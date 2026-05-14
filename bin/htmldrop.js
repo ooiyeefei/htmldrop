@@ -4,6 +4,7 @@ import { program } from 'commander';
 import { init } from '../src/init.js';
 import { push } from '../src/push.js';
 import { list } from '../src/list.js';
+import { deleteFile } from '../src/delete.js';
 import { openFile } from '../src/index.js';
 
 program
@@ -44,6 +45,18 @@ program
   .action(async () => {
     try {
       await list();
+    } catch (err) {
+      console.error(`Error: ${err.message}`);
+      process.exit(1);
+    }
+  });
+
+program
+  .command('delete <file>')
+  .description('Remove a published file and redeploy')
+  .action(async (file) => {
+    try {
+      await deleteFile(file);
     } catch (err) {
       console.error(`Error: ${err.message}`);
       process.exit(1);

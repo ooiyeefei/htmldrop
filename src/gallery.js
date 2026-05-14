@@ -23,9 +23,10 @@ function formatDate(isoString) {
 function generateFileCards(files) {
   return files
     .map((file) => {
-      const lockIcon = file.encrypted
-        ? '<span class="lock-icon" title="Password-protected">&#128274;</span>'
-        : '';
+      const isPrivate = file.encrypted;
+      const badge = isPrivate
+        ? '<span class="badge badge-private">Private</span>'
+        : '<span class="badge badge-public">Public</span>';
       const size = formatFileSize(file.size);
       const date = formatDate(file.date);
 
@@ -33,7 +34,7 @@ function generateFileCards(files) {
       <a href="${file.name}" class="card">
         <div class="card-header">
           <span class="card-title">${file.name}</span>
-          ${lockIcon}
+          ${badge}
         </div>
         <div class="card-meta">
           <span class="card-date">${date}</span>
