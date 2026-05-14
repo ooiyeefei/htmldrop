@@ -1,0 +1,42 @@
+{
+  "name": "htmldrop",
+  "version": "1.0.0",
+  "description": "Publish HTML files and get shareable links via Surge.sh",
+  "type": "module",
+  "bin": {
+    "htmldrop": "./bin/htmldrop.js"
+  },
+  "exports": {
+    ".": "./src/index.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "test": "echo \"No tests yet\" && exit 0"
+  },
+  "keywords": [
+    "html",
+    "share",
+    "publish",
+    "surge",
+    "cli",
+    "static",
+    "hosting"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "commander": "^12.1.0",
+    "crypto-js": "^4.2.0",
+    "open": "^10.1.0"
+  },
+  "peerDependencies": {
+    "surge": ">=0.23.0"
+  },
+  "peerDependenciesMeta": {
+    "surge": {
+      "optional": true
+    }
+  }
+}
