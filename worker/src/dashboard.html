@@ -133,7 +133,7 @@
       text-align: center; padding: 80px 20px; color: var(--muted);
     }
     .empty-state h2 { font-size: 18px; margin-bottom: 8px; color: var(--text); }
-    .setup-panel {
+    .setup-panel, .home-panel {
       max-width: 400px; margin: 80px auto; padding: 32px;
       background: var(--surface); border: 1px solid var(--border);
       border-radius: 12px; text-align: center;
@@ -204,6 +204,8 @@
       workerUrl: DEFAULT_WORKER_URL,
       authorKey: '',
       anthropicKey: '',
+      currentDocId: '',
+      page: 'home',
       files: [],
       selectedFile: null,
       feedback: [],
@@ -218,6 +220,7 @@
       const params = new URLSearchParams(hash);
       if (params.get('key')) state.authorKey = params.get('key');
       if (params.get('worker')) state.workerUrl = params.get('worker');
+      if (params.get('doc')) state.currentDocId = params.get('doc');
 
       // Author key: localStorage (low-value identity token, persists across sessions)
       const savedAuthorKey = localStorage.getItem('htmldrop_author_key');
@@ -228,38 +231,107 @@
       const savedAnthropicKey = sessionStorage.getItem('htmldrop_anthropic_key');
       if (savedAnthropicKey) state.anthropicKey = savedAnthropicKey;
 
-      if (!state.authorKey) {
-        renderSetup();
-      } else {
+      // If we have a docId, load feedback directly (no auth needed for reading)
+      if (state.currentDocId) {
+        loadFeedback(state.currentDocId);
+      } else if (state.authorKey) {
         loadFiles();
+      } else {
+        state.page = 'home';
+        renderHome();
       }
     }
 
-    function renderSetup() {
-      const panel = document.createElement('div');
-      panel.className = 'setup-panel';
+    function renderHome() {
+      const frag = document.createDocumentFragment();
+      frag.appendChild(renderNav());
 
+      const hero = document.createElement('div');
+      hero.className = 'empty-state';
       const h2 = document.createElement('h2');
       h2.textContent = 'Converge Studio';
-      const p = document.createElement('p');
-      p.textContent = 'Enter your author API key to view feedback and insights.';
-      const input = document.createElement('input');
-      input.type = 'password';
-      input.placeholder = 'Author API key from ~/.htmldrop/config.json';
-      const btn = document.createElement('button');
-      btn.className = 'btn btn-primary';
-      btn.style.width = '100%';
-      btn.textContent = 'Connect';
-      btn.addEventListener('click', () => {
-        if (input.value.trim()) {
-          state.authorKey = input.value.trim();
-          window.location.hash = 'key=' + state.authorKey;
-          loadFiles();
+      const p1 = document.createElement('p');
+      p1.textContent = 'AI-facilitated document feedback and synthesis.';
+      p1.style.marginBottom = '24px';
+      hero.append(h2, p1);
+
+      // Direct doc ID input
+      const docRow = document.createElement('div');
+      docRow.style.cssText = 'display:flex;gap:8px;max-width:400px;margin:0 auto 16px;';
+      const docInput = document.createElement('input');
+      docInput.className = 'setting-input';
+      docInput.placeholder = 'Enter a document ID to view feedback';
+      docInput.style.margin = '0';
+      const goBtn = document.createElement('button');
+      goBtn.className = 'btn btn-primary';
+      goBtn.textContent = 'View';
+      goBtn.addEventListener('click', () => {
+        if (docInput.value.trim()) {
+          state.currentDocId = docInput.value.trim();
+          window.location.hash = 'doc=' + state.currentDocId;
+          loadFeedback(state.currentDocId);
         }
       });
+      docRow.append(docInput, goBtn);
+      hero.appendChild(docRow);
 
-      panel.append(h2, p, input, btn);
-      app.replaceChildren(panel);
+      const hint = document.createElement('p');
+      hint.style.cssText = 'font-size:12px;color:var(--muted);margin-top:12px;';
+      hint.textContent = 'Or connect your author key in Settings to see all your documents.';
+      hero.appendChild(hint);
+
+      frag.appendChild(hero);
+      app.replaceChildren(frag);
+    }
+
+    function renderNav() {
+      const nav = document.createElement('header');
+      const h1 = document.createElement('h1');
+      h1.textContent = 'Converge ';
+      const span = document.createElement('span');
+      span.textContent = 'Studio';
+      h1.appendChild(span);
+      h1.style.cursor = 'pointer';
+      h1.addEventListener('click', () => { state.page = 'home'; renderHome(); });
+
+      const actions = document.createElement('div');
+      actions.className = 'header-actions';
+
+      const keyStatus = document.createElement('span');
+      keyStatus.className = 'key-status ' + (state.anthropicKey ? 'active' : 'missing');
+      keyStatus.textContent = state.anthropicKey ? 'AI Ready' : 'No AI Key';
+
+      const settingsBtn = document.createElement('button');
+      settingsBtn.className = 'btn-icon';
+      settingsBtn.textContent = '⚙ Settings';
+      settingsBtn.addEventListener('click', () => { state.page = 'settings'; renderSettingsPage(); });
+
+      actions.append(keyStatus, settingsBtn);
+
+      if (state.authorKey) {
+        const logoutBtn = document.createElement('button');
+        logoutBtn.className = 'btn-icon btn-danger';
+        logoutBtn.textContent = 'Logout';
+        logoutBtn.addEventListener('click', () => {
+          localStorage.removeItem('htmldrop_author_key');
+          sessionStorage.removeItem('htmldrop_anthropic_key');
+          state.authorKey = '';
+          state.anthropicKey = '';
+          window.location.hash = '';
+          renderHome();
+        });
+        actions.appendChild(logoutBtn);
+      }
+
+      nav.append(h1, actions);
+      return nav;
+    }
+
+    function renderSettingsPage() {
+      const frag = document.createDocumentFragment();
+      frag.appendChild(renderNav());
+      frag.appendChild(renderSettings());
+      app.replaceChildren(frag);
     }
 
     async function loadFiles() {
@@ -285,11 +357,11 @@
     async function loadFeedback(docId) {
       renderLoading('Loading feedback...');
       try {
-        const res = await fetch(state.workerUrl + '/api/feedback/' + docId, {
-          headers: { 'Authorization': 'Bearer ' + state.authorKey },
-        });
+        const res = await fetch(state.workerUrl + '/api/feedback/' + docId);
         const data = await res.json();
         state.feedback = data.items || [];
+        state.currentDocId = docId;
+        state.selectedFile = state.selectedFile || { docId, name: docId.slice(0, 8) };
         await loadSegments(docId);
       } catch (e) {
         state.feedback = [];
@@ -298,24 +370,25 @@
     }
 
     async function loadSegments(docId) {
-      try {
-        const res = await fetch(state.workerUrl + '/api/segments/' + docId, {
-          method: 'POST',
-          headers: {
-            'Authorization': 'Bearer ' + state.authorKey,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({ items: state.feedback }),
-        });
-        if (res.ok) {
-          const data = await res.json();
-          state.segments = data.segments || [];
-        } else {
-          state.segments = fallbackSegmentation(state.feedback);
-        }
-      } catch (e) {
-        state.segments = fallbackSegmentation(state.feedback);
+      if (state.authorKey) {
+        try {
+          const res = await fetch(state.workerUrl + '/api/segments/' + docId, {
+            method: 'POST',
+            headers: {
+              'Authorization': 'Bearer ' + state.authorKey,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ items: state.feedback }),
+          });
+          if (res.ok) {
+            const data = await res.json();
+            state.segments = data.segments || [];
+            renderDashboard();
+            return;
+          }
+        } catch (e) { /* fall through to client-side */ }
       }
+      state.segments = fallbackSegmentation(state.feedback);
       renderDashboard();
     }
 
@@ -361,57 +434,28 @@
     function renderDashboard() {
       const frag = document.createDocumentFragment();
 
-      // Header
-      const header = document.createElement('header');
-      const h1 = document.createElement('h1');
-      h1.textContent = 'Converge ';
-      const span = document.createElement('span');
-      span.textContent = 'Studio';
-      h1.appendChild(span);
-      const headerActions = document.createElement('div');
-      headerActions.className = 'header-actions';
-      const select = document.createElement('select');
-      select.className = 'file-select';
-      for (const f of state.files) {
-        const opt = document.createElement('option');
-        opt.value = f.docId;
-        opt.textContent = f.name || f.docId.slice(0, 8);
-        if (f.docId === state.selectedFile?.docId) opt.selected = true;
-        select.appendChild(opt);
-      }
-      select.addEventListener('change', (e) => {
-        state.selectedFile = state.files.find(f => f.docId === e.target.value);
-        loadFeedback(state.selectedFile.docId);
-      });
+      // Nav
+      frag.appendChild(renderNav());
 
-      const keyStatus = document.createElement('span');
-      keyStatus.className = 'key-status ' + (state.anthropicKey ? 'active' : 'missing');
-      keyStatus.textContent = state.anthropicKey ? 'AI Ready' : 'No AI Key';
-
-      const settingsBtn = document.createElement('button');
-      settingsBtn.className = 'btn-icon';
-      settingsBtn.textContent = '⚙ Settings';
-      settingsBtn.addEventListener('click', () => { state.showSettings = !state.showSettings; renderDashboard(); });
-
-      const logoutBtn = document.createElement('button');
-      logoutBtn.className = 'btn-icon btn-danger';
-      logoutBtn.textContent = 'Logout';
-      logoutBtn.addEventListener('click', () => {
-        localStorage.removeItem('htmldrop_author_key');
-        sessionStorage.removeItem('htmldrop_anthropic_key');
-        state.authorKey = '';
-        state.anthropicKey = '';
-        window.location.hash = '';
-        renderSetup();
-      });
-
-      headerActions.append(select, keyStatus, settingsBtn, logoutBtn);
-      header.append(h1, headerActions);
-      frag.appendChild(header);
-
-      // Settings panel
-      if (state.showSettings) {
-        frag.appendChild(renderSettings());
+      // File selector (if author has multiple files)
+      if (state.files.length > 1) {
+        const selectRow = document.createElement('div');
+        selectRow.style.cssText = 'margin-bottom:16px;';
+        const select = document.createElement('select');
+        select.className = 'file-select';
+        for (const f of state.files) {
+          const opt = document.createElement('option');
+          opt.value = f.docId;
+          opt.textContent = f.name || f.docId.slice(0, 8);
+          if (f.docId === state.selectedFile?.docId) opt.selected = true;
+          select.appendChild(opt);
+        }
+        select.addEventListener('change', (e) => {
+          state.selectedFile = state.files.find(f => f.docId === e.target.value);
+          loadFeedback(state.selectedFile.docId);
+        });
+        selectRow.appendChild(select);
+        frag.appendChild(selectRow);
       }
 
       // Stats
@@ -704,9 +748,9 @@
 
     async function getInsights(segIdx) {
       if (!state.anthropicKey) {
-        alert('Please add your Anthropic API key in Settings to use AI features.');
-        state.showSettings = true;
-        renderDashboard();
+        alert('Add your Anthropic API key in Settings to use AI features.');
+        state.page = 'settings';
+        renderSettingsPage();
         return;
       }
       state.insights[segIdx] = { loading: true };
@@ -740,9 +784,9 @@
 
     async function convergeSegment(segIdx) {
       if (!state.anthropicKey) {
-        alert('Please add your Anthropic API key in Settings to use AI features.');
-        state.showSettings = true;
-        renderDashboard();
+        alert('Add your Anthropic API key in Settings to use AI features.');
+        state.page = 'settings';
+        renderSettingsPage();
         return;
       }
       const seg = state.segments[segIdx];
