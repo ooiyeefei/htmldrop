@@ -195,12 +195,107 @@
       border: 1px solid var(--border); border-radius: 10px; overflow: hidden;
       background: var(--surface);
     }
-    .doc-iframe-wrap {
+    .doc-content-wrap {
       flex: 1; border-right: 1px solid var(--border); position: relative;
+      overflow-y: auto;
     }
-    .doc-iframe-wrap iframe {
-      width: 100%; height: 100%; border: none;
+    .doc-content {
+      padding: 32px 48px; line-height: 1.7; font-size: 15px;
+      max-width: 720px; min-height: 100%;
+      position: relative; cursor: text;
     }
+    .doc-content mark.hd-hl {
+      background: #fef9c3; border-bottom: 2px solid #fbbf24;
+      border-radius: 2px; padding: 0 2px; cursor: pointer;
+    }
+    .doc-content mark.hd-hl:hover { background: #fde68a; }
+    .doc-content mark.hd-hl.active { background: #fde68a; box-shadow: 0 0 0 2px rgba(251,191,36,0.4); }
+    /* Area annotation */
+    .hd-area-overlay {
+      position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+      pointer-events: none; z-index: 10;
+    }
+    .hd-area-rect {
+      position: absolute; border: 2px solid #3b82f6;
+      background: rgba(59,130,246,0.08); border-radius: 4px;
+      cursor: pointer; pointer-events: auto;
+    }
+    .hd-area-rect:hover { background: rgba(59,130,246,0.15); }
+    /* Selection tooltip */
+    .hd-sel-tooltip {
+      position: absolute; z-index: 100;
+      background: #1e293b; color: #fff;
+      padding: 6px 12px; border-radius: 6px;
+      font-size: 12px; cursor: pointer;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+      animation: hd-pop 0.1s ease;
+      white-space: nowrap;
+    }
+    @keyframes hd-pop { from { opacity:0; transform:scale(0.95); } to { opacity:1; transform:scale(1); } }
+    .hd-sel-tooltip::after {
+      content:''; position:absolute; top:-5px; left:50%; transform:translateX(-50%);
+      border-left:5px solid transparent; border-right:5px solid transparent;
+      border-bottom:5px solid #1e293b;
+    }
+    /* Comment popover */
+    .hd-comment-popover {
+      position: absolute; z-index: 200;
+      background: #fff; border: 1px solid var(--border);
+      border-radius: 10px; box-shadow: 0 8px 30px rgba(0,0,0,0.12);
+      width: 300px; animation: hd-pop 0.15s ease;
+    }
+    .hd-cp-header {
+      padding: 12px 16px; border-bottom: 1px solid #f1f5f9;
+      display: flex; align-items: center; gap: 8px;
+    }
+    .hd-cp-avatar {
+      width: 28px; height: 28px; border-radius: 50%;
+      background: var(--accent); color: #fff;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 12px; font-weight: 600;
+    }
+    .hd-cp-name {
+      border: 1px solid var(--border); border-radius: 6px;
+      padding: 4px 10px; font-size: 12px; flex: 1;
+    }
+    .hd-cp-body { padding: 12px 16px; }
+    .hd-cp-body textarea {
+      width: 100%; border: none; outline: none; resize: none;
+      font-size: 13px; font-family: inherit; min-height: 50px;
+      line-height: 1.4;
+    }
+    .hd-cp-body textarea::placeholder { color: #94a3b8; }
+    .hd-cp-actions {
+      padding: 8px 16px 12px; display: flex; justify-content: flex-end; gap: 8px;
+    }
+    .hd-cp-btn {
+      padding: 6px 14px; border-radius: 6px; font-size: 12px;
+      font-weight: 500; cursor: pointer; border: none;
+    }
+    .hd-cp-cancel { background: #f1f5f9; color: #64748b; }
+    .hd-cp-cancel:hover { background: #e2e8f0; }
+    .hd-cp-submit { background: var(--accent); color: #fff; }
+    .hd-cp-submit:hover { background: #2563eb; }
+    /* Area draw cursor */
+    .doc-content.area-mode { cursor: crosshair; }
+    .hd-drawing-rect {
+      position: absolute; border: 2px dashed #3b82f6;
+      background: rgba(59,130,246,0.05); border-radius: 4px;
+      pointer-events: none; z-index: 11;
+    }
+    /* Toolbar */
+    .doc-toolbar {
+      padding: 8px 16px; background: var(--bg);
+      border-bottom: 1px solid var(--border);
+      display: flex; align-items: center; gap: 8px;
+    }
+    .toolbar-btn {
+      padding: 5px 10px; border: 1px solid var(--border); border-radius: 5px;
+      font-size: 12px; cursor: pointer; background: var(--surface);
+      transition: all 0.15s;
+    }
+    .toolbar-btn:hover { border-color: var(--accent); color: var(--accent); }
+    .toolbar-btn.active { background: var(--accent); color: #fff; border-color: var(--accent); }
     .doc-margin {
       width: 340px; overflow-y: auto; padding: 16px;
       background: var(--bg);
@@ -500,53 +595,62 @@
       const frag = document.createDocumentFragment();
       frag.appendChild(renderNav());
 
-      // Container goes full width for the doc viewer
       const container = app.parentElement;
       container.style.maxWidth = '100%';
       container.style.padding = '0 16px';
 
-      // Doc viewer: iframe left + comments right
       const viewer = document.createElement('div');
       viewer.className = 'doc-viewer';
 
-      // Left: iframe with the published HTML
-      const iframeWrap = document.createElement('div');
-      iframeWrap.className = 'doc-iframe-wrap';
+      // Left: interactive document content
+      const contentWrap = document.createElement('div');
+      contentWrap.className = 'doc-content-wrap';
 
-      const urlBar = document.createElement('div');
-      urlBar.className = 'doc-url-bar';
-      const urlLabel = document.createElement('span');
-      urlLabel.textContent = 'Document: ';
-      const urlCode = document.createElement('code');
-      urlCode.textContent = state.currentDocId || state.selectedFile?.docId || 'unknown';
-      urlBar.append(urlLabel, urlCode);
+      // Toolbar
+      const toolbar = document.createElement('div');
+      toolbar.className = 'doc-toolbar';
+      const textBtn = document.createElement('button');
+      textBtn.className = 'toolbar-btn active';
+      textBtn.textContent = '✎ Text Select';
+      const areaBtn = document.createElement('button');
+      areaBtn.className = 'toolbar-btn';
+      areaBtn.textContent = '▢ Area Annotate';
+      const docLabel = document.createElement('span');
+      docLabel.style.cssText = 'margin-left:auto;font-size:12px;color:var(--muted);';
+      docLabel.textContent = 'Doc: ' + (state.currentDocId || state.selectedFile?.docId || '').slice(0, 12);
 
-      if (state.files.length > 1) {
-        const select = document.createElement('select');
-        select.className = 'file-select';
-        select.style.marginLeft = 'auto';
-        for (const f of state.files) {
-          const opt = document.createElement('option');
-          opt.value = f.docId;
-          opt.textContent = f.name || f.docId.slice(0, 8);
-          if (f.docId === (state.selectedFile?.docId || state.currentDocId)) opt.selected = true;
-          select.appendChild(opt);
-        }
-        select.addEventListener('change', (e) => {
-          state.selectedFile = state.files.find(f => f.docId === e.target.value);
-          state.currentDocId = e.target.value;
-          loadFeedback(state.currentDocId);
-        });
-        urlBar.appendChild(select);
-      }
+      textBtn.addEventListener('click', () => {
+        state.annotateMode = 'text';
+        textBtn.classList.add('active'); areaBtn.classList.remove('active');
+        docContent.classList.remove('area-mode');
+      });
+      areaBtn.addEventListener('click', () => {
+        state.annotateMode = 'area';
+        areaBtn.classList.add('active'); textBtn.classList.remove('active');
+        docContent.classList.add('area-mode');
+      });
+      toolbar.append(textBtn, areaBtn, docLabel);
+      contentWrap.appendChild(toolbar);
 
-      const iframe = document.createElement('iframe');
-      iframe.sandbox = 'allow-same-origin';
-      // Build a preview of the HTML content with highlighted comments
-      const previewHtml = buildPreviewHtml();
-      iframe.srcdoc = previewHtml;
+      // Document content area
+      const docContent = document.createElement('div');
+      docContent.className = 'doc-content';
+      state.annotateMode = state.annotateMode || 'text';
 
-      iframeWrap.append(urlBar, iframe);
+      // Render content with highlights
+      renderDocContent(docContent);
+
+      // Area annotation overlay
+      const areaOverlay = document.createElement('div');
+      areaOverlay.className = 'hd-area-overlay';
+      docContent.appendChild(areaOverlay);
+
+      // Text selection handler
+      setupTextSelection(docContent, contentWrap);
+      // Area draw handler
+      setupAreaDraw(docContent, contentWrap, areaOverlay);
+
+      contentWrap.appendChild(docContent);
 
       // Right: margin comments
       const margin = document.createElement('div');
@@ -622,7 +726,7 @@
         margin.appendChild(convAll);
       }
 
-      viewer.append(iframeWrap, margin);
+      viewer.append(contentWrap, margin);
       frag.appendChild(viewer);
       app.replaceChildren(frag);
     }
@@ -690,38 +794,229 @@
       return d.toLocaleDateString();
     }
 
-    function buildPreviewHtml() {
-      // Build a simple rendered view with highlighted anchors
-      const anchors = state.feedback
-        .filter(f => f.anchor?.selectedText)
-        .map(f => f.anchor.selectedText);
+    function renderDocContent(container) {
+      // Render document text with highlights where comments exist
+      const textAnchors = state.feedback.filter(f => f.anchor?.selectedText);
+      const uniqueTexts = [...new Set(textAnchors.map(f => f.anchor.selectedText))];
 
-      let html = '<!DOCTYPE html><html><head><style>body{font-family:-apple-system,sans-serif;padding:32px 48px;line-height:1.7;max-width:700px;color:#1e293b;}mark.hd-hl{background:#fef9c3;border-bottom:2px solid #fbbf24;border-radius:2px;padding:0 2px;}</style></head><body>';
-      html += '<h2 style="margin-bottom:16px;">Document Preview</h2>';
+      // Placeholder doc content — in real use, this would be the actual HTML
+      const title = document.createElement('h1');
+      title.style.cssText = 'font-size:24px;margin-bottom:16px;';
+      title.textContent = 'Document: ' + (state.selectedFile?.name || state.currentDocId || 'Unknown');
+      container.appendChild(title);
 
-      if (state.feedback.length === 0) {
-        html += '<p style="color:#64748b;">No feedback yet for this document.</p>';
-      } else {
-        html += '<p style="color:#64748b;font-size:13px;margin-bottom:24px;">Highlighted text has reviewer comments attached.</p>';
-        // Show unique anchors as content blocks
-        const seen = new Set();
-        state.feedback.forEach(item => {
-          const txt = item.anchor?.selectedText;
-          if (txt && !seen.has(txt)) {
-            seen.add(txt);
-            const escaped = txt.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-            html += '<p><mark class="hd-hl">' + escaped + '</mark></p>';
-          }
+      const hint = document.createElement('p');
+      hint.style.cssText = 'font-size:13px;color:var(--muted);margin-bottom:24px;';
+      hint.textContent = 'Select text to comment, or use Area Annotate to mark regions.';
+      container.appendChild(hint);
+
+      // Render text content with highlights
+      uniqueTexts.forEach(txt => {
+        const p = document.createElement('p');
+        p.style.marginBottom = '12px';
+        const mark = document.createElement('mark');
+        mark.className = 'hd-hl';
+        mark.textContent = txt;
+        mark.addEventListener('click', () => {
+          container.querySelectorAll('.hd-hl').forEach(m => m.classList.remove('active'));
+          mark.classList.add('active');
+          // Scroll margin to this comment
         });
-        // Page-level comments
-        const pageLevel = state.feedback.filter(f => f.anchor?.type === 'page_level');
-        if (pageLevel.length > 0) {
-          html += '<hr style="margin:24px 0;border:none;border-top:1px solid #e2e8f0;">';
-          html += '<p style="color:#64748b;font-size:12px;">Page-level feedback (' + pageLevel.length + ' comments)</p>';
-        }
+        p.appendChild(mark);
+        container.appendChild(p);
+      });
+
+      // Page-level indicator
+      const pageComments = state.feedback.filter(f => f.anchor?.type === 'page_level');
+      if (pageComments.length > 0) {
+        const hr = document.createElement('hr');
+        hr.style.cssText = 'margin:24px 0;border:none;border-top:1px solid var(--border);';
+        const plabel = document.createElement('p');
+        plabel.style.cssText = 'font-size:12px;color:var(--muted);';
+        plabel.textContent = pageComments.length + ' page-level comment(s)';
+        container.append(hr, plabel);
       }
-      html += '</body></html>';
-      return html;
+
+      // Area rects from existing comments
+      const areaComments = state.feedback.filter(f => f.anchor?.type === 'element_rect');
+      areaComments.forEach(item => {
+        if (item.anchor?.rect) {
+          const rect = document.createElement('div');
+          rect.className = 'hd-area-rect';
+          rect.style.left = item.anchor.rect.x + '%';
+          rect.style.top = item.anchor.rect.y + '%';
+          rect.style.width = item.anchor.rect.w + '%';
+          rect.style.height = item.anchor.rect.h + '%';
+          container.appendChild(rect);
+        }
+      });
+    }
+
+    function setupTextSelection(docContent, wrap) {
+      docContent.addEventListener('mouseup', (e) => {
+        if (state.annotateMode !== 'text') return;
+        // Remove any existing tooltip
+        wrap.querySelectorAll('.hd-sel-tooltip').forEach(t => t.remove());
+
+        const sel = window.getSelection();
+        if (!sel || sel.isCollapsed || sel.toString().trim().length === 0) return;
+
+        const range = sel.getRangeAt(0);
+        const rect = range.getBoundingClientRect();
+        const wrapRect = wrap.getBoundingClientRect();
+
+        const tooltip = document.createElement('div');
+        tooltip.className = 'hd-sel-tooltip';
+        tooltip.textContent = '+ Comment';
+        tooltip.style.left = (rect.left - wrapRect.left + rect.width / 2 - 40) + 'px';
+        tooltip.style.top = (rect.bottom - wrapRect.top + wrap.scrollTop + 6) + 'px';
+        tooltip.addEventListener('click', () => {
+          const selectedText = sel.toString().trim().slice(0, 2000);
+          tooltip.remove();
+          showCommentPopover(wrap, rect, wrapRect, { type: 'text_range', selectedText: selectedText });
+        });
+        wrap.appendChild(tooltip);
+      });
+
+      docContent.addEventListener('mousedown', () => {
+        wrap.querySelectorAll('.hd-sel-tooltip').forEach(t => t.remove());
+        wrap.querySelectorAll('.hd-comment-popover').forEach(p => p.remove());
+      });
+    }
+
+    function setupAreaDraw(docContent, wrap, overlay) {
+      let drawing = false, startX = 0, startY = 0, drawRect = null;
+
+      docContent.addEventListener('mousedown', (e) => {
+        if (state.annotateMode !== 'area') return;
+        drawing = true;
+        const contentRect = docContent.getBoundingClientRect();
+        startX = e.clientX - contentRect.left;
+        startY = e.clientY - contentRect.top + docContent.parentElement.scrollTop;
+        drawRect = document.createElement('div');
+        drawRect.className = 'hd-drawing-rect';
+        drawRect.style.left = startX + 'px';
+        drawRect.style.top = startY + 'px';
+        docContent.appendChild(drawRect);
+      });
+
+      docContent.addEventListener('mousemove', (e) => {
+        if (!drawing || !drawRect) return;
+        const contentRect = docContent.getBoundingClientRect();
+        const curX = e.clientX - contentRect.left;
+        const curY = e.clientY - contentRect.top + docContent.parentElement.scrollTop;
+        const x = Math.min(startX, curX);
+        const y = Math.min(startY, curY);
+        const w = Math.abs(curX - startX);
+        const h = Math.abs(curY - startY);
+        drawRect.style.left = x + 'px'; drawRect.style.top = y + 'px';
+        drawRect.style.width = w + 'px'; drawRect.style.height = h + 'px';
+      });
+
+      docContent.addEventListener('mouseup', (e) => {
+        if (!drawing || !drawRect) return;
+        drawing = false;
+        const w = parseInt(drawRect.style.width);
+        const h = parseInt(drawRect.style.height);
+        if (w < 20 || h < 20) { drawRect.remove(); drawRect = null; return; }
+
+        const contentRect = docContent.getBoundingClientRect();
+        const wrapRect = wrap.getBoundingClientRect();
+        const rectData = {
+          x: (parseInt(drawRect.style.left) / contentRect.width * 100).toFixed(1),
+          y: (parseInt(drawRect.style.top) / contentRect.height * 100).toFixed(1),
+          w: (w / contentRect.width * 100).toFixed(1),
+          h: (h / contentRect.height * 100).toFixed(1),
+        };
+
+        // Convert drawn rect to permanent
+        drawRect.classList.remove('hd-drawing-rect');
+        drawRect.classList.add('hd-area-rect');
+        drawRect.style.pointerEvents = 'auto';
+        const finalRect = drawRect;
+        drawRect = null;
+
+        const popRect = finalRect.getBoundingClientRect();
+        showCommentPopover(wrap, popRect, wrapRect, {
+          type: 'element_rect',
+          rect: rectData,
+          selector: 'area:' + Object.values(rectData).join(','),
+        });
+      });
+    }
+
+    function showCommentPopover(wrap, triggerRect, wrapRect, anchor) {
+      wrap.querySelectorAll('.hd-comment-popover').forEach(p => p.remove());
+
+      const popover = document.createElement('div');
+      popover.className = 'hd-comment-popover';
+      popover.style.left = Math.max(0, Math.min(triggerRect.left - wrapRect.left, wrapRect.width - 320)) + 'px';
+      popover.style.top = (triggerRect.bottom - wrapRect.top + wrap.scrollTop + 10) + 'px';
+
+      const userName = localStorage.getItem('htmldrop_reviewer_name') || '';
+
+      const header = document.createElement('div');
+      header.className = 'hd-cp-header';
+      const avatar = document.createElement('div');
+      avatar.className = 'hd-cp-avatar';
+      avatar.textContent = (userName || '?')[0].toUpperCase();
+      const nameInput = document.createElement('input');
+      nameInput.className = 'hd-cp-name';
+      nameInput.placeholder = 'Your name';
+      nameInput.value = userName;
+      nameInput.addEventListener('change', () => {
+        localStorage.setItem('htmldrop_reviewer_name', nameInput.value.trim());
+        avatar.textContent = (nameInput.value.trim() || '?')[0].toUpperCase();
+      });
+      header.append(avatar, nameInput);
+
+      const body = document.createElement('div');
+      body.className = 'hd-cp-body';
+      const textarea = document.createElement('textarea');
+      textarea.placeholder = 'Add a comment...';
+      textarea.rows = 3;
+      body.appendChild(textarea);
+
+      const actions = document.createElement('div');
+      actions.className = 'hd-cp-actions';
+      const cancelBtn = document.createElement('button');
+      cancelBtn.className = 'hd-cp-btn hd-cp-cancel';
+      cancelBtn.textContent = 'Cancel';
+      cancelBtn.addEventListener('click', () => popover.remove());
+      const submitBtn = document.createElement('button');
+      submitBtn.className = 'hd-cp-btn hd-cp-submit';
+      submitBtn.textContent = 'Comment';
+      submitBtn.addEventListener('click', async () => {
+        const text = textarea.value.trim();
+        if (!text) return;
+        submitBtn.textContent = '...';
+        submitBtn.disabled = true;
+        const name = nameInput.value.trim() || 'Anonymous';
+        const feedbackBody = {
+          anchor: anchor,
+          content: { type: 'text', text: text },
+          author: { displayName: name },
+          parentId: null,
+        };
+        try {
+          await fetch(state.workerUrl + '/api/feedback/' + (state.currentDocId || state.selectedFile?.docId), {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(feedbackBody),
+          });
+          popover.remove();
+          await loadFeedback(state.currentDocId || state.selectedFile?.docId);
+        } catch(e) {
+          alert('Failed to submit');
+          submitBtn.textContent = 'Comment';
+          submitBtn.disabled = false;
+        }
+      });
+      actions.append(cancelBtn, submitBtn);
+
+      popover.append(header, body, actions);
+      wrap.appendChild(popover);
+      setTimeout(() => textarea.focus(), 50);
     }
 
     function renderSettings() {
