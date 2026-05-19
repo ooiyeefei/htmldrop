@@ -1,0 +1,19 @@
+name = "htmldrop-feedback"
+main = "src/index.ts"
+compatibility_date = "2024-06-20"
+
+[vars]
+ENVIRONMENT = "production"
+# Set ANTHROPIC_API_KEY via: npx wrangler secret put ANTHROPIC_API_KEY
+
+[[kv_namespaces]]
+binding = "FEEDBACK"
+id = "03dcf2e0528149488daa42020437832a"
+
+[[kv_namespaces]]
+binding = "RATE_LIMITS"
+id = "404c48af87a34ac5b0e7374a85d00969"
+
+[[kv_namespaces]]
+binding = "AUTHORS"
+id = "2d1e4560553b46dabcf9b0c54214add5"

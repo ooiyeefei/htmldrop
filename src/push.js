@@ -1,4 +1,5 @@
 import { existsSync, readFileSync, writeFileSync, statSync } from 'node:fs';
+import { randomUUID } from 'node:crypto';
 import { execSync } from 'node:child_process';
 import { basename, resolve, join } from 'node:path';
 import open from 'open';
@@ -6,6 +7,10 @@ import { requireConfig, getSiteDir, ensureSiteDir, getFileUrl } from './config.j
 import { encryptHtml } from './encrypt.js';
 import { generateGallery } from './gallery.js';
 import { loadManifest, saveManifest } from './manifest.js';
+import { injectFeedbackWidget } from './feedback/inject.js';
+import { getAuthorKey } from './auth.js';
+
+const DEFAULT_WORKER_URL = 'https://htmldrop-feedback.htmldrop.workers.dev';
 
 function getSurgeCommand() {
   try {
@@ -59,6 +64,29 @@ export async function push(file, options = {}) {
     console.log(`Added noindex tag to ${filename} (crawlers blocked).`);
   }
 
+  // Inject feedback widget if --feedback flag
+  let docId = null;
+  if (options.feedback && !isEncrypted) {
+    const authorKey = getAuthorKey();
+    docId = randomUUID();
+    const workerUrl = options.workerUrl || DEFAULT_WORKER_URL;
+    content = injectFeedbackWidget(content, { docId, workerUrl });
+    console.log(`Feedback enabled for ${filename} (docId: ${docId.slice(0, 8)}...)`);
+
+    // Register doc with the worker
+    try {
+      const res = await fetch(`${workerUrl}/api/register/${docId}`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${authorKey}` },
+      });
+      if (!res.ok) {
+        console.warn('Warning: could not register doc with feedback worker.');
+      }
+    } catch {
+      console.warn('Warning: feedback worker unreachable. Comments may not work until worker is deployed.');
+    }
+  }
+
   // Write to site directory
   const destPath = join(siteDir, filename);
   writeFileSync(destPath, content, 'utf-8');
@@ -73,6 +101,8 @@ export async function push(file, options = {}) {
     size: fileSizeBytes,
     encrypted: isEncrypted,
     noindex: Boolean(options.noindex),
+    feedback: Boolean(options.feedback),
+    docId: docId || undefined,
   };
 
   if (existingIndex >= 0) {

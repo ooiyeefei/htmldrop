@@ -1,0 +1,787 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Converge Studio — htmldrop</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    :root {
+      --bg: #f8fafc; --surface: #fff; --border: #e2e8f0;
+      --text: #1e293b; --muted: #64748b; --accent: #3b82f6;
+      --accent-soft: #eff6ff; --danger: #ef4444; --success: #10b981;
+      --insight-bg: #fefce8; --insight-border: #fbbf24;
+      --debate-bg: #fef2f2; --debate-border: #f87171;
+    }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Inter, sans-serif;
+      background: var(--bg); color: var(--text); line-height: 1.5;
+    }
+    .container { max-width: 960px; margin: 0 auto; padding: 24px 20px; }
+    header {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 16px 0; margin-bottom: 24px; border-bottom: 1px solid var(--border);
+    }
+    header h1 { font-size: 20px; font-weight: 700; }
+    header h1 span { color: var(--accent); }
+    .file-select {
+      padding: 8px 12px; border: 1px solid var(--border); border-radius: 6px;
+      font-size: 13px; background: var(--surface); cursor: pointer;
+    }
+    .stats {
+      display: flex; gap: 16px; margin-bottom: 24px;
+    }
+    .stat {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 8px; padding: 16px 20px; flex: 1;
+    }
+    .stat-value { font-size: 24px; font-weight: 700; }
+    .stat-label { font-size: 12px; color: var(--muted); margin-top: 2px; }
+    .segment {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 10px; margin-bottom: 16px; overflow: hidden;
+    }
+    .segment-header {
+      padding: 14px 20px; border-bottom: 1px solid var(--border);
+      display: flex; justify-content: space-between; align-items: center;
+    }
+    .segment-title { font-size: 14px; font-weight: 600; }
+    .segment-badge {
+      font-size: 11px; padding: 3px 8px; border-radius: 99px;
+      font-weight: 500;
+    }
+    .badge-debate { background: var(--debate-bg); color: var(--danger); border: 1px solid var(--debate-border); }
+    .badge-consensus { background: #ecfdf5; color: var(--success); border: 1px solid #6ee7b7; }
+    .comments { padding: 16px 20px; }
+    .comment {
+      padding: 10px 14px; margin-bottom: 8px;
+      background: var(--bg); border-radius: 8px; border: 1px solid var(--border);
+    }
+    .comment-meta {
+      display: flex; justify-content: space-between;
+      font-size: 12px; color: var(--muted); margin-bottom: 4px;
+    }
+    .comment-author { font-weight: 600; color: var(--text); }
+    .comment-text { font-size: 13px; }
+    .comment-anchor {
+      font-size: 11px; color: var(--accent); margin-top: 4px;
+      font-style: italic;
+    }
+    .insight-panel {
+      margin: 0 20px 16px; padding: 16px;
+      background: var(--insight-bg); border: 1px solid var(--insight-border);
+      border-radius: 8px;
+    }
+    .insight-header {
+      display: flex; align-items: center; gap: 8px;
+      font-size: 12px; font-weight: 600; color: #92400e; margin-bottom: 8px;
+    }
+    .insight-content { font-size: 13px; line-height: 1.6; }
+    .insight-content li { margin-bottom: 6px; }
+    .insight-source {
+      font-size: 11px; color: var(--muted); margin-top: 4px;
+    }
+    .insight-loading {
+      display: flex; align-items: center; gap: 8px;
+      font-size: 13px; color: var(--muted);
+    }
+    .spinner {
+      width: 14px; height: 14px; border: 2px solid var(--border);
+      border-top-color: var(--accent); border-radius: 50%;
+      animation: spin 0.6s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .segment-actions {
+      padding: 12px 20px; border-top: 1px solid var(--border);
+      display: flex; gap: 8px;
+    }
+    .btn {
+      padding: 7px 14px; border-radius: 6px; font-size: 12px;
+      font-weight: 500; cursor: pointer; border: 1px solid var(--border);
+      background: var(--surface); color: var(--text); transition: all 0.15s;
+    }
+    .btn:hover { border-color: var(--accent); color: var(--accent); }
+    .btn-primary {
+      background: var(--accent); color: #fff; border-color: var(--accent);
+    }
+    .btn-primary:hover { background: #2563eb; }
+    .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+    .references {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 10px; padding: 20px; margin-bottom: 16px;
+    }
+    .references h3 { font-size: 14px; font-weight: 600; margin-bottom: 12px; }
+    .ref-list { list-style: none; }
+    .ref-item {
+      display: flex; align-items: center; gap: 8px;
+      padding: 6px 0; font-size: 13px; border-bottom: 1px solid var(--border);
+    }
+    .ref-item:last-child { border-bottom: none; }
+    .ref-remove { color: var(--danger); cursor: pointer; font-size: 16px; }
+    .ref-add {
+      display: flex; gap: 8px; margin-top: 8px;
+    }
+    .ref-add input {
+      flex: 1; padding: 8px 12px; border: 1px solid var(--border);
+      border-radius: 6px; font-size: 13px;
+    }
+    .converge-all {
+      text-align: center; padding: 24px;
+    }
+    .converge-all .btn-primary { font-size: 14px; padding: 12px 32px; }
+    .empty-state {
+      text-align: center; padding: 80px 20px; color: var(--muted);
+    }
+    .empty-state h2 { font-size: 18px; margin-bottom: 8px; color: var(--text); }
+    .setup-panel {
+      max-width: 400px; margin: 80px auto; padding: 32px;
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 12px; text-align: center;
+    }
+    .setup-panel h2 { margin-bottom: 8px; }
+    .setup-panel p { font-size: 13px; color: var(--muted); margin-bottom: 16px; }
+    .setup-panel input {
+      width: 100%; padding: 10px 14px; border: 1px solid var(--border);
+      border-radius: 6px; font-size: 13px; margin-bottom: 12px;
+    }
+    .converge-result {
+      margin: 0 20px 16px; padding: 16px;
+      background: #ecfdf5; border: 1px solid #6ee7b7; border-radius: 8px;
+    }
+    .converge-result h4 { font-size: 12px; font-weight: 600; color: #065f46; margin-bottom: 8px; }
+    .converge-result pre {
+      font-size: 12px; white-space: pre-wrap; word-break: break-word;
+      max-height: 200px; overflow-y: auto;
+    }
+    .header-actions { display: flex; gap: 8px; align-items: center; }
+    .settings-panel {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 10px; padding: 24px; margin-bottom: 24px;
+    }
+    .settings-panel h3 { font-size: 15px; font-weight: 600; margin-bottom: 16px; }
+    .setting-row {
+      margin-bottom: 16px; padding-bottom: 16px;
+      border-bottom: 1px solid var(--border);
+    }
+    .setting-row:last-child { border-bottom: none; margin-bottom: 0; padding-bottom: 0; }
+    .setting-label { font-size: 13px; font-weight: 600; margin-bottom: 4px; }
+    .setting-desc { font-size: 12px; color: var(--muted); margin-bottom: 8px; }
+    .setting-input {
+      width: 100%; padding: 8px 12px; border: 1px solid var(--border);
+      border-radius: 6px; font-size: 13px; font-family: monospace;
+    }
+    .setting-saved {
+      display: inline-block; font-size: 11px; color: var(--success);
+      margin-left: 8px; opacity: 0; transition: opacity 0.3s;
+    }
+    .setting-saved.show { opacity: 1; }
+    .btn-icon {
+      background: none; border: 1px solid var(--border); border-radius: 6px;
+      padding: 6px 10px; cursor: pointer; font-size: 13px; color: var(--muted);
+      transition: all 0.15s;
+    }
+    .btn-icon:hover { border-color: var(--accent); color: var(--accent); }
+    .btn-danger { color: var(--danger); }
+    .btn-danger:hover { border-color: var(--danger); color: var(--danger); }
+    .key-status {
+      display: inline-flex; align-items: center; gap: 6px;
+      font-size: 12px; padding: 4px 10px; border-radius: 99px;
+    }
+    .key-status.active { background: #ecfdf5; color: var(--success); }
+    .key-status.missing { background: var(--insight-bg); color: #92400e; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div id="app"></div>
+  </div>
+  <script>
+  (function() {
+    const app = document.getElementById('app');
+    const DEFAULT_WORKER_URL = 'https://htmldrop-feedback.htmldrop.workers.dev';
+
+    let state = {
+      workerUrl: DEFAULT_WORKER_URL,
+      authorKey: '',
+      anthropicKey: '',
+      files: [],
+      selectedFile: null,
+      feedback: [],
+      segments: [],
+      references: [],
+      insights: {},
+      showSettings: false,
+    };
+
+    function init() {
+      const hash = window.location.hash.slice(1);
+      const params = new URLSearchParams(hash);
+      if (params.get('key')) state.authorKey = params.get('key');
+      if (params.get('worker')) state.workerUrl = params.get('worker');
+
+      // Author key: localStorage (low-value identity token, persists across sessions)
+      const savedAuthorKey = localStorage.getItem('htmldrop_author_key');
+      if (savedAuthorKey && !state.authorKey) state.authorKey = savedAuthorKey;
+      if (state.authorKey) localStorage.setItem('htmldrop_author_key', state.authorKey);
+
+      // Anthropic key: sessionStorage only (payment credential, auto-clears on browser close)
+      const savedAnthropicKey = sessionStorage.getItem('htmldrop_anthropic_key');
+      if (savedAnthropicKey) state.anthropicKey = savedAnthropicKey;
+
+      if (!state.authorKey) {
+        renderSetup();
+      } else {
+        loadFiles();
+      }
+    }
+
+    function renderSetup() {
+      const panel = document.createElement('div');
+      panel.className = 'setup-panel';
+
+      const h2 = document.createElement('h2');
+      h2.textContent = 'Converge Studio';
+      const p = document.createElement('p');
+      p.textContent = 'Enter your author API key to view feedback and insights.';
+      const input = document.createElement('input');
+      input.type = 'password';
+      input.placeholder = 'Author API key from ~/.htmldrop/config.json';
+      const btn = document.createElement('button');
+      btn.className = 'btn btn-primary';
+      btn.style.width = '100%';
+      btn.textContent = 'Connect';
+      btn.addEventListener('click', () => {
+        if (input.value.trim()) {
+          state.authorKey = input.value.trim();
+          window.location.hash = 'key=' + state.authorKey;
+          loadFiles();
+        }
+      });
+
+      panel.append(h2, p, input, btn);
+      app.replaceChildren(panel);
+    }
+
+    async function loadFiles() {
+      renderLoading('Loading your files...');
+      try {
+        const res = await fetch(state.workerUrl + '/api/author/files', {
+          headers: { 'Authorization': 'Bearer ' + state.authorKey },
+        });
+        if (!res.ok) throw new Error('Failed to load files');
+        const data = await res.json();
+        state.files = data.files || [];
+        if (state.files.length > 0) {
+          state.selectedFile = state.files[0];
+          await loadFeedback(state.selectedFile.docId);
+        } else {
+          renderEmpty();
+        }
+      } catch (e) {
+        renderEmpty();
+      }
+    }
+
+    async function loadFeedback(docId) {
+      renderLoading('Loading feedback...');
+      try {
+        const res = await fetch(state.workerUrl + '/api/feedback/' + docId, {
+          headers: { 'Authorization': 'Bearer ' + state.authorKey },
+        });
+        const data = await res.json();
+        state.feedback = data.items || [];
+        await loadSegments(docId);
+      } catch (e) {
+        state.feedback = [];
+        renderDashboard();
+      }
+    }
+
+    async function loadSegments(docId) {
+      try {
+        const res = await fetch(state.workerUrl + '/api/segments/' + docId, {
+          method: 'POST',
+          headers: {
+            'Authorization': 'Bearer ' + state.authorKey,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ items: state.feedback }),
+        });
+        if (res.ok) {
+          const data = await res.json();
+          state.segments = data.segments || [];
+        } else {
+          state.segments = fallbackSegmentation(state.feedback);
+        }
+      } catch (e) {
+        state.segments = fallbackSegmentation(state.feedback);
+      }
+      renderDashboard();
+    }
+
+    function fallbackSegmentation(items) {
+      const groups = {};
+      for (const item of items) {
+        const key = item.anchor?.selectedText?.slice(0, 40) || item.anchor?.selector || 'page-level';
+        if (!groups[key]) groups[key] = { title: key, items: [], hasDebate: false };
+        groups[key].items.push(item);
+      }
+      for (const seg of Object.values(groups)) {
+        if (seg.items.length >= 2) {
+          const authors = new Set(seg.items.map(i => i.author?.displayName));
+          seg.hasDebate = authors.size >= 2;
+        }
+      }
+      return Object.values(groups);
+    }
+
+    function renderLoading(msg) {
+      const div = document.createElement('div');
+      div.className = 'empty-state';
+      const spin = document.createElement('div');
+      spin.className = 'spinner';
+      spin.style.margin = '0 auto 12px';
+      const text = document.createElement('p');
+      text.textContent = msg;
+      div.append(spin, text);
+      app.replaceChildren(div);
+    }
+
+    function renderEmpty() {
+      const div = document.createElement('div');
+      div.className = 'empty-state';
+      const h2 = document.createElement('h2');
+      h2.textContent = 'No feedback files yet';
+      const p = document.createElement('p');
+      p.textContent = 'Push a file with --feedback flag to get started: htmldrop push spec.html --feedback';
+      div.append(h2, p);
+      app.replaceChildren(div);
+    }
+
+    function renderDashboard() {
+      const frag = document.createDocumentFragment();
+
+      // Header
+      const header = document.createElement('header');
+      const h1 = document.createElement('h1');
+      h1.textContent = 'Converge ';
+      const span = document.createElement('span');
+      span.textContent = 'Studio';
+      h1.appendChild(span);
+      const headerActions = document.createElement('div');
+      headerActions.className = 'header-actions';
+      const select = document.createElement('select');
+      select.className = 'file-select';
+      for (const f of state.files) {
+        const opt = document.createElement('option');
+        opt.value = f.docId;
+        opt.textContent = f.name || f.docId.slice(0, 8);
+        if (f.docId === state.selectedFile?.docId) opt.selected = true;
+        select.appendChild(opt);
+      }
+      select.addEventListener('change', (e) => {
+        state.selectedFile = state.files.find(f => f.docId === e.target.value);
+        loadFeedback(state.selectedFile.docId);
+      });
+
+      const keyStatus = document.createElement('span');
+      keyStatus.className = 'key-status ' + (state.anthropicKey ? 'active' : 'missing');
+      keyStatus.textContent = state.anthropicKey ? 'AI Ready' : 'No AI Key';
+
+      const settingsBtn = document.createElement('button');
+      settingsBtn.className = 'btn-icon';
+      settingsBtn.textContent = '⚙ Settings';
+      settingsBtn.addEventListener('click', () => { state.showSettings = !state.showSettings; renderDashboard(); });
+
+      const logoutBtn = document.createElement('button');
+      logoutBtn.className = 'btn-icon btn-danger';
+      logoutBtn.textContent = 'Logout';
+      logoutBtn.addEventListener('click', () => {
+        localStorage.removeItem('htmldrop_author_key');
+        sessionStorage.removeItem('htmldrop_anthropic_key');
+        state.authorKey = '';
+        state.anthropicKey = '';
+        window.location.hash = '';
+        renderSetup();
+      });
+
+      headerActions.append(select, keyStatus, settingsBtn, logoutBtn);
+      header.append(h1, headerActions);
+      frag.appendChild(header);
+
+      // Settings panel
+      if (state.showSettings) {
+        frag.appendChild(renderSettings());
+      }
+
+      // Stats
+      const stats = document.createElement('div');
+      stats.className = 'stats';
+      const debates = state.segments.filter(s => s.hasDebate).length;
+      const statData = [
+        { value: state.feedback.length, label: 'Comments' },
+        { value: state.segments.length, label: 'Segments' },
+        { value: debates, label: 'Debates' },
+        { value: Object.keys(state.insights).length, label: 'Insights' },
+      ];
+      for (const s of statData) {
+        const stat = document.createElement('div');
+        stat.className = 'stat';
+        const val = document.createElement('div');
+        val.className = 'stat-value';
+        val.textContent = s.value;
+        const lbl = document.createElement('div');
+        lbl.className = 'stat-label';
+        lbl.textContent = s.label;
+        stat.append(val, lbl);
+        stats.appendChild(stat);
+      }
+      frag.appendChild(stats);
+
+      // References
+      frag.appendChild(renderReferences());
+
+      // Segments
+      for (let i = 0; i < state.segments.length; i++) {
+        frag.appendChild(renderSegment(state.segments[i], i));
+      }
+
+      // Converge All
+      if (state.segments.length > 0) {
+        const convAll = document.createElement('div');
+        convAll.className = 'converge-all';
+        const btn = document.createElement('button');
+        btn.className = 'btn btn-primary';
+        btn.textContent = 'Converge All Segments';
+        btn.addEventListener('click', () => convergeAll());
+        convAll.appendChild(btn);
+        frag.appendChild(convAll);
+      }
+
+      app.replaceChildren(frag);
+    }
+
+    function renderSettings() {
+      const panel = document.createElement('div');
+      panel.className = 'settings-panel';
+      const h3 = document.createElement('h3');
+      h3.textContent = 'Settings';
+      panel.appendChild(h3);
+
+      // Anthropic API Key
+      const aiRow = document.createElement('div');
+      aiRow.className = 'setting-row';
+      const aiLabel = document.createElement('div');
+      aiLabel.className = 'setting-label';
+      aiLabel.textContent = 'Anthropic API Key (for AI Insights & Converge)';
+      const aiDesc = document.createElement('div');
+      aiDesc.className = 'setting-desc';
+      aiDesc.textContent = 'Stored in session memory only — automatically cleared when you close the browser. Never persisted to disk or sent to our servers.';
+      const aiInput = document.createElement('input');
+      aiInput.className = 'setting-input';
+      aiInput.type = 'password';
+      aiInput.placeholder = 'sk-ant-...';
+      aiInput.value = state.anthropicKey || '';
+      const aiSaved = document.createElement('span');
+      aiSaved.className = 'setting-saved';
+      aiSaved.textContent = 'Saved';
+      aiInput.addEventListener('change', () => {
+        state.anthropicKey = aiInput.value.trim();
+        if (state.anthropicKey) {
+          sessionStorage.setItem('htmldrop_anthropic_key', state.anthropicKey);
+        } else {
+          sessionStorage.removeItem('htmldrop_anthropic_key');
+        }
+        aiSaved.classList.add('show');
+        setTimeout(() => aiSaved.classList.remove('show'), 2000);
+        renderDashboard();
+      });
+      const aiAction = document.createElement('div');
+      aiAction.style.marginTop = '8px';
+      aiAction.style.fontSize = '12px';
+      const aiLink = document.createElement('a');
+      aiLink.href = 'https://console.anthropic.com/settings/keys';
+      aiLink.target = '_blank';
+      aiLink.textContent = 'Get an API key from Anthropic Console';
+      aiLink.style.color = 'var(--accent)';
+      aiAction.appendChild(aiLink);
+      aiRow.append(aiLabel, aiDesc, aiInput, aiSaved, aiAction);
+      panel.appendChild(aiRow);
+
+      // Worker URL
+      const workerRow = document.createElement('div');
+      workerRow.className = 'setting-row';
+      const wLabel = document.createElement('div');
+      wLabel.className = 'setting-label';
+      wLabel.textContent = 'Worker URL';
+      const wDesc = document.createElement('div');
+      wDesc.className = 'setting-desc';
+      wDesc.textContent = 'The feedback relay backend. Change only if self-hosting.';
+      const wInput = document.createElement('input');
+      wInput.className = 'setting-input';
+      wInput.type = 'url';
+      wInput.value = state.workerUrl;
+      wInput.addEventListener('change', () => {
+        state.workerUrl = wInput.value.trim() || DEFAULT_WORKER_URL;
+      });
+      workerRow.append(wLabel, wDesc, wInput);
+      panel.appendChild(workerRow);
+
+      // Author key (read-only display)
+      const authRow = document.createElement('div');
+      authRow.className = 'setting-row';
+      const authLabel = document.createElement('div');
+      authLabel.className = 'setting-label';
+      authLabel.textContent = 'Author Key';
+      const authDesc = document.createElement('div');
+      authDesc.className = 'setting-desc';
+      authDesc.textContent = 'Your author identity. Generated by `htmldrop auth setup`.';
+      const authValue = document.createElement('code');
+      authValue.style.fontSize = '12px';
+      authValue.style.color = 'var(--muted)';
+      authValue.textContent = state.authorKey.slice(0, 8) + '...' + state.authorKey.slice(-4);
+      authRow.append(authLabel, authDesc, authValue);
+      panel.appendChild(authRow);
+
+      return panel;
+    }
+
+    function renderReferences() {
+      const div = document.createElement('div');
+      div.className = 'references';
+      const h3 = document.createElement('h3');
+      h3.textContent = 'Reference URLs (AI will consult these for insights)';
+      div.appendChild(h3);
+
+      const list = document.createElement('ul');
+      list.className = 'ref-list';
+      for (let i = 0; i < state.references.length; i++) {
+        const li = document.createElement('li');
+        li.className = 'ref-item';
+        const link = document.createElement('span');
+        link.textContent = state.references[i];
+        const rm = document.createElement('span');
+        rm.className = 'ref-remove';
+        rm.textContent = '×';
+        rm.addEventListener('click', () => {
+          state.references.splice(i, 1);
+          renderDashboard();
+        });
+        li.append(link, rm);
+        list.appendChild(li);
+      }
+      div.appendChild(list);
+
+      const addRow = document.createElement('div');
+      addRow.className = 'ref-add';
+      const input = document.createElement('input');
+      input.type = 'url';
+      input.placeholder = 'https://example.com/reference-doc';
+      const addBtn = document.createElement('button');
+      addBtn.className = 'btn';
+      addBtn.textContent = '+ Add';
+      addBtn.addEventListener('click', () => {
+        if (input.value.trim()) {
+          state.references.push(input.value.trim());
+          renderDashboard();
+        }
+      });
+      addRow.append(input, addBtn);
+      div.appendChild(addRow);
+      return div;
+    }
+
+    function renderSegment(seg, idx) {
+      const div = document.createElement('div');
+      div.className = 'segment';
+
+      // Header
+      const header = document.createElement('div');
+      header.className = 'segment-header';
+      const title = document.createElement('span');
+      title.className = 'segment-title';
+      title.textContent = seg.title.length > 60 ? seg.title.slice(0, 60) + '...' : seg.title;
+      header.appendChild(title);
+      if (seg.hasDebate) {
+        const badge = document.createElement('span');
+        badge.className = 'segment-badge badge-debate';
+        badge.textContent = 'Debate';
+        header.appendChild(badge);
+      } else if (seg.items.length >= 2) {
+        const badge = document.createElement('span');
+        badge.className = 'segment-badge badge-consensus';
+        badge.textContent = 'Consensus';
+        header.appendChild(badge);
+      }
+      div.appendChild(header);
+
+      // Comments
+      const comments = document.createElement('div');
+      comments.className = 'comments';
+      for (const item of seg.items) {
+        const comment = document.createElement('div');
+        comment.className = 'comment';
+        const meta = document.createElement('div');
+        meta.className = 'comment-meta';
+        const author = document.createElement('span');
+        author.className = 'comment-author';
+        author.textContent = item.author?.displayName || 'Anonymous';
+        const time = document.createElement('span');
+        time.textContent = new Date(item.createdAt).toLocaleDateString();
+        meta.append(author, time);
+        const text = document.createElement('div');
+        text.className = 'comment-text';
+        text.textContent = item.content?.text || '';
+        comment.append(meta, text);
+        if (item.anchor?.selectedText) {
+          const anchor = document.createElement('div');
+          anchor.className = 'comment-anchor';
+          anchor.textContent = '“' + item.anchor.selectedText.slice(0, 80) + '”';
+          comment.appendChild(anchor);
+        }
+        comments.appendChild(comment);
+      }
+      div.appendChild(comments);
+
+      // Insight panel (if exists)
+      if (state.insights[idx]) {
+        div.appendChild(renderInsight(state.insights[idx]));
+      }
+
+      // Actions
+      const actions = document.createElement('div');
+      actions.className = 'segment-actions';
+      const insightBtn = document.createElement('button');
+      insightBtn.className = 'btn';
+      insightBtn.textContent = state.insights[idx] ? 'Refresh Insights' : 'Get Insights';
+      insightBtn.addEventListener('click', () => getInsights(idx));
+      const convergeBtn = document.createElement('button');
+      convergeBtn.className = 'btn btn-primary';
+      convergeBtn.textContent = 'Converge this segment';
+      convergeBtn.addEventListener('click', () => convergeSegment(idx));
+      actions.append(insightBtn, convergeBtn);
+      div.appendChild(actions);
+
+      return div;
+    }
+
+    function renderInsight(insight) {
+      const panel = document.createElement('div');
+      panel.className = 'insight-panel';
+      const header = document.createElement('div');
+      header.className = 'insight-header';
+      header.textContent = '⚡ AI Insight';
+      panel.appendChild(header);
+      const content = document.createElement('div');
+      content.className = 'insight-content';
+      if (insight.loading) {
+        const loading = document.createElement('div');
+        loading.className = 'insight-loading';
+        const spin = document.createElement('div');
+        spin.className = 'spinner';
+        const text = document.createElement('span');
+        text.textContent = 'Researching...';
+        loading.append(spin, text);
+        content.appendChild(loading);
+      } else if (insight.points) {
+        const ul = document.createElement('ul');
+        for (const point of insight.points) {
+          const li = document.createElement('li');
+          li.textContent = point.text;
+          if (point.source) {
+            const src = document.createElement('div');
+            src.className = 'insight-source';
+            src.textContent = 'Source: ' + point.source;
+            li.appendChild(src);
+          }
+          ul.appendChild(li);
+        }
+        content.appendChild(ul);
+      }
+      panel.appendChild(content);
+      return panel;
+    }
+
+    async function getInsights(segIdx) {
+      if (!state.anthropicKey) {
+        alert('Please add your Anthropic API key in Settings to use AI features.');
+        state.showSettings = true;
+        renderDashboard();
+        return;
+      }
+      state.insights[segIdx] = { loading: true };
+      renderDashboard();
+
+      try {
+        const seg = state.segments[segIdx];
+        const res = await fetch(state.workerUrl + '/api/insights/' + state.selectedFile.docId, {
+          method: 'POST',
+          headers: {
+            'Authorization': 'Bearer ' + state.authorKey,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            segment: seg,
+            references: state.references,
+            anthropicKey: state.anthropicKey,
+          }),
+        });
+        if (res.ok) {
+          const data = await res.json();
+          state.insights[segIdx] = data;
+        } else {
+          state.insights[segIdx] = { points: [{ text: 'Could not generate insights. Check Worker deployment.' }] };
+        }
+      } catch (e) {
+        state.insights[segIdx] = { points: [{ text: 'Network error — is the Worker deployed?' }] };
+      }
+      renderDashboard();
+    }
+
+    async function convergeSegment(segIdx) {
+      if (!state.anthropicKey) {
+        alert('Please add your Anthropic API key in Settings to use AI features.');
+        state.showSettings = true;
+        renderDashboard();
+        return;
+      }
+      const seg = state.segments[segIdx];
+      const insight = state.insights[segIdx];
+      try {
+        const res = await fetch(state.workerUrl + '/api/converge/' + state.selectedFile.docId, {
+          method: 'POST',
+          headers: {
+            'Authorization': 'Bearer ' + state.authorKey,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            segment: seg,
+            insight: insight,
+            references: state.references,
+            anthropicKey: state.anthropicKey,
+          }),
+        });
+        if (res.ok) {
+          const data = await res.json();
+          alert('Segment converged. Suggestion: ' + (data.suggestion || '').slice(0, 200));
+        }
+      } catch (e) {
+        alert('Failed to converge segment');
+      }
+    }
+
+    async function convergeAll() {
+      alert('Converging all segments... This will call the AI for each debated segment.');
+      for (let i = 0; i < state.segments.length; i++) {
+        if (state.segments[i].hasDebate || state.segments[i].items.length >= 2) {
+          if (!state.insights[i]) await getInsights(i);
+          await convergeSegment(i);
+        }
+      }
+    }
+
+    init();
+  })();
+  </script>
+</body>
+</html>

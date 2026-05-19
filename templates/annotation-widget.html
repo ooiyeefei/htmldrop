@@ -1,0 +1,206 @@
+<!-- htmldrop annotation widget -->
+<script>
+(function() {
+  const configEl = document.getElementById('htmldrop-config');
+  if (!configEl) return;
+  const config = JSON.parse(configEl.textContent);
+
+  const host = document.createElement('div');
+  host.id = 'htmldrop-widget-host';
+  document.body.appendChild(host);
+  const shadow = host.attachShadow({ mode: 'open' });
+
+  const style = document.createElement('style');
+  style.textContent = `
+    .hd-fab {
+      position: fixed; bottom: 24px; right: 24px;
+      width: 48px; height: 48px; border-radius: 50%;
+      background: #1e293b; color: #fff; border: none;
+      cursor: pointer; font-size: 20px;
+      display: flex; align-items: center; justify-content: center;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+      z-index: 999999; transition: transform 0.15s;
+    }
+    .hd-fab:hover { transform: scale(1.1); }
+    .hd-sidebar {
+      position: fixed; top: 0; right: 0;
+      width: 360px; height: 100vh;
+      background: #fff; border-left: 1px solid #e2e8f0;
+      box-shadow: -4px 0 20px rgba(0,0,0,0.08);
+      z-index: 999998; display: none; flex-direction: column;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    }
+    .hd-sidebar.open { display: flex; }
+    .hd-header {
+      padding: 16px 20px; border-bottom: 1px solid #e2e8f0;
+      display: flex; justify-content: space-between; align-items: center;
+    }
+    .hd-header h3 { margin: 0; font-size: 14px; font-weight: 600; color: #1e293b; }
+    .hd-close { background: none; border: none; font-size: 18px; cursor: pointer; color: #64748b; }
+    .hd-comments { flex: 1; overflow-y: auto; padding: 16px 20px; }
+    .hd-comment {
+      margin-bottom: 16px; padding: 12px;
+      background: #f8fafc; border-radius: 8px; border: 1px solid #e2e8f0;
+    }
+    .hd-comment-author { font-weight: 600; font-size: 12px; color: #475569; }
+    .hd-comment-text { font-size: 13px; color: #1e293b; margin-top: 4px; line-height: 1.4; }
+    .hd-comment-anchor { font-size: 11px; color: #94a3b8; margin-top: 4px; font-style: italic; }
+    .hd-form { padding: 16px 20px; border-top: 1px solid #e2e8f0; }
+    .hd-form input, .hd-form textarea {
+      width: 100%; padding: 8px 12px;
+      border: 1px solid #e2e8f0; border-radius: 6px;
+      font-size: 13px; margin-bottom: 8px; font-family: inherit;
+    }
+    .hd-form textarea { resize: vertical; min-height: 60px; }
+    .hd-form button {
+      background: #1e293b; color: #fff; border: none;
+      padding: 8px 16px; border-radius: 6px; font-size: 13px;
+      cursor: pointer; width: 100%;
+    }
+    .hd-form button:hover { background: #334155; }
+    .hd-empty { color: #94a3b8; font-size: 13px; text-align: center; padding: 40px 20px; }
+    .hd-count {
+      position: absolute; top: -4px; right: -4px;
+      background: #3b82f6; color: #fff; font-size: 10px;
+      width: 18px; height: 18px; border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+    }
+  `;
+  shadow.appendChild(style);
+
+  function el(tag, attrs, children) {
+    const node = document.createElement(tag);
+    if (attrs) Object.entries(attrs).forEach(([k, v]) => {
+      if (k === 'text') node.textContent = v;
+      else if (k === 'class') node.className = v;
+      else node.setAttribute(k, v);
+    });
+    if (children) children.forEach(c => node.appendChild(c));
+    return node;
+  }
+
+  const countEl = el('span', { class: 'hd-count', id: 'hd-count', style: 'display:none' });
+  const fab = el('button', { class: 'hd-fab', title: 'Feedback', text: '\u{1F4AC}' });
+  fab.appendChild(countEl);
+
+  const commentsEl = el('div', { class: 'hd-comments' });
+  const nameInput = el('input', { type: 'text', placeholder: 'Your name', maxlength: '100' });
+  const textInput = el('textarea', { placeholder: 'Leave feedback...', maxlength: '10000' });
+  const submitBtn = el('button', { text: 'Submit Feedback' });
+  const closeBtn = el('button', { class: 'hd-close', text: '×' });
+  const headerTitle = el('h3', { text: 'Feedback' });
+
+  const header = el('div', { class: 'hd-header' }, [headerTitle, closeBtn]);
+  const form = el('div', { class: 'hd-form' }, [nameInput, textInput, submitBtn]);
+  const sidebar = el('div', { class: 'hd-sidebar' }, [header, commentsEl, form]);
+
+  shadow.appendChild(fab);
+  shadow.appendChild(sidebar);
+
+  let selectedText = '';
+  let selectedSelector = '';
+
+  fab.addEventListener('click', () => sidebar.classList.toggle('open'));
+  closeBtn.addEventListener('click', () => sidebar.classList.remove('open'));
+
+  document.addEventListener('mouseup', () => {
+    const sel = window.getSelection();
+    if (sel && sel.toString().trim().length > 0) {
+      selectedText = sel.toString().trim().slice(0, 2000);
+      const node = sel.anchorNode && sel.anchorNode.parentElement;
+      if (node) {
+        try { selectedSelector = buildSelector(node); } catch(e) { selectedSelector = ''; }
+      }
+    }
+  });
+
+  function buildSelector(node) {
+    const parts = [];
+    while (node && node !== document.body) {
+      let part = node.tagName.toLowerCase();
+      if (node.id) { parts.unshift('#' + node.id); break; }
+      const parent = node.parentElement;
+      if (parent) {
+        const siblings = Array.from(parent.children).filter(c => c.tagName === node.tagName);
+        if (siblings.length > 1) part += ':nth-of-type(' + (siblings.indexOf(node) + 1) + ')';
+      }
+      parts.unshift(part);
+      node = parent;
+    }
+    return parts.join(' > ');
+  }
+
+  async function loadComments() {
+    try {
+      const res = await fetch(config.workerUrl + '/api/feedback/' + config.docId);
+      const data = await res.json();
+      renderComments(data.items || []);
+    } catch(e) {
+      commentsEl.replaceChildren(el('div', { class: 'hd-empty', text: 'Could not load comments' }));
+    }
+  }
+
+  function renderComments(items) {
+    commentsEl.replaceChildren();
+    if (items.length === 0) {
+      commentsEl.appendChild(el('div', { class: 'hd-empty', text: 'No feedback yet. Be the first!' }));
+      countEl.style.display = 'none';
+      return;
+    }
+    countEl.textContent = String(items.length);
+    countEl.style.display = 'flex';
+    items.forEach(item => {
+      const author = el('div', { class: 'hd-comment-author', text: item.author?.displayName || 'Anonymous' });
+      const text = el('div', { class: 'hd-comment-text', text: item.content?.text || '' });
+      const comment = el('div', { class: 'hd-comment' }, [author, text]);
+      if (item.anchor?.selectedText) {
+        comment.appendChild(el('div', {
+          class: 'hd-comment-anchor',
+          text: '“' + item.anchor.selectedText.slice(0, 80) + '”'
+        }));
+      }
+      commentsEl.appendChild(comment);
+    });
+  }
+
+  submitBtn.addEventListener('click', async () => {
+    const text = textInput.value.trim();
+    if (!text) return;
+    const name = nameInput.value.trim() || 'Anonymous';
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'Sending...';
+    try {
+      const body = {
+        anchor: {
+          type: selectedText ? 'text_range' : 'page_level',
+          selector: selectedSelector || undefined,
+          selectedText: selectedText || undefined,
+        },
+        content: { type: 'text', text: text },
+        author: { displayName: name },
+        parentId: null,
+      };
+      const res = await fetch(config.workerUrl + '/api/feedback/' + config.docId, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        alert(err.error || 'Failed to submit');
+      } else {
+        textInput.value = '';
+        selectedText = '';
+        selectedSelector = '';
+        await loadComments();
+      }
+    } catch(e) {
+      alert('Network error');
+    }
+    submitBtn.disabled = false;
+    submitBtn.textContent = 'Submit Feedback';
+  });
+
+  loadComments();
+})();
+</script>
