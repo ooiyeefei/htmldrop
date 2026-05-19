@@ -17,7 +17,7 @@
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Inter, sans-serif;
       background: var(--bg); color: var(--text); line-height: 1.5;
     }
-    .container { max-width: 960px; margin: 0 auto; padding: 24px 20px; }
+    .container { max-width: 1200px; margin: 0 auto; padding: 24px 20px; }
     header {
       display: flex; justify-content: space-between; align-items: center;
       padding: 16px 0; margin-bottom: 24px; border-bottom: 1px solid var(--border);
@@ -189,6 +189,71 @@
     }
     .key-status.active { background: #ecfdf5; color: var(--success); }
     .key-status.missing { background: var(--insight-bg); color: #92400e; }
+    /* Doc viewer layout */
+    .doc-viewer {
+      display: flex; gap: 0; height: calc(100vh - 80px);
+      border: 1px solid var(--border); border-radius: 10px; overflow: hidden;
+      background: var(--surface);
+    }
+    .doc-iframe-wrap {
+      flex: 1; border-right: 1px solid var(--border); position: relative;
+    }
+    .doc-iframe-wrap iframe {
+      width: 100%; height: 100%; border: none;
+    }
+    .doc-margin {
+      width: 340px; overflow-y: auto; padding: 16px;
+      background: var(--bg);
+    }
+    .doc-margin-header {
+      font-size: 13px; font-weight: 600; margin-bottom: 12px;
+      display: flex; justify-content: space-between; align-items: center;
+    }
+    .doc-margin-count {
+      font-size: 11px; color: var(--muted); font-weight: 400;
+      background: var(--surface); padding: 2px 8px; border-radius: 99px;
+      border: 1px solid var(--border);
+    }
+    .mc {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 8px; padding: 12px; margin-bottom: 10px;
+      transition: border-color 0.15s;
+    }
+    .mc:hover { border-color: var(--accent); }
+    .mc-header { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+    .mc-avatar {
+      width: 24px; height: 24px; border-radius: 50%;
+      background: var(--accent); color: #fff;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 11px; font-weight: 600;
+    }
+    .mc-name { font-weight: 600; font-size: 12px; }
+    .mc-time { font-size: 11px; color: var(--muted); margin-left: auto; }
+    .mc-text { font-size: 13px; color: var(--text); line-height: 1.4; }
+    .mc-anchor {
+      margin-top: 6px; padding: 4px 8px;
+      background: var(--accent-soft); color: var(--accent);
+      border-radius: 4px; font-size: 11px; display: inline-block;
+    }
+    .mc-insight {
+      background: var(--insight-bg); border: 1px solid var(--insight-border);
+      border-radius: 8px; padding: 12px; margin-bottom: 10px;
+    }
+    .mc-insight-header { font-size: 11px; font-weight: 600; color: #92400e; margin-bottom: 6px; }
+    .mc-insight-text { font-size: 12px; line-height: 1.5; }
+    .mc-insight-source { font-size: 10px; color: var(--muted); margin-top: 3px; }
+    .mc-actions { display: flex; gap: 6px; margin-top: 12px; }
+    .doc-url-bar {
+      padding: 8px 16px; background: var(--bg);
+      border-bottom: 1px solid var(--border);
+      font-size: 12px; color: var(--muted);
+      display: flex; align-items: center; gap: 8px;
+    }
+    .doc-url-bar code {
+      background: var(--surface); padding: 2px 8px;
+      border-radius: 4px; border: 1px solid var(--border);
+      font-size: 11px;
+    }
   </style>
 </head>
 <body>
@@ -433,76 +498,230 @@
 
     function renderDashboard() {
       const frag = document.createDocumentFragment();
-
-      // Nav
       frag.appendChild(renderNav());
 
-      // File selector (if author has multiple files)
+      // Container goes full width for the doc viewer
+      const container = app.parentElement;
+      container.style.maxWidth = '100%';
+      container.style.padding = '0 16px';
+
+      // Doc viewer: iframe left + comments right
+      const viewer = document.createElement('div');
+      viewer.className = 'doc-viewer';
+
+      // Left: iframe with the published HTML
+      const iframeWrap = document.createElement('div');
+      iframeWrap.className = 'doc-iframe-wrap';
+
+      const urlBar = document.createElement('div');
+      urlBar.className = 'doc-url-bar';
+      const urlLabel = document.createElement('span');
+      urlLabel.textContent = 'Document: ';
+      const urlCode = document.createElement('code');
+      urlCode.textContent = state.currentDocId || state.selectedFile?.docId || 'unknown';
+      urlBar.append(urlLabel, urlCode);
+
       if (state.files.length > 1) {
-        const selectRow = document.createElement('div');
-        selectRow.style.cssText = 'margin-bottom:16px;';
         const select = document.createElement('select');
         select.className = 'file-select';
+        select.style.marginLeft = 'auto';
         for (const f of state.files) {
           const opt = document.createElement('option');
           opt.value = f.docId;
           opt.textContent = f.name || f.docId.slice(0, 8);
-          if (f.docId === state.selectedFile?.docId) opt.selected = true;
+          if (f.docId === (state.selectedFile?.docId || state.currentDocId)) opt.selected = true;
           select.appendChild(opt);
         }
         select.addEventListener('change', (e) => {
           state.selectedFile = state.files.find(f => f.docId === e.target.value);
-          loadFeedback(state.selectedFile.docId);
+          state.currentDocId = e.target.value;
+          loadFeedback(state.currentDocId);
         });
-        selectRow.appendChild(select);
-        frag.appendChild(selectRow);
+        urlBar.appendChild(select);
       }
 
-      // Stats
-      const stats = document.createElement('div');
-      stats.className = 'stats';
-      const debates = state.segments.filter(s => s.hasDebate).length;
-      const statData = [
-        { value: state.feedback.length, label: 'Comments' },
-        { value: state.segments.length, label: 'Segments' },
-        { value: debates, label: 'Debates' },
-        { value: Object.keys(state.insights).length, label: 'Insights' },
-      ];
-      for (const s of statData) {
-        const stat = document.createElement('div');
-        stat.className = 'stat';
-        const val = document.createElement('div');
-        val.className = 'stat-value';
-        val.textContent = s.value;
-        const lbl = document.createElement('div');
-        lbl.className = 'stat-label';
-        lbl.textContent = s.label;
-        stat.append(val, lbl);
-        stats.appendChild(stat);
-      }
-      frag.appendChild(stats);
+      const iframe = document.createElement('iframe');
+      iframe.sandbox = 'allow-same-origin';
+      // Build a preview of the HTML content with highlighted comments
+      const previewHtml = buildPreviewHtml();
+      iframe.srcdoc = previewHtml;
 
-      // References
-      frag.appendChild(renderReferences());
+      iframeWrap.append(urlBar, iframe);
 
-      // Segments
-      for (let i = 0; i < state.segments.length; i++) {
-        frag.appendChild(renderSegment(state.segments[i], i));
-      }
+      // Right: margin comments
+      const margin = document.createElement('div');
+      margin.className = 'doc-margin';
 
-      // Converge All
+      const marginHeader = document.createElement('div');
+      marginHeader.className = 'doc-margin-header';
+      const marginTitle = document.createElement('span');
+      marginTitle.textContent = 'Comments';
+      const marginCount = document.createElement('span');
+      marginCount.className = 'doc-margin-count';
+      marginCount.textContent = state.feedback.length + ' total';
+      marginHeader.append(marginTitle, marginCount);
+      margin.appendChild(marginHeader);
+
+      // Render comments grouped by segment
       if (state.segments.length > 0) {
+        state.segments.forEach((seg, segIdx) => {
+          // Segment label
+          const segLabel = document.createElement('div');
+          segLabel.style.cssText = 'font-size:11px;font-weight:600;color:var(--muted);margin:12px 0 6px;text-transform:uppercase;letter-spacing:0.5px;';
+          segLabel.textContent = seg.title.length > 30 ? seg.title.slice(0, 30) + '...' : seg.title;
+          if (seg.hasDebate) {
+            const badge = document.createElement('span');
+            badge.style.cssText = 'margin-left:6px;background:var(--debate-bg);color:var(--danger);padding:1px 6px;border-radius:99px;font-size:10px;';
+            badge.textContent = 'debate';
+            segLabel.appendChild(badge);
+          }
+          margin.appendChild(segLabel);
+
+          // Comments in segment
+          seg.items.forEach(item => {
+            margin.appendChild(renderMarginComment(item));
+          });
+
+          // Insight (if exists)
+          if (state.insights[segIdx] && !state.insights[segIdx].loading) {
+            margin.appendChild(renderMarginInsight(state.insights[segIdx]));
+          }
+
+          // Actions for this segment
+          const actions = document.createElement('div');
+          actions.className = 'mc-actions';
+          const insightBtn = document.createElement('button');
+          insightBtn.className = 'btn';
+          insightBtn.textContent = state.insights[segIdx] ? '↻ Refresh' : '⚡ Get Insights';
+          insightBtn.style.fontSize = '11px';
+          insightBtn.addEventListener('click', () => getInsights(segIdx));
+          const convBtn = document.createElement('button');
+          convBtn.className = 'btn btn-primary';
+          convBtn.textContent = 'Converge';
+          convBtn.style.fontSize = '11px';
+          convBtn.addEventListener('click', () => convergeSegment(segIdx));
+          actions.append(insightBtn, convBtn);
+          margin.appendChild(actions);
+        });
+      } else {
+        state.feedback.forEach(item => {
+          margin.appendChild(renderMarginComment(item));
+        });
+      }
+
+      // Converge All button at bottom
+      if (state.feedback.length > 0) {
         const convAll = document.createElement('div');
-        convAll.className = 'converge-all';
+        convAll.style.cssText = 'margin-top:16px;padding-top:16px;border-top:1px solid var(--border);';
         const btn = document.createElement('button');
         btn.className = 'btn btn-primary';
-        btn.textContent = 'Converge All Segments';
+        btn.style.width = '100%';
+        btn.textContent = 'Converge All';
         btn.addEventListener('click', () => convergeAll());
         convAll.appendChild(btn);
-        frag.appendChild(convAll);
+        margin.appendChild(convAll);
       }
 
+      viewer.append(iframeWrap, margin);
+      frag.appendChild(viewer);
       app.replaceChildren(frag);
+    }
+
+    function renderMarginComment(item) {
+      const card = document.createElement('div');
+      card.className = 'mc';
+      const header = document.createElement('div');
+      header.className = 'mc-header';
+      const avatar = document.createElement('div');
+      avatar.className = 'mc-avatar';
+      avatar.textContent = (item.author?.displayName || 'A')[0].toUpperCase();
+      const name = document.createElement('span');
+      name.className = 'mc-name';
+      name.textContent = item.author?.displayName || 'Anonymous';
+      const time = document.createElement('span');
+      time.className = 'mc-time';
+      time.textContent = formatTime(item.createdAt);
+      header.append(avatar, name, time);
+      const text = document.createElement('div');
+      text.className = 'mc-text';
+      text.textContent = item.content?.text || '';
+      card.append(header, text);
+      if (item.anchor?.selectedText) {
+        const anchor = document.createElement('div');
+        anchor.className = 'mc-anchor';
+        anchor.textContent = '"' + item.anchor.selectedText.slice(0, 60) + '"';
+        card.appendChild(anchor);
+      }
+      return card;
+    }
+
+    function renderMarginInsight(insight) {
+      const panel = document.createElement('div');
+      panel.className = 'mc-insight';
+      const header = document.createElement('div');
+      header.className = 'mc-insight-header';
+      header.textContent = '⚡ AI Insight';
+      panel.appendChild(header);
+      if (insight.points) {
+        insight.points.forEach(p => {
+          const text = document.createElement('div');
+          text.className = 'mc-insight-text';
+          text.textContent = p.text;
+          panel.appendChild(text);
+          if (p.source) {
+            const src = document.createElement('div');
+            src.className = 'mc-insight-source';
+            src.textContent = 'Source: ' + p.source;
+            panel.appendChild(src);
+          }
+        });
+      }
+      return panel;
+    }
+
+    function formatTime(iso) {
+      if (!iso) return '';
+      const d = new Date(iso);
+      const now = new Date();
+      const diff = now - d;
+      if (diff < 60000) return 'now';
+      if (diff < 3600000) return Math.floor(diff / 60000) + 'm ago';
+      if (diff < 86400000) return Math.floor(diff / 3600000) + 'h ago';
+      return d.toLocaleDateString();
+    }
+
+    function buildPreviewHtml() {
+      // Build a simple rendered view with highlighted anchors
+      const anchors = state.feedback
+        .filter(f => f.anchor?.selectedText)
+        .map(f => f.anchor.selectedText);
+
+      let html = '<!DOCTYPE html><html><head><style>body{font-family:-apple-system,sans-serif;padding:32px 48px;line-height:1.7;max-width:700px;color:#1e293b;}mark.hd-hl{background:#fef9c3;border-bottom:2px solid #fbbf24;border-radius:2px;padding:0 2px;}</style></head><body>';
+      html += '<h2 style="margin-bottom:16px;">Document Preview</h2>';
+
+      if (state.feedback.length === 0) {
+        html += '<p style="color:#64748b;">No feedback yet for this document.</p>';
+      } else {
+        html += '<p style="color:#64748b;font-size:13px;margin-bottom:24px;">Highlighted text has reviewer comments attached.</p>';
+        // Show unique anchors as content blocks
+        const seen = new Set();
+        state.feedback.forEach(item => {
+          const txt = item.anchor?.selectedText;
+          if (txt && !seen.has(txt)) {
+            seen.add(txt);
+            const escaped = txt.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+            html += '<p><mark class="hd-hl">' + escaped + '</mark></p>';
+          }
+        });
+        // Page-level comments
+        const pageLevel = state.feedback.filter(f => f.anchor?.type === 'page_level');
+        if (pageLevel.length > 0) {
+          html += '<hr style="margin:24px 0;border:none;border-top:1px solid #e2e8f0;">';
+          html += '<p style="color:#64748b;font-size:12px;">Page-level feedback (' + pageLevel.length + ' comments)</p>';
+        }
+      }
+      html += '</body></html>';
+      return html;
     }
 
     function renderSettings() {

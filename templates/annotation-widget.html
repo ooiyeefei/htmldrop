@@ -12,107 +12,286 @@
 
   const style = document.createElement('style');
   style.textContent = `
-    .hd-fab {
-      position: fixed; bottom: 24px; right: 24px;
-      width: 48px; height: 48px; border-radius: 50%;
-      background: #1e293b; color: #fff; border: none;
-      cursor: pointer; font-size: 20px;
-      display: flex; align-items: center; justify-content: center;
-      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-      z-index: 999999; transition: transform 0.15s;
+    :host { all: initial; }
+    .hd-highlight {
+      background: #fef9c3;
+      border-bottom: 2px solid #fbbf24;
+      cursor: pointer;
+      border-radius: 2px;
+      transition: background 0.15s;
     }
-    .hd-fab:hover { transform: scale(1.1); }
-    .hd-sidebar {
-      position: fixed; top: 0; right: 0;
-      width: 360px; height: 100vh;
-      background: #fff; border-left: 1px solid #e2e8f0;
-      box-shadow: -4px 0 20px rgba(0,0,0,0.08);
-      z-index: 999998; display: none; flex-direction: column;
+    .hd-highlight:hover { background: #fde68a; }
+    .hd-popover {
+      position: absolute;
+      z-index: 999999;
+      background: #fff;
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.12);
+      width: 320px;
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      font-size: 13px;
+      animation: hd-fadein 0.15s ease;
     }
-    .hd-sidebar.open { display: flex; }
-    .hd-header {
-      padding: 16px 20px; border-bottom: 1px solid #e2e8f0;
-      display: flex; justify-content: space-between; align-items: center;
+    @keyframes hd-fadein { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+    .hd-popover-header {
+      padding: 12px 16px;
+      border-bottom: 1px solid #f1f5f9;
+      display: flex;
+      align-items: center;
+      gap: 8px;
     }
-    .hd-header h3 { margin: 0; font-size: 14px; font-weight: 600; color: #1e293b; }
-    .hd-close { background: none; border: none; font-size: 18px; cursor: pointer; color: #64748b; }
-    .hd-comments { flex: 1; overflow-y: auto; padding: 16px 20px; }
-    .hd-comment {
-      margin-bottom: 16px; padding: 12px;
-      background: #f8fafc; border-radius: 8px; border: 1px solid #e2e8f0;
+    .hd-avatar {
+      width: 28px; height: 28px; border-radius: 50%;
+      background: #3b82f6; color: #fff;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 12px; font-weight: 600;
     }
-    .hd-comment-author { font-weight: 600; font-size: 12px; color: #475569; }
-    .hd-comment-text { font-size: 13px; color: #1e293b; margin-top: 4px; line-height: 1.4; }
-    .hd-comment-anchor { font-size: 11px; color: #94a3b8; margin-top: 4px; font-style: italic; }
-    .hd-form { padding: 16px 20px; border-top: 1px solid #e2e8f0; }
-    .hd-form input, .hd-form textarea {
-      width: 100%; padding: 8px 12px;
-      border: 1px solid #e2e8f0; border-radius: 6px;
-      font-size: 13px; margin-bottom: 8px; font-family: inherit;
+    .hd-popover-input {
+      padding: 12px 16px;
     }
-    .hd-form textarea { resize: vertical; min-height: 60px; }
-    .hd-form button {
-      background: #1e293b; color: #fff; border: none;
-      padding: 8px 16px; border-radius: 6px; font-size: 13px;
-      cursor: pointer; width: 100%;
+    .hd-popover-input textarea {
+      width: 100%; border: none; outline: none; resize: none;
+      font-size: 13px; font-family: inherit; line-height: 1.4;
+      min-height: 40px; color: #1e293b;
     }
-    .hd-form button:hover { background: #334155; }
-    .hd-empty { color: #94a3b8; font-size: 13px; text-align: center; padding: 40px 20px; }
-    .hd-count {
-      position: absolute; top: -4px; right: -4px;
-      background: #3b82f6; color: #fff; font-size: 10px;
+    .hd-popover-input textarea::placeholder { color: #94a3b8; }
+    .hd-popover-actions {
+      padding: 8px 16px 12px;
+      display: flex; justify-content: flex-end; gap: 8px;
+    }
+    .hd-btn {
+      padding: 6px 14px; border-radius: 6px; font-size: 12px;
+      font-weight: 500; cursor: pointer; border: none;
+    }
+    .hd-btn-cancel { background: #f1f5f9; color: #64748b; }
+    .hd-btn-cancel:hover { background: #e2e8f0; }
+    .hd-btn-submit { background: #3b82f6; color: #fff; }
+    .hd-btn-submit:hover { background: #2563eb; }
+    .hd-margin-comments {
+      position: fixed;
+      top: 0; right: 0;
+      width: 300px; height: 100vh;
+      overflow-y: auto;
+      padding: 16px 12px;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      z-index: 999990;
+    }
+    .hd-margin-comment {
+      background: #fff;
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+      padding: 12px 14px;
+      margin-bottom: 10px;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.04);
+      font-size: 13px;
+      cursor: pointer;
+      transition: border-color 0.15s, box-shadow 0.15s;
+    }
+    .hd-margin-comment:hover {
+      border-color: #3b82f6;
+      box-shadow: 0 2px 8px rgba(59,130,246,0.1);
+    }
+    .hd-margin-comment.active {
+      border-color: #3b82f6;
+      box-shadow: 0 0 0 2px rgba(59,130,246,0.15);
+    }
+    .hd-mc-header {
+      display: flex; align-items: center; gap: 6px; margin-bottom: 6px;
+    }
+    .hd-mc-avatar {
+      width: 22px; height: 22px; border-radius: 50%;
+      background: #3b82f6; color: #fff;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 10px; font-weight: 600;
+    }
+    .hd-mc-name { font-weight: 600; font-size: 12px; color: #1e293b; }
+    .hd-mc-time { font-size: 11px; color: #94a3b8; margin-left: auto; }
+    .hd-mc-text { color: #374151; line-height: 1.4; }
+    .hd-mc-anchor {
+      font-size: 11px; color: #3b82f6; margin-top: 6px;
+      padding: 4px 8px; background: #eff6ff; border-radius: 4px;
+      display: inline-block;
+    }
+    .hd-tooltip {
+      position: absolute; z-index: 999999;
+      background: #1e293b; color: #fff;
+      padding: 6px 12px; border-radius: 6px;
+      font-size: 12px; font-family: -apple-system, sans-serif;
+      cursor: pointer; white-space: nowrap;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+      animation: hd-fadein 0.1s ease;
+    }
+    .hd-tooltip::after {
+      content: ''; position: absolute;
+      top: -5px; left: 50%; transform: translateX(-50%);
+      border-left: 5px solid transparent;
+      border-right: 5px solid transparent;
+      border-bottom: 5px solid #1e293b;
+    }
+    .hd-name-input {
+      width: 100%; border: 1px solid #e2e8f0; border-radius: 6px;
+      padding: 6px 10px; font-size: 12px; margin-bottom: 8px;
+      font-family: inherit;
+    }
+    .hd-badge {
+      position: fixed; bottom: 16px; right: 16px;
+      background: #1e293b; color: #fff;
+      padding: 8px 14px; border-radius: 20px;
+      font-size: 12px; font-family: -apple-system, sans-serif;
+      z-index: 999999; cursor: pointer;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+      display: flex; align-items: center; gap: 6px;
+    }
+    .hd-badge:hover { background: #334155; }
+    .hd-badge-count {
+      background: #3b82f6; color: #fff;
       width: 18px; height: 18px; border-radius: 50%;
       display: flex; align-items: center; justify-content: center;
+      font-size: 10px; font-weight: 600;
     }
   `;
   shadow.appendChild(style);
 
-  function el(tag, attrs, children) {
-    const node = document.createElement(tag);
-    if (attrs) Object.entries(attrs).forEach(([k, v]) => {
-      if (k === 'text') node.textContent = v;
-      else if (k === 'class') node.className = v;
-      else node.setAttribute(k, v);
-    });
-    if (children) children.forEach(c => node.appendChild(c));
-    return node;
+  let comments = [];
+  let showMargin = false;
+  let activePopover = null;
+  let tooltip = null;
+  let userName = localStorage.getItem('htmldrop_reviewer_name') || '';
+
+  // Margin comments container
+  const marginEl = document.createElement('div');
+  marginEl.className = 'hd-margin-comments';
+  marginEl.style.display = 'none';
+  shadow.appendChild(marginEl);
+
+  // Badge (bottom-right)
+  const badge = document.createElement('div');
+  badge.className = 'hd-badge';
+  shadow.appendChild(badge);
+  badge.addEventListener('click', toggleMargin);
+
+  function toggleMargin() {
+    showMargin = !showMargin;
+    marginEl.style.display = showMargin ? 'block' : 'none';
+    if (showMargin) document.body.style.marginRight = '312px';
+    else document.body.style.marginRight = '';
   }
 
-  const countEl = el('span', { class: 'hd-count', id: 'hd-count', style: 'display:none' });
-  const fab = el('button', { class: 'hd-fab', title: 'Feedback', text: '\u{1F4AC}' });
-  fab.appendChild(countEl);
-
-  const commentsEl = el('div', { class: 'hd-comments' });
-  const nameInput = el('input', { type: 'text', placeholder: 'Your name', maxlength: '100' });
-  const textInput = el('textarea', { placeholder: 'Leave feedback...', maxlength: '10000' });
-  const submitBtn = el('button', { text: 'Submit Feedback' });
-  const closeBtn = el('button', { class: 'hd-close', text: '×' });
-  const headerTitle = el('h3', { text: 'Feedback' });
-
-  const header = el('div', { class: 'hd-header' }, [headerTitle, closeBtn]);
-  const form = el('div', { class: 'hd-form' }, [nameInput, textInput, submitBtn]);
-  const sidebar = el('div', { class: 'hd-sidebar' }, [header, commentsEl, form]);
-
-  shadow.appendChild(fab);
-  shadow.appendChild(sidebar);
-
-  let selectedText = '';
-  let selectedSelector = '';
-
-  fab.addEventListener('click', () => sidebar.classList.toggle('open'));
-  closeBtn.addEventListener('click', () => sidebar.classList.remove('open'));
-
-  document.addEventListener('mouseup', () => {
+  // Text selection → tooltip
+  document.addEventListener('mouseup', (e) => {
+    removeTooltip();
     const sel = window.getSelection();
-    if (sel && sel.toString().trim().length > 0) {
-      selectedText = sel.toString().trim().slice(0, 2000);
+    if (!sel || sel.isCollapsed || sel.toString().trim().length === 0) return;
+
+    const range = sel.getRangeAt(0);
+    const rect = range.getBoundingClientRect();
+
+    tooltip = document.createElement('div');
+    tooltip.className = 'hd-tooltip';
+    tooltip.textContent = '+ Comment';
+    tooltip.style.left = (rect.left + rect.width / 2 - 40) + 'px';
+    tooltip.style.top = (rect.bottom + window.scrollY + 8) + 'px';
+    tooltip.addEventListener('click', () => {
+      const selectedText = sel.toString().trim().slice(0, 2000);
       const node = sel.anchorNode && sel.anchorNode.parentElement;
-      if (node) {
-        try { selectedSelector = buildSelector(node); } catch(e) { selectedSelector = ''; }
-      }
-    }
+      const selector = node ? buildSelector(node) : '';
+      removeTooltip();
+      showPopover(rect, selectedText, selector);
+    });
+    shadow.appendChild(tooltip);
   });
+
+  document.addEventListener('mousedown', (e) => {
+    if (e.target && shadow.contains(e.target)) return;
+    removeTooltip();
+  });
+
+  function removeTooltip() {
+    if (tooltip) { tooltip.remove(); tooltip = null; }
+  }
+
+  function showPopover(anchorRect, selectedText, selector) {
+    removePopover();
+    const popover = document.createElement('div');
+    popover.className = 'hd-popover';
+    popover.style.left = Math.min(anchorRect.left, window.innerWidth - 340) + 'px';
+    popover.style.top = (anchorRect.bottom + window.scrollY + 12) + 'px';
+
+    const header = document.createElement('div');
+    header.className = 'hd-popover-header';
+    const avatar = document.createElement('div');
+    avatar.className = 'hd-avatar';
+    avatar.textContent = (userName || 'Y')[0].toUpperCase();
+    const nameInput = document.createElement('input');
+    nameInput.className = 'hd-name-input';
+    nameInput.placeholder = 'Your name';
+    nameInput.value = userName;
+    nameInput.addEventListener('change', () => {
+      userName = nameInput.value.trim();
+      localStorage.setItem('htmldrop_reviewer_name', userName);
+      avatar.textContent = (userName || 'Y')[0].toUpperCase();
+    });
+    header.append(avatar, nameInput);
+
+    const inputArea = document.createElement('div');
+    inputArea.className = 'hd-popover-input';
+    const textarea = document.createElement('textarea');
+    textarea.placeholder = 'Comment or add others with @';
+    textarea.rows = 2;
+    inputArea.appendChild(textarea);
+
+    const actions = document.createElement('div');
+    actions.className = 'hd-popover-actions';
+    const cancelBtn = document.createElement('button');
+    cancelBtn.className = 'hd-btn hd-btn-cancel';
+    cancelBtn.textContent = 'Cancel';
+    cancelBtn.addEventListener('click', removePopover);
+    const submitBtn = document.createElement('button');
+    submitBtn.className = 'hd-btn hd-btn-submit';
+    submitBtn.textContent = 'Comment';
+    submitBtn.addEventListener('click', async () => {
+      const text = textarea.value.trim();
+      if (!text) return;
+      submitBtn.textContent = '...';
+      submitBtn.disabled = true;
+      await submitComment(selectedText, selector, text);
+      removePopover();
+    });
+    actions.append(cancelBtn, submitBtn);
+
+    popover.append(header, inputArea, actions);
+    shadow.appendChild(popover);
+    activePopover = popover;
+    setTimeout(() => textarea.focus(), 50);
+  }
+
+  function removePopover() {
+    if (activePopover) { activePopover.remove(); activePopover = null; }
+  }
+
+  async function submitComment(selectedText, selector, text) {
+    const body = {
+      anchor: {
+        type: selectedText ? 'text_range' : 'page_level',
+        selector: selector || undefined,
+        selectedText: selectedText || undefined,
+      },
+      content: { type: 'text', text: text },
+      author: { displayName: userName || 'Anonymous' },
+      parentId: null,
+    };
+    try {
+      await fetch(config.workerUrl + '/api/feedback/' + config.docId, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      await loadComments();
+    } catch(e) {
+      alert('Failed to submit comment');
+    }
+  }
 
   function buildSelector(node) {
     const parts = [];
@@ -134,72 +313,131 @@
     try {
       const res = await fetch(config.workerUrl + '/api/feedback/' + config.docId);
       const data = await res.json();
-      renderComments(data.items || []);
+      comments = data.items || [];
+      renderBadge();
+      renderMarginComments();
+      highlightAnchors();
     } catch(e) {
-      commentsEl.replaceChildren(el('div', { class: 'hd-empty', text: 'Could not load comments' }));
+      comments = [];
+      renderBadge();
     }
   }
 
-  function renderComments(items) {
-    commentsEl.replaceChildren();
-    if (items.length === 0) {
-      commentsEl.appendChild(el('div', { class: 'hd-empty', text: 'No feedback yet. Be the first!' }));
-      countEl.style.display = 'none';
-      return;
+  function renderBadge() {
+    badge.replaceChildren();
+    const icon = document.createElement('span');
+    icon.textContent = '\u{1F4AC}';
+    badge.appendChild(icon);
+    if (comments.length > 0) {
+      const count = document.createElement('span');
+      count.className = 'hd-badge-count';
+      count.textContent = String(comments.length);
+      badge.appendChild(count);
     }
-    countEl.textContent = String(items.length);
-    countEl.style.display = 'flex';
-    items.forEach(item => {
-      const author = el('div', { class: 'hd-comment-author', text: item.author?.displayName || 'Anonymous' });
-      const text = el('div', { class: 'hd-comment-text', text: item.content?.text || '' });
-      const comment = el('div', { class: 'hd-comment' }, [author, text]);
+    const label = document.createElement('span');
+    label.textContent = comments.length ? '' : 'Add feedback';
+    badge.appendChild(label);
+  }
+
+  function renderMarginComments() {
+    marginEl.replaceChildren();
+    comments.forEach((item, idx) => {
+      const card = document.createElement('div');
+      card.className = 'hd-margin-comment';
+
+      const header = document.createElement('div');
+      header.className = 'hd-mc-header';
+      const avatar = document.createElement('div');
+      avatar.className = 'hd-mc-avatar';
+      avatar.textContent = (item.author?.displayName || 'A')[0].toUpperCase();
+      const name = document.createElement('span');
+      name.className = 'hd-mc-name';
+      name.textContent = item.author?.displayName || 'Anonymous';
+      const time = document.createElement('span');
+      time.className = 'hd-mc-time';
+      time.textContent = formatTime(item.createdAt);
+      header.append(avatar, name, time);
+
+      const text = document.createElement('div');
+      text.className = 'hd-mc-text';
+      text.textContent = item.content?.text || '';
+
+      card.append(header, text);
+
       if (item.anchor?.selectedText) {
-        comment.appendChild(el('div', {
-          class: 'hd-comment-anchor',
-          text: '“' + item.anchor.selectedText.slice(0, 80) + '”'
-        }));
+        const anchor = document.createElement('div');
+        anchor.className = 'hd-mc-anchor';
+        anchor.textContent = '"' + item.anchor.selectedText.slice(0, 60) + '"';
+        card.appendChild(anchor);
       }
-      commentsEl.appendChild(comment);
+
+      card.addEventListener('click', () => {
+        scrollToAnchor(item);
+        marginEl.querySelectorAll('.hd-margin-comment').forEach(c => c.classList.remove('active'));
+        card.classList.add('active');
+      });
+
+      marginEl.appendChild(card);
     });
   }
 
-  submitBtn.addEventListener('click', async () => {
-    const text = textInput.value.trim();
-    if (!text) return;
-    const name = nameInput.value.trim() || 'Anonymous';
-    submitBtn.disabled = true;
-    submitBtn.textContent = 'Sending...';
-    try {
-      const body = {
-        anchor: {
-          type: selectedText ? 'text_range' : 'page_level',
-          selector: selectedSelector || undefined,
-          selectedText: selectedText || undefined,
-        },
-        content: { type: 'text', text: text },
-        author: { displayName: name },
-        parentId: null,
-      };
-      const res = await fetch(config.workerUrl + '/api/feedback/' + config.docId, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-      });
-      if (!res.ok) {
-        const err = await res.json();
-        alert(err.error || 'Failed to submit');
-      } else {
-        textInput.value = '';
-        selectedText = '';
-        selectedSelector = '';
-        await loadComments();
+  function highlightAnchors() {
+    // Remove old highlights
+    document.querySelectorAll('.hd-highlight').forEach(el => {
+      const parent = el.parentNode;
+      parent.replaceChild(document.createTextNode(el.textContent), el);
+      parent.normalize();
+    });
+
+    comments.forEach(item => {
+      if (item.anchor?.type === 'text_range' && item.anchor?.selectedText) {
+        highlightText(item.anchor.selectedText);
       }
-    } catch(e) {
-      alert('Network error');
+    });
+  }
+
+  function highlightText(searchText) {
+    const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+    while (walker.nextNode()) {
+      const node = walker.currentNode;
+      if (node.parentElement && node.parentElement.id === 'htmldrop-widget-host') continue;
+      const idx = node.textContent.indexOf(searchText);
+      if (idx === -1) continue;
+
+      const range = document.createRange();
+      range.setStart(node, idx);
+      range.setEnd(node, idx + searchText.length);
+
+      const mark = document.createElement('mark');
+      mark.className = 'hd-highlight';
+      range.surroundContents(mark);
+      break;
     }
-    submitBtn.disabled = false;
-    submitBtn.textContent = 'Submit Feedback';
-  });
+  }
+
+  function scrollToAnchor(item) {
+    if (!item.anchor?.selectedText) return;
+    const marks = document.querySelectorAll('.hd-highlight');
+    for (const mark of marks) {
+      if (mark.textContent.includes(item.anchor.selectedText.slice(0, 30))) {
+        mark.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        mark.style.background = '#fde68a';
+        setTimeout(() => { mark.style.background = ''; }, 2000);
+        return;
+      }
+    }
+  }
+
+  function formatTime(iso) {
+    if (!iso) return '';
+    const d = new Date(iso);
+    const now = new Date();
+    const diff = now - d;
+    if (diff < 60000) return 'now';
+    if (diff < 3600000) return Math.floor(diff / 60000) + 'm';
+    if (diff < 86400000) return Math.floor(diff / 3600000) + 'h';
+    return d.toLocaleDateString();
+  }
 
   loadComments();
 })();
