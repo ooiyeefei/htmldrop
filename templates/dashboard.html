@@ -734,6 +734,56 @@
       marginHeader.append(marginTitle, marginCount);
       margin.appendChild(marginHeader);
 
+      // Add comment input at top of margin
+      var addCommentBox = document.createElement('div');
+      addCommentBox.style.cssText = 'padding:12px 16px;border-bottom:1px solid var(--border);background:var(--surface);';
+      var addInput = document.createElement('textarea');
+      addInput.style.cssText = 'width:100%;border:1px solid var(--border);border-radius:6px;padding:8px 10px;font-size:13px;font-family:inherit;resize:none;min-height:36px;';
+      addInput.placeholder = 'Add a comment...';
+      addInput.rows = 1;
+      var addActions = document.createElement('div');
+      addActions.style.cssText = 'display:none;margin-top:8px;text-align:right;';
+      var addCancel = document.createElement('button');
+      addCancel.className = 'btn';
+      addCancel.textContent = 'Cancel';
+      addCancel.style.cssText = 'margin-right:6px;font-size:11px;padding:5px 10px;';
+      var addSubmit = document.createElement('button');
+      addSubmit.className = 'btn btn-primary';
+      addSubmit.textContent = 'Comment';
+      addSubmit.style.cssText = 'font-size:11px;padding:5px 10px;';
+      addActions.append(addCancel, addSubmit);
+      addInput.addEventListener('focus', function() { addActions.style.display = 'block'; addInput.rows = 3; });
+      addCancel.addEventListener('click', function() { addInput.value = ''; addActions.style.display = 'none'; addInput.rows = 1; addInput.blur(); });
+      addSubmit.addEventListener('click', async function() {
+        var text = addInput.value.trim();
+        if (!text) return;
+        addSubmit.disabled = true;
+        addSubmit.textContent = '...';
+        var name = localStorage.getItem('htmldrop_reviewer_name') || 'Author';
+        try {
+          await fetch(state.workerUrl + '/api/feedback/' + (state.currentDocId || state.selectedFile?.docId), {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              anchor: { type: 'page_level' },
+              content: { type: 'text', text: text },
+              author: { displayName: name },
+              parentId: null,
+            }),
+          });
+          addInput.value = '';
+          addActions.style.display = 'none';
+          addInput.rows = 1;
+          await loadFeedback(state.currentDocId || state.selectedFile?.docId);
+        } catch(e) {
+          alert('Failed to submit');
+        }
+        addSubmit.disabled = false;
+        addSubmit.textContent = 'Comment';
+      });
+      addCommentBox.append(addInput, addActions);
+      margin.appendChild(addCommentBox);
+
       // Segments with comments
       if (state.segments.length > 0) {
         for (var segIdx = 0; segIdx < state.segments.length; segIdx++) {
