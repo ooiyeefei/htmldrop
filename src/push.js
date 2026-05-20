@@ -66,25 +66,14 @@ export async function push(file, options = {}) {
 
   // Inject feedback widget if --feedback flag
   let docId = null;
+  let feedbackAuthorKey = null;
+  let feedbackWorkerUrl = null;
   if (options.feedback && !isEncrypted) {
-    const authorKey = getAuthorKey();
+    feedbackAuthorKey = getAuthorKey();
     docId = randomUUID();
-    const workerUrl = options.workerUrl || DEFAULT_WORKER_URL;
-    content = injectFeedbackWidget(content, { docId, workerUrl });
+    feedbackWorkerUrl = options.workerUrl || DEFAULT_WORKER_URL;
+    content = injectFeedbackWidget(content, { docId, workerUrl: feedbackWorkerUrl });
     console.log(`Feedback enabled for ${filename} (docId: ${docId.slice(0, 8)}...)`);
-
-    // Register doc with the worker
-    try {
-      const res = await fetch(`${workerUrl}/api/register/${docId}`, {
-        method: 'POST',
-        headers: { 'Authorization': `Bearer ${authorKey}` },
-      });
-      if (!res.ok) {
-        console.warn('Warning: could not register doc with feedback worker.');
-      }
-    } catch {
-      console.warn('Warning: feedback worker unreachable. Comments may not work until worker is deployed.');
-    }
   }
 
   // Write to site directory
@@ -140,6 +129,25 @@ export async function push(file, options = {}) {
 
   const url = getFileUrl(config, filename);
   console.log(`\nPublished: ${url}`);
+
+  // Register doc with the feedback worker (after deploy so URL is live)
+  if (docId && feedbackAuthorKey && feedbackWorkerUrl) {
+    try {
+      const res = await fetch(`${feedbackWorkerUrl}/api/register/${docId}`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${feedbackAuthorKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ url }),
+      });
+      if (!res.ok) {
+        console.warn('Warning: could not register doc with feedback worker.');
+      }
+    } catch {
+      console.warn('Warning: feedback worker unreachable. Comments may not work until worker is deployed.');
+    }
+  }
 
   if (isEncrypted) {
     console.log('(Password-protected — viewer must enter password to access content)');

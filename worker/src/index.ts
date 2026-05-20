@@ -1,5 +1,5 @@
 import { FeedbackItemSchema, type FeedbackStored } from './schema';
-import { type Env, getFeedback, addFeedback, deleteFeedback } from './storage';
+import { type Env, getFeedback, addFeedback, deleteFeedback, storeDocUrl, getDocUrl, storeInsight, getInsights, type StoredInsight } from './storage';
 import { checkRateLimit, incrementRateLimit } from './rate-limit';
 import { isAuthorOfDoc, registerAuthorKey, getAuthorDocs } from './auth';
 import DASHBOARD_HTML from './dashboard.html';
@@ -36,12 +36,23 @@ export default {
         return handleRegister(request, env, registerMatch[1], corsHeaders);
       }
 
+      // GET /api/doc/:docId/url — retrieve published URL
+      const docUrlMatch = path.match(/^\/api\/doc\/([a-zA-Z0-9_-]+)\/url$/);
+      if (docUrlMatch && request.method === 'GET') {
+        return handleGetDocUrl(env, docUrlMatch[1], corsHeaders);
+      }
+
       const segmentsMatch = path.match(/^\/api\/segments\/([a-zA-Z0-9_-]+)$/);
       if (segmentsMatch && request.method === 'POST') {
         return handleSegments(request, env, segmentsMatch[1], corsHeaders);
       }
 
+      // GET /api/insights/:docId — retrieve stored insights
       const insightsMatch = path.match(/^\/api\/insights\/([a-zA-Z0-9_-]+)$/);
+      if (insightsMatch && request.method === 'GET') {
+        return handleGetInsights(request, env, insightsMatch[1], corsHeaders);
+      }
+      // POST /api/insights/:docId — generate and store insights
       if (insightsMatch && request.method === 'POST') {
         return handleInsights(request, env, insightsMatch[1], corsHeaders);
       }
@@ -49,6 +60,12 @@ export default {
       const convergeMatch = path.match(/^\/api\/converge\/([a-zA-Z0-9_-]+)$/);
       if (convergeMatch && request.method === 'POST') {
         return handleConverge(request, env, convergeMatch[1], corsHeaders);
+      }
+
+      // POST /api/feedback/:docId/:commentId/reply — reply threading
+      const replyMatch = path.match(/^\/api\/feedback\/([a-zA-Z0-9_-]+)\/([a-zA-Z0-9_-]+)\/reply$/);
+      if (replyMatch && request.method === 'POST') {
+        return handleReply(request, env, replyMatch[1], replyMatch[2], corsHeaders);
       }
 
       const feedbackMatch = path.match(/^\/api\/feedback\/([a-zA-Z0-9_-]+)$/);
@@ -59,7 +76,7 @@ export default {
       const docId = feedbackMatch[1];
 
       if (request.method === 'GET') {
-        return handleGet(env, docId, corsHeaders);
+        return handleGet(request, env, docId, corsHeaders);
       }
 
       if (request.method === 'POST') {
@@ -78,8 +95,20 @@ export default {
   },
 } satisfies ExportedHandler<Env>;
 
-async function handleGet(env: Env, docId: string, headers: Record<string, string>): Promise<Response> {
-  const items = await getFeedback(env, docId);
+async function handleGet(request: Request, env: Env, docId: string, headers: Record<string, string>): Promise<Response> {
+  const url = new URL(request.url);
+  const since = url.searchParams.get('since');
+
+  let items = await getFeedback(env, docId);
+
+  if (since) {
+    const sinceDate = new Date(since);
+    if (isNaN(sinceDate.getTime())) {
+      return json({ error: 'Invalid "since" parameter — must be ISO8601' }, 400, headers);
+    }
+    items = items.filter((item) => new Date(item.createdAt) > sinceDate);
+  }
+
   return json({ docId, items, count: items.length }, 200, headers);
 }
 
@@ -136,6 +165,12 @@ async function handleRegister(request: Request, env: Env, docId: string, headers
   const key = authHeader.slice(7);
   await registerAuthorKey(env, key, docId);
 
+  // Store optional published URL
+  const body = await request.json().catch(() => null) as { url?: string } | null;
+  if (body?.url) {
+    await storeDocUrl(env, docId, body.url);
+  }
+
   return json({ registered: true, docId }, 200, headers);
 }
 
@@ -170,6 +205,7 @@ async function handleInsights(request: Request, env: Env, docId: string, headers
 
   const body = await request.json().catch(() => null) as {
     segment?: { title: string; items: FeedbackStored[] };
+    segmentIndex?: number;
     references?: string[];
     anthropicKey?: string;
   } | null;
@@ -181,7 +217,73 @@ async function handleInsights(request: Request, env: Env, docId: string, headers
   }
 
   const points = await generateInsights(anthropicKey, body.segment, body.references || []);
+
+  // Persist insights in KV
+  const segmentIdx = body.segmentIndex ?? 0;
+  const storedInsight: StoredInsight = {
+    points,
+    generatedAt: new Date().toISOString(),
+  };
+  await storeInsight(env, docId, segmentIdx, storedInsight);
+
   return json({ points }, 200, headers);
+}
+
+async function handleGetInsights(request: Request, env: Env, docId: string, headers: Record<string, string>): Promise<Response> {
+  const authHeader = request.headers.get('Authorization');
+  const isAuthor = await isAuthorOfDoc(env, authHeader, docId);
+  if (!isAuthor) return json({ error: 'Unauthorized' }, 403, headers);
+
+  const insights = await getInsights(env, docId);
+  return json({ docId, insights }, 200, headers);
+}
+
+async function handleGetDocUrl(env: Env, docId: string, headers: Record<string, string>): Promise<Response> {
+  const url = await getDocUrl(env, docId);
+  if (!url) {
+    return json({ error: 'No URL stored for this document' }, 404, headers);
+  }
+  return json({ docId, url }, 200, headers);
+}
+
+async function handleReply(request: Request, env: Env, docId: string, commentId: string, headers: Record<string, string>): Promise<Response> {
+  const ip = request.headers.get('CF-Connecting-IP') || 'unknown';
+
+  const rateCheck = await checkRateLimit(env, ip, docId);
+  if (!rateCheck.allowed) {
+    return json({ error: rateCheck.reason }, 429, headers);
+  }
+
+  const body = await request.json().catch(() => null);
+  if (!body) {
+    return json({ error: 'Invalid JSON body' }, 400, headers);
+  }
+
+  const parsed = FeedbackItemSchema.safeParse(body);
+  if (!parsed.success) {
+    return json({ error: 'Validation failed', details: parsed.error.issues }, 400, headers);
+  }
+
+  // Verify the parent comment exists
+  const existing = await getFeedback(env, docId);
+  const parentComment = existing.find((item) => item.id === commentId);
+  if (!parentComment) {
+    return json({ error: 'Parent comment not found' }, 404, headers);
+  }
+
+  const item: FeedbackStored = {
+    ...parsed.data,
+    id: crypto.randomUUID(),
+    docId,
+    parentId: commentId,
+    createdAt: new Date().toISOString(),
+    resolved: false,
+  };
+
+  await addFeedback(env, docId, item);
+  await incrementRateLimit(env, ip, docId);
+
+  return json({ id: item.id, parentId: commentId, createdAt: item.createdAt }, 201, headers);
 }
 
 async function handleConverge(request: Request, env: Env, docId: string, headers: Record<string, string>): Promise<Response> {

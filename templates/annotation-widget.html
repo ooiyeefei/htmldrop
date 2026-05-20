@@ -150,10 +150,54 @@
       display: flex; align-items: center; justify-content: center;
       font-size: 10px; font-weight: 600;
     }
+    .hd-margin-reply {
+      margin-left: 16px;
+      border-left: 2px solid #e2e8f0;
+      padding-left: 10px;
+      font-size: 12px;
+    }
+    .hd-reply-btn {
+      background: none; border: none; color: #3b82f6;
+      font-size: 11px; cursor: pointer; padding: 4px 0; margin-top: 6px;
+      font-family: inherit;
+    }
+    .hd-reply-btn:hover { text-decoration: underline; }
+    .hd-reply-input-wrap {
+      display: flex; gap: 6px; margin-top: 8px; align-items: center;
+    }
+    .hd-reply-input-wrap input {
+      flex: 1; border: 1px solid #e2e8f0; border-radius: 6px;
+      padding: 5px 8px; font-size: 12px; font-family: inherit;
+    }
+    .hd-reply-input-wrap button {
+      background: #3b82f6; color: #fff; border: none;
+      border-radius: 6px; padding: 5px 10px; font-size: 11px;
+      cursor: pointer; font-family: inherit;
+    }
+    .hd-reply-input-wrap button:hover { background: #2563eb; }
+    .hd-insight-card {
+      background: #fef9c3;
+      border: 1px solid #fbbf24;
+      border-radius: 8px;
+      padding: 12px 14px;
+      margin-bottom: 10px;
+      font-size: 13px;
+    }
+    .hd-insight-header {
+      font-weight: 600; font-size: 12px; color: #92400e;
+      margin-bottom: 6px; display: flex; align-items: center; gap: 4px;
+    }
+    .hd-insight-point {
+      color: #374151; line-height: 1.4; margin-bottom: 4px;
+    }
+    .hd-insight-source {
+      font-size: 10px; color: #94a3b8; margin-left: 4px;
+    }
   `;
   shadow.appendChild(style);
 
   let comments = [];
+  let insights = {};
   let showMargin = false;
   let activePopover = null;
   let tooltip = null;
@@ -321,6 +365,21 @@
       comments = [];
       renderBadge();
     }
+    // Also load insights
+    await loadInsights();
+  }
+
+  async function loadInsights() {
+    try {
+      const res = await fetch(config.workerUrl + '/api/insights/' + config.docId);
+      if (res.ok) {
+        const data = await res.json();
+        insights = data.insights || {};
+        renderMarginComments();
+      }
+    } catch(e) {
+      // Insights not available, no-op
+    }
   }
 
   function renderBadge() {
@@ -341,44 +400,167 @@
 
   function renderMarginComments() {
     marginEl.replaceChildren();
-    comments.forEach((item, idx) => {
-      const card = document.createElement('div');
-      card.className = 'hd-margin-comment';
 
-      const header = document.createElement('div');
-      header.className = 'hd-mc-header';
-      const avatar = document.createElement('div');
-      avatar.className = 'hd-mc-avatar';
-      avatar.textContent = (item.author?.displayName || 'A')[0].toUpperCase();
-      const name = document.createElement('span');
-      name.className = 'hd-mc-name';
-      name.textContent = item.author?.displayName || 'Anonymous';
-      const time = document.createElement('span');
-      time.className = 'hd-mc-time';
-      time.textContent = formatTime(item.createdAt);
-      header.append(avatar, name, time);
-
-      const text = document.createElement('div');
-      text.className = 'hd-mc-text';
-      text.textContent = item.content?.text || '';
-
-      card.append(header, text);
-
-      if (item.anchor?.selectedText) {
-        const anchor = document.createElement('div');
-        anchor.className = 'hd-mc-anchor';
-        anchor.textContent = '"' + item.anchor.selectedText.slice(0, 60) + '"';
-        card.appendChild(anchor);
-      }
-
-      card.addEventListener('click', () => {
-        scrollToAnchor(item);
-        marginEl.querySelectorAll('.hd-margin-comment').forEach(c => c.classList.remove('active'));
-        card.classList.add('active');
-      });
-
-      marginEl.appendChild(card);
+    // Separate top-level comments from replies
+    const topLevel = comments.filter(item => !item.parentId);
+    const replies = comments.filter(item => item.parentId);
+    const replyMap = {};
+    replies.forEach(r => {
+      if (!replyMap[r.parentId]) replyMap[r.parentId] = [];
+      replyMap[r.parentId].push(r);
     });
+
+    topLevel.forEach((item, idx) => {
+      const card = renderCommentCard(item, replyMap);
+      marginEl.appendChild(card);
+
+      // Show insight card after this group if one exists for this index
+      if (insights[String(idx)]) {
+        const insightCard = renderInsightCard(insights[String(idx)]);
+        marginEl.appendChild(insightCard);
+      }
+    });
+  }
+
+  function renderCommentCard(item, replyMap) {
+    const card = document.createElement('div');
+    card.className = 'hd-margin-comment';
+
+    const header = document.createElement('div');
+    header.className = 'hd-mc-header';
+    const avatar = document.createElement('div');
+    avatar.className = 'hd-mc-avatar';
+    avatar.textContent = (item.author?.displayName || 'A')[0].toUpperCase();
+    const name = document.createElement('span');
+    name.className = 'hd-mc-name';
+    name.textContent = item.author?.displayName || 'Anonymous';
+    const time = document.createElement('span');
+    time.className = 'hd-mc-time';
+    time.textContent = formatTime(item.createdAt);
+    header.append(avatar, name, time);
+
+    const text = document.createElement('div');
+    text.className = 'hd-mc-text';
+    text.textContent = item.content?.text || '';
+
+    card.append(header, text);
+
+    if (item.anchor?.selectedText) {
+      const anchor = document.createElement('div');
+      anchor.className = 'hd-mc-anchor';
+      anchor.textContent = '"' + item.anchor.selectedText.slice(0, 60) + '"';
+      card.appendChild(anchor);
+    }
+
+    // Reply button
+    const replyBtn = document.createElement('button');
+    replyBtn.className = 'hd-reply-btn';
+    replyBtn.textContent = 'Reply';
+    replyBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      // Toggle reply input
+      let existing = card.querySelector('.hd-reply-input-wrap');
+      if (existing) { existing.remove(); return; }
+      const wrap = document.createElement('div');
+      wrap.className = 'hd-reply-input-wrap';
+      const input = document.createElement('input');
+      input.type = 'text';
+      input.placeholder = 'Write a reply...';
+      const sendBtn = document.createElement('button');
+      sendBtn.textContent = 'Send';
+      sendBtn.addEventListener('click', async (ev) => {
+        ev.stopPropagation();
+        const replyText = input.value.trim();
+        if (!replyText) return;
+        sendBtn.textContent = '...';
+        sendBtn.disabled = true;
+        await submitReply(item, replyText);
+      });
+      wrap.append(input, sendBtn);
+      card.appendChild(wrap);
+      input.focus();
+    });
+    card.appendChild(replyBtn);
+
+    // Render nested replies
+    const childReplies = replyMap && replyMap[item.id] ? replyMap[item.id] : [];
+    childReplies.forEach(reply => {
+      const replyEl = document.createElement('div');
+      replyEl.className = 'hd-margin-comment hd-margin-reply';
+
+      const rHeader = document.createElement('div');
+      rHeader.className = 'hd-mc-header';
+      const rAvatar = document.createElement('div');
+      rAvatar.className = 'hd-mc-avatar';
+      rAvatar.textContent = (reply.author?.displayName || 'A')[0].toUpperCase();
+      const rName = document.createElement('span');
+      rName.className = 'hd-mc-name';
+      rName.textContent = reply.author?.displayName || 'Anonymous';
+      const rTime = document.createElement('span');
+      rTime.className = 'hd-mc-time';
+      rTime.textContent = formatTime(reply.createdAt);
+      rHeader.append(rAvatar, rName, rTime);
+
+      const rText = document.createElement('div');
+      rText.className = 'hd-mc-text';
+      rText.textContent = reply.content?.text || '';
+
+      replyEl.append(rHeader, rText);
+      card.appendChild(replyEl);
+    });
+
+    card.addEventListener('click', (e) => {
+      if (e.target.closest('.hd-reply-btn') || e.target.closest('.hd-reply-input-wrap')) return;
+      scrollToAnchor(item);
+      marginEl.querySelectorAll('.hd-margin-comment').forEach(c => c.classList.remove('active'));
+      card.classList.add('active');
+    });
+
+    return card;
+  }
+
+  function renderInsightCard(insightData) {
+    const card = document.createElement('div');
+    card.className = 'hd-insight-card';
+    const header = document.createElement('div');
+    header.className = 'hd-insight-header';
+    header.textContent = '⚡ AI Insight';
+    card.appendChild(header);
+
+    const points = insightData.points || [];
+    points.forEach(p => {
+      const point = document.createElement('div');
+      point.className = 'hd-insight-point';
+      point.textContent = p.text || '';
+      if (p.source) {
+        const src = document.createElement('span');
+        src.className = 'hd-insight-source';
+        src.textContent = '(' + p.source + ')';
+        point.appendChild(src);
+      }
+      card.appendChild(point);
+    });
+
+    return card;
+  }
+
+  async function submitReply(parentItem, text) {
+    const body = {
+      anchor: parentItem.anchor || { type: 'page_level' },
+      content: { type: 'text', text: text },
+      author: { displayName: userName || 'Anonymous' },
+      parentId: parentItem.id,
+    };
+    try {
+      await fetch(config.workerUrl + '/api/feedback/' + config.docId + '/' + parentItem.id + '/reply', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      await loadComments();
+    } catch(e) {
+      alert('Failed to submit reply');
+    }
   }
 
   function highlightAnchors() {
@@ -440,5 +622,6 @@
   }
 
   loadComments();
+  setInterval(loadComments, 10000);
 })();
 </script>

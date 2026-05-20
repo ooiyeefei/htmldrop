@@ -24,111 +24,6 @@
     }
     header h1 { font-size: 20px; font-weight: 700; }
     header h1 span { color: var(--accent); }
-    .file-select {
-      padding: 8px 12px; border: 1px solid var(--border); border-radius: 6px;
-      font-size: 13px; background: var(--surface); cursor: pointer;
-    }
-    .stats {
-      display: flex; gap: 16px; margin-bottom: 24px;
-    }
-    .stat {
-      background: var(--surface); border: 1px solid var(--border);
-      border-radius: 8px; padding: 16px 20px; flex: 1;
-    }
-    .stat-value { font-size: 24px; font-weight: 700; }
-    .stat-label { font-size: 12px; color: var(--muted); margin-top: 2px; }
-    .segment {
-      background: var(--surface); border: 1px solid var(--border);
-      border-radius: 10px; margin-bottom: 16px; overflow: hidden;
-    }
-    .segment-header {
-      padding: 14px 20px; border-bottom: 1px solid var(--border);
-      display: flex; justify-content: space-between; align-items: center;
-    }
-    .segment-title { font-size: 14px; font-weight: 600; }
-    .segment-badge {
-      font-size: 11px; padding: 3px 8px; border-radius: 99px;
-      font-weight: 500;
-    }
-    .badge-debate { background: var(--debate-bg); color: var(--danger); border: 1px solid var(--debate-border); }
-    .badge-consensus { background: #ecfdf5; color: var(--success); border: 1px solid #6ee7b7; }
-    .comments { padding: 16px 20px; }
-    .comment {
-      padding: 10px 14px; margin-bottom: 8px;
-      background: var(--bg); border-radius: 8px; border: 1px solid var(--border);
-    }
-    .comment-meta {
-      display: flex; justify-content: space-between;
-      font-size: 12px; color: var(--muted); margin-bottom: 4px;
-    }
-    .comment-author { font-weight: 600; color: var(--text); }
-    .comment-text { font-size: 13px; }
-    .comment-anchor {
-      font-size: 11px; color: var(--accent); margin-top: 4px;
-      font-style: italic;
-    }
-    .insight-panel {
-      margin: 0 20px 16px; padding: 16px;
-      background: var(--insight-bg); border: 1px solid var(--insight-border);
-      border-radius: 8px;
-    }
-    .insight-header {
-      display: flex; align-items: center; gap: 8px;
-      font-size: 12px; font-weight: 600; color: #92400e; margin-bottom: 8px;
-    }
-    .insight-content { font-size: 13px; line-height: 1.6; }
-    .insight-content li { margin-bottom: 6px; }
-    .insight-source {
-      font-size: 11px; color: var(--muted); margin-top: 4px;
-    }
-    .insight-loading {
-      display: flex; align-items: center; gap: 8px;
-      font-size: 13px; color: var(--muted);
-    }
-    .spinner {
-      width: 14px; height: 14px; border: 2px solid var(--border);
-      border-top-color: var(--accent); border-radius: 50%;
-      animation: spin 0.6s linear infinite;
-    }
-    @keyframes spin { to { transform: rotate(360deg); } }
-    .segment-actions {
-      padding: 12px 20px; border-top: 1px solid var(--border);
-      display: flex; gap: 8px;
-    }
-    .btn {
-      padding: 7px 14px; border-radius: 6px; font-size: 12px;
-      font-weight: 500; cursor: pointer; border: 1px solid var(--border);
-      background: var(--surface); color: var(--text); transition: all 0.15s;
-    }
-    .btn:hover { border-color: var(--accent); color: var(--accent); }
-    .btn-primary {
-      background: var(--accent); color: #fff; border-color: var(--accent);
-    }
-    .btn-primary:hover { background: #2563eb; }
-    .btn:disabled { opacity: 0.5; cursor: not-allowed; }
-    .references {
-      background: var(--surface); border: 1px solid var(--border);
-      border-radius: 10px; padding: 20px; margin-bottom: 16px;
-    }
-    .references h3 { font-size: 14px; font-weight: 600; margin-bottom: 12px; }
-    .ref-list { list-style: none; }
-    .ref-item {
-      display: flex; align-items: center; gap: 8px;
-      padding: 6px 0; font-size: 13px; border-bottom: 1px solid var(--border);
-    }
-    .ref-item:last-child { border-bottom: none; }
-    .ref-remove { color: var(--danger); cursor: pointer; font-size: 16px; }
-    .ref-add {
-      display: flex; gap: 8px; margin-top: 8px;
-    }
-    .ref-add input {
-      flex: 1; padding: 8px 12px; border: 1px solid var(--border);
-      border-radius: 6px; font-size: 13px;
-    }
-    .converge-all {
-      text-align: center; padding: 24px;
-    }
-    .converge-all .btn-primary { font-size: 14px; padding: 12px 32px; }
     .empty-state {
       text-align: center; padding: 80px 20px; color: var(--muted);
     }
@@ -144,16 +39,40 @@
       width: 100%; padding: 10px 14px; border: 1px solid var(--border);
       border-radius: 6px; font-size: 13px; margin-bottom: 12px;
     }
-    .converge-result {
-      margin: 0 20px 16px; padding: 16px;
-      background: #ecfdf5; border: 1px solid #6ee7b7; border-radius: 8px;
-    }
-    .converge-result h4 { font-size: 12px; font-weight: 600; color: #065f46; margin-bottom: 8px; }
-    .converge-result pre {
-      font-size: 12px; white-space: pre-wrap; word-break: break-word;
-      max-height: 200px; overflow-y: auto;
-    }
     .header-actions { display: flex; gap: 8px; align-items: center; }
+    .key-status {
+      display: inline-flex; align-items: center; gap: 6px;
+      font-size: 12px; padding: 4px 10px; border-radius: 99px;
+    }
+    .key-status.active { background: #ecfdf5; color: var(--success); }
+    .key-status.missing { background: var(--insight-bg); color: #92400e; }
+    .btn {
+      padding: 7px 14px; border-radius: 6px; font-size: 12px;
+      font-weight: 500; cursor: pointer; border: 1px solid var(--border);
+      background: var(--surface); color: var(--text); transition: all 0.15s;
+    }
+    .btn:hover { border-color: var(--accent); color: var(--accent); }
+    .btn-primary {
+      background: var(--accent); color: #fff; border-color: var(--accent);
+    }
+    .btn-primary:hover { background: #2563eb; }
+    .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+    .btn-icon {
+      background: none; border: 1px solid var(--border); border-radius: 6px;
+      padding: 6px 10px; cursor: pointer; font-size: 13px; color: var(--muted);
+      transition: all 0.15s;
+    }
+    .btn-icon:hover { border-color: var(--accent); color: var(--accent); }
+    .btn-danger { color: var(--danger); }
+    .btn-danger:hover { border-color: var(--danger); color: var(--danger); }
+    .spinner {
+      width: 14px; height: 14px; border: 2px solid var(--border);
+      border-top-color: var(--accent); border-radius: 50%;
+      animation: spin 0.6s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* Settings */
     .settings-panel {
       background: var(--surface); border: 1px solid var(--border);
       border-radius: 10px; padding: 24px; margin-bottom: 24px;
@@ -175,20 +94,7 @@
       margin-left: 8px; opacity: 0; transition: opacity 0.3s;
     }
     .setting-saved.show { opacity: 1; }
-    .btn-icon {
-      background: none; border: 1px solid var(--border); border-radius: 6px;
-      padding: 6px 10px; cursor: pointer; font-size: 13px; color: var(--muted);
-      transition: all 0.15s;
-    }
-    .btn-icon:hover { border-color: var(--accent); color: var(--accent); }
-    .btn-danger { color: var(--danger); }
-    .btn-danger:hover { border-color: var(--danger); color: var(--danger); }
-    .key-status {
-      display: inline-flex; align-items: center; gap: 6px;
-      font-size: 12px; padding: 4px 10px; border-radius: 99px;
-    }
-    .key-status.active { background: #ecfdf5; color: var(--success); }
-    .key-status.missing { background: var(--insight-bg); color: #92400e; }
+
     /* Doc viewer layout */
     .doc-viewer {
       display: flex; gap: 0; height: calc(100vh - 80px);
@@ -197,147 +103,19 @@
     }
     .doc-content-wrap {
       flex: 1; border-right: 1px solid var(--border); position: relative;
-      overflow-y: auto;
+      display: flex; flex-direction: column;
     }
-    .doc-content {
-      padding: 32px 48px; line-height: 1.7; font-size: 15px;
-      max-width: 720px; min-height: 100%;
-      position: relative; cursor: text;
+    .doc-iframe-container {
+      flex: 1; position: relative; overflow: hidden;
     }
-    .doc-content mark.hd-hl {
-      background: #fef9c3; border-bottom: 2px solid #fbbf24;
-      border-radius: 2px; padding: 0 2px; cursor: pointer;
+    .doc-iframe-container iframe {
+      width: 100%; height: 100%; border: none;
     }
-    .doc-content mark.hd-hl:hover { background: #fde68a; }
-    .doc-content mark.hd-hl.active { background: #fde68a; box-shadow: 0 0 0 2px rgba(251,191,36,0.4); }
-    /* Area annotation */
-    .hd-area-overlay {
-      position: absolute; top: 0; left: 0; right: 0; bottom: 0;
-      pointer-events: none; z-index: 10;
-    }
-    .hd-area-rect {
-      position: absolute; border: 2px solid #3b82f6;
-      background: rgba(59,130,246,0.08); border-radius: 4px;
-      cursor: pointer; pointer-events: auto;
-    }
-    .hd-area-rect:hover { background: rgba(59,130,246,0.15); }
-    /* Selection tooltip */
-    .hd-sel-tooltip {
-      position: absolute; z-index: 100;
-      background: #1e293b; color: #fff;
-      padding: 6px 12px; border-radius: 6px;
-      font-size: 12px; cursor: pointer;
-      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-      animation: hd-pop 0.1s ease;
-      white-space: nowrap;
-    }
-    @keyframes hd-pop { from { opacity:0; transform:scale(0.95); } to { opacity:1; transform:scale(1); } }
-    .hd-sel-tooltip::after {
-      content:''; position:absolute; top:-5px; left:50%; transform:translateX(-50%);
-      border-left:5px solid transparent; border-right:5px solid transparent;
-      border-bottom:5px solid #1e293b;
-    }
-    /* Comment popover */
-    .hd-comment-popover {
-      position: absolute; z-index: 200;
-      background: #fff; border: 1px solid var(--border);
-      border-radius: 10px; box-shadow: 0 8px 30px rgba(0,0,0,0.12);
-      width: 300px; animation: hd-pop 0.15s ease;
-    }
-    .hd-cp-header {
-      padding: 12px 16px; border-bottom: 1px solid #f1f5f9;
-      display: flex; align-items: center; gap: 8px;
-    }
-    .hd-cp-avatar {
-      width: 28px; height: 28px; border-radius: 50%;
-      background: var(--accent); color: #fff;
+    .doc-iframe-placeholder {
       display: flex; align-items: center; justify-content: center;
-      font-size: 12px; font-weight: 600;
+      height: 100%; padding: 40px; text-align: center; color: var(--muted);
     }
-    .hd-cp-name {
-      border: 1px solid var(--border); border-radius: 6px;
-      padding: 4px 10px; font-size: 12px; flex: 1;
-    }
-    .hd-cp-body { padding: 12px 16px; }
-    .hd-cp-body textarea {
-      width: 100%; border: none; outline: none; resize: none;
-      font-size: 13px; font-family: inherit; min-height: 50px;
-      line-height: 1.4;
-    }
-    .hd-cp-body textarea::placeholder { color: #94a3b8; }
-    .hd-cp-actions {
-      padding: 8px 16px 12px; display: flex; justify-content: flex-end; gap: 8px;
-    }
-    .hd-cp-btn {
-      padding: 6px 14px; border-radius: 6px; font-size: 12px;
-      font-weight: 500; cursor: pointer; border: none;
-    }
-    .hd-cp-cancel { background: #f1f5f9; color: #64748b; }
-    .hd-cp-cancel:hover { background: #e2e8f0; }
-    .hd-cp-submit { background: var(--accent); color: #fff; }
-    .hd-cp-submit:hover { background: #2563eb; }
-    /* Area draw cursor */
-    .doc-content.area-mode { cursor: crosshair; }
-    .hd-drawing-rect {
-      position: absolute; border: 2px dashed #3b82f6;
-      background: rgba(59,130,246,0.05); border-radius: 4px;
-      pointer-events: none; z-index: 11;
-    }
-    /* Toolbar */
-    .doc-toolbar {
-      padding: 8px 16px; background: var(--bg);
-      border-bottom: 1px solid var(--border);
-      display: flex; align-items: center; gap: 8px;
-    }
-    .toolbar-btn {
-      padding: 5px 10px; border: 1px solid var(--border); border-radius: 5px;
-      font-size: 12px; cursor: pointer; background: var(--surface);
-      transition: all 0.15s;
-    }
-    .toolbar-btn:hover { border-color: var(--accent); color: var(--accent); }
-    .toolbar-btn.active { background: var(--accent); color: #fff; border-color: var(--accent); }
-    .doc-margin {
-      width: 340px; overflow-y: auto; padding: 16px;
-      background: var(--bg);
-    }
-    .doc-margin-header {
-      font-size: 13px; font-weight: 600; margin-bottom: 12px;
-      display: flex; justify-content: space-between; align-items: center;
-    }
-    .doc-margin-count {
-      font-size: 11px; color: var(--muted); font-weight: 400;
-      background: var(--surface); padding: 2px 8px; border-radius: 99px;
-      border: 1px solid var(--border);
-    }
-    .mc {
-      background: var(--surface); border: 1px solid var(--border);
-      border-radius: 8px; padding: 12px; margin-bottom: 10px;
-      transition: border-color 0.15s;
-    }
-    .mc:hover { border-color: var(--accent); }
-    .mc-header { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
-    .mc-avatar {
-      width: 24px; height: 24px; border-radius: 50%;
-      background: var(--accent); color: #fff;
-      display: flex; align-items: center; justify-content: center;
-      font-size: 11px; font-weight: 600;
-    }
-    .mc-name { font-weight: 600; font-size: 12px; }
-    .mc-time { font-size: 11px; color: var(--muted); margin-left: auto; }
-    .mc-text { font-size: 13px; color: var(--text); line-height: 1.4; }
-    .mc-anchor {
-      margin-top: 6px; padding: 4px 8px;
-      background: var(--accent-soft); color: var(--accent);
-      border-radius: 4px; font-size: 11px; display: inline-block;
-    }
-    .mc-insight {
-      background: var(--insight-bg); border: 1px solid var(--insight-border);
-      border-radius: 8px; padding: 12px; margin-bottom: 10px;
-    }
-    .mc-insight-header { font-size: 11px; font-weight: 600; color: #92400e; margin-bottom: 6px; }
-    .mc-insight-text { font-size: 12px; line-height: 1.5; }
-    .mc-insight-source { font-size: 10px; color: var(--muted); margin-top: 3px; }
-    .mc-actions { display: flex; gap: 6px; margin-top: 12px; }
+    .doc-iframe-placeholder p { font-size: 14px; line-height: 1.6; max-width: 360px; }
     .doc-url-bar {
       padding: 8px 16px; background: var(--bg);
       border-bottom: 1px solid var(--border);
@@ -347,8 +125,137 @@
     .doc-url-bar code {
       background: var(--surface); padding: 2px 8px;
       border-radius: 4px; border: 1px solid var(--border);
-      font-size: 11px;
+      font-size: 11px; overflow: hidden; text-overflow: ellipsis;
+      white-space: nowrap; max-width: 400px;
     }
+
+    /* Right panel: margin comments */
+    .doc-margin {
+      width: 360px; overflow-y: auto; padding: 0;
+      background: var(--bg);
+    }
+    .doc-margin-header {
+      font-size: 13px; font-weight: 600;
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 14px 16px; border-bottom: 1px solid var(--border);
+      background: var(--surface); position: sticky; top: 0; z-index: 5;
+    }
+    .doc-margin-count {
+      font-size: 11px; color: var(--muted); font-weight: 400;
+      background: var(--bg); padding: 2px 8px; border-radius: 99px;
+      border: 1px solid var(--border);
+    }
+
+    /* Segment label */
+    .seg-label {
+      font-size: 11px; font-weight: 600; color: var(--muted);
+      margin: 0; padding: 10px 16px 6px;
+      text-transform: uppercase; letter-spacing: 0.5px;
+      background: var(--bg);
+    }
+    .seg-label .debate-badge {
+      margin-left: 6px; background: var(--debate-bg); color: var(--danger);
+      padding: 1px 6px; border-radius: 99px; font-size: 10px;
+    }
+
+    /* Comment card - Google Docs style */
+    .mc {
+      background: var(--surface); margin: 0 12px 2px;
+      border-radius: 8px; padding: 12px 14px;
+      transition: background 0.15s;
+    }
+    .mc:first-of-type { margin-top: 6px; }
+    .mc:hover { background: #f8fafc; }
+    .mc-header { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
+    .mc-avatar {
+      width: 26px; height: 26px; border-radius: 50%;
+      background: var(--accent); color: #fff;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 11px; font-weight: 600; flex-shrink: 0;
+    }
+    .mc-name { font-weight: 600; font-size: 12px; color: var(--text); }
+    .mc-time { font-size: 11px; color: var(--muted); margin-left: auto; }
+    .mc-text { font-size: 13px; color: var(--text); line-height: 1.4; margin-left: 34px; }
+    .mc-anchor {
+      margin-top: 6px; margin-left: 34px; padding: 3px 8px;
+      background: var(--accent-soft); color: var(--accent);
+      border-radius: 99px; font-size: 11px; display: inline-block;
+    }
+
+    /* Reply link */
+    .mc-reply-link {
+      margin-left: 34px; margin-top: 6px;
+      font-size: 11px; color: var(--muted); cursor: pointer;
+      display: inline-block;
+    }
+    .mc-reply-link:hover { color: var(--accent); }
+
+    /* Reply form */
+    .mc-reply-form {
+      margin: 8px 0 0 34px; display: none;
+    }
+    .mc-reply-form.open { display: block; }
+    .mc-reply-form textarea {
+      width: 100%; border: 1px solid var(--border); border-radius: 6px;
+      padding: 8px 10px; font-size: 12px; font-family: inherit;
+      resize: none; min-height: 48px; outline: none;
+      transition: border-color 0.15s;
+    }
+    .mc-reply-form textarea:focus { border-color: var(--accent); }
+    .mc-reply-form-actions {
+      display: flex; justify-content: flex-end; gap: 6px; margin-top: 6px;
+    }
+    .mc-reply-form-actions .btn { font-size: 11px; padding: 5px 10px; }
+
+    /* Reply cards (nested) */
+    .mc-replies {
+      margin-left: 34px; margin-top: 8px;
+      border-left: 2px solid var(--border); padding-left: 12px;
+    }
+    .mc-reply {
+      margin-bottom: 8px;
+    }
+    .mc-reply .mc-header { margin-bottom: 2px; }
+    .mc-reply .mc-avatar { width: 20px; height: 20px; font-size: 9px; }
+    .mc-reply .mc-name { font-size: 11px; }
+    .mc-reply .mc-time { font-size: 10px; }
+    .mc-reply .mc-reply-text { font-size: 12px; color: var(--text); line-height: 1.4; margin-left: 28px; }
+
+    /* AI Actions divider area */
+    .ai-actions-area {
+      margin: 4px 12px 12px; padding: 10px 14px;
+      border-top: 1px solid var(--border);
+    }
+    .ai-actions-label {
+      font-size: 10px; font-weight: 600; color: var(--muted);
+      text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px;
+    }
+    .ai-actions-btns { display: flex; gap: 6px; }
+    .ai-actions-btns .btn { font-size: 11px; padding: 5px 10px; }
+
+    /* Insight card in margin */
+    .mc-insight {
+      margin: 4px 12px 10px; padding: 12px 14px;
+      background: var(--insight-bg); border: 1px solid var(--insight-border);
+      border-radius: 8px;
+    }
+    .mc-insight-header {
+      font-size: 11px; font-weight: 600; color: #92400e; margin-bottom: 6px;
+      display: flex; align-items: center; gap: 4px;
+    }
+    .mc-insight-text { font-size: 12px; line-height: 1.5; margin-bottom: 4px; }
+    .mc-insight-source { font-size: 10px; color: var(--muted); margin-top: 2px; }
+    .mc-insight-loading {
+      display: flex; align-items: center; gap: 8px;
+      font-size: 12px; color: var(--muted);
+    }
+
+    /* Converge All footer */
+    .margin-footer {
+      padding: 12px 16px; border-top: 1px solid var(--border);
+      position: sticky; bottom: 0; background: var(--surface);
+    }
+    .margin-footer .btn { width: 100%; }
   </style>
 </head>
 <body>
@@ -373,6 +280,10 @@
       references: [],
       insights: {},
       showSettings: false,
+      docUrl: null,
+      docUrlError: false,
+      lastTimestamp: null,
+      pollTimer: null,
     };
 
     function init() {
@@ -382,16 +293,13 @@
       if (params.get('worker')) state.workerUrl = params.get('worker');
       if (params.get('doc')) state.currentDocId = params.get('doc');
 
-      // Author key: localStorage (low-value identity token, persists across sessions)
       const savedAuthorKey = localStorage.getItem('htmldrop_author_key');
       if (savedAuthorKey && !state.authorKey) state.authorKey = savedAuthorKey;
       if (state.authorKey) localStorage.setItem('htmldrop_author_key', state.authorKey);
 
-      // Anthropic key: sessionStorage only (payment credential, auto-clears on browser close)
       const savedAnthropicKey = sessionStorage.getItem('htmldrop_anthropic_key');
       if (savedAnthropicKey) state.anthropicKey = savedAnthropicKey;
 
-      // If we have a docId, load feedback directly (no auth needed for reading)
       if (state.currentDocId) {
         loadFeedback(state.currentDocId);
       } else if (state.authorKey) {
@@ -402,30 +310,106 @@
       }
     }
 
+    // --- Polling ---
+    function startPolling() {
+      stopPolling();
+      state.pollTimer = setInterval(function() { pollNewFeedback(); }, 10000);
+    }
+
+    function stopPolling() {
+      if (state.pollTimer) {
+        clearInterval(state.pollTimer);
+        state.pollTimer = null;
+      }
+    }
+
+    async function pollNewFeedback() {
+      if (!state.currentDocId) return;
+      var since = state.lastTimestamp || new Date(0).toISOString();
+      try {
+        var url = state.workerUrl + '/api/feedback/' + state.currentDocId + '?since=' + encodeURIComponent(since);
+        var res = await fetch(url);
+        if (!res.ok) return;
+        var data = await res.json();
+        var newItems = data.items || [];
+        if (newItems.length > 0) {
+          state.feedback = state.feedback.concat(newItems);
+          updateLastTimestamp();
+          state.segments = fallbackSegmentation(state.feedback);
+          renderMarginPanel();
+        }
+      } catch (e) { /* silent */ }
+    }
+
+    function updateLastTimestamp() {
+      if (state.feedback.length > 0) {
+        var times = state.feedback.map(function(f) { return f.createdAt; }).filter(Boolean).sort();
+        if (times.length > 0) state.lastTimestamp = times[times.length - 1];
+      }
+    }
+
+    // --- Doc URL fetching ---
+    async function fetchDocUrl(docId) {
+      try {
+        var res = await fetch(state.workerUrl + '/api/doc/' + docId + '/url');
+        if (res.ok) {
+          var data = await res.json();
+          if (data.url) {
+            state.docUrl = data.url;
+            state.docUrlError = false;
+            return;
+          }
+        }
+        state.docUrl = null;
+        state.docUrlError = true;
+      } catch (e) {
+        state.docUrl = null;
+        state.docUrlError = true;
+      }
+    }
+
+    // --- Insights fetching ---
+    async function fetchInsights(docId) {
+      try {
+        var res = await fetch(state.workerUrl + '/api/insights/' + docId);
+        if (res.ok) {
+          var data = await res.json();
+          if (data.insights) {
+            state.insights = {};
+            for (var key in data.insights) {
+              if (data.insights.hasOwnProperty(key)) {
+                state.insights[parseInt(key)] = data.insights[key];
+              }
+            }
+          }
+        }
+      } catch (e) { /* silent */ }
+    }
+
+    // --- Render: Home ---
     function renderHome() {
-      const frag = document.createDocumentFragment();
+      var frag = document.createDocumentFragment();
       frag.appendChild(renderNav());
 
-      const hero = document.createElement('div');
+      var hero = document.createElement('div');
       hero.className = 'empty-state';
-      const h2 = document.createElement('h2');
+      var h2 = document.createElement('h2');
       h2.textContent = 'Converge Studio';
-      const p1 = document.createElement('p');
+      var p1 = document.createElement('p');
       p1.textContent = 'AI-facilitated document feedback and synthesis.';
       p1.style.marginBottom = '24px';
       hero.append(h2, p1);
 
-      // Direct doc ID input
-      const docRow = document.createElement('div');
+      var docRow = document.createElement('div');
       docRow.style.cssText = 'display:flex;gap:8px;max-width:400px;margin:0 auto 16px;';
-      const docInput = document.createElement('input');
+      var docInput = document.createElement('input');
       docInput.className = 'setting-input';
       docInput.placeholder = 'Enter a document ID to view feedback';
       docInput.style.margin = '0';
-      const goBtn = document.createElement('button');
+      var goBtn = document.createElement('button');
       goBtn.className = 'btn btn-primary';
       goBtn.textContent = 'View';
-      goBtn.addEventListener('click', () => {
+      goBtn.addEventListener('click', function() {
         if (docInput.value.trim()) {
           state.currentDocId = docInput.value.trim();
           window.location.hash = 'doc=' + state.currentDocId;
@@ -435,7 +419,7 @@
       docRow.append(docInput, goBtn);
       hero.appendChild(docRow);
 
-      const hint = document.createElement('p');
+      var hint = document.createElement('p');
       hint.style.cssText = 'font-size:12px;color:var(--muted);margin-top:12px;';
       hint.textContent = 'Or connect your author key in Settings to see all your documents.';
       hero.appendChild(hint);
@@ -444,40 +428,42 @@
       app.replaceChildren(frag);
     }
 
+    // --- Render: Nav ---
     function renderNav() {
-      const nav = document.createElement('header');
-      const h1 = document.createElement('h1');
+      var nav = document.createElement('header');
+      var h1 = document.createElement('h1');
       h1.textContent = 'Converge ';
-      const span = document.createElement('span');
+      var span = document.createElement('span');
       span.textContent = 'Studio';
       h1.appendChild(span);
       h1.style.cursor = 'pointer';
-      h1.addEventListener('click', () => { state.page = 'home'; renderHome(); });
+      h1.addEventListener('click', function() { stopPolling(); state.page = 'home'; renderHome(); });
 
-      const actions = document.createElement('div');
+      var actions = document.createElement('div');
       actions.className = 'header-actions';
 
-      const keyStatus = document.createElement('span');
+      var keyStatus = document.createElement('span');
       keyStatus.className = 'key-status ' + (state.anthropicKey ? 'active' : 'missing');
       keyStatus.textContent = state.anthropicKey ? 'AI Ready' : 'No AI Key';
 
-      const settingsBtn = document.createElement('button');
+      var settingsBtn = document.createElement('button');
       settingsBtn.className = 'btn-icon';
-      settingsBtn.textContent = '⚙ Settings';
-      settingsBtn.addEventListener('click', () => { state.page = 'settings'; renderSettingsPage(); });
+      settingsBtn.textContent = 'Settings';
+      settingsBtn.addEventListener('click', function() { stopPolling(); state.page = 'settings'; renderSettingsPage(); });
 
       actions.append(keyStatus, settingsBtn);
 
       if (state.authorKey) {
-        const logoutBtn = document.createElement('button');
+        var logoutBtn = document.createElement('button');
         logoutBtn.className = 'btn-icon btn-danger';
         logoutBtn.textContent = 'Logout';
-        logoutBtn.addEventListener('click', () => {
+        logoutBtn.addEventListener('click', function() {
           localStorage.removeItem('htmldrop_author_key');
           sessionStorage.removeItem('htmldrop_anthropic_key');
           state.authorKey = '';
           state.anthropicKey = '';
           window.location.hash = '';
+          stopPolling();
           renderHome();
         });
         actions.appendChild(logoutBtn);
@@ -487,21 +473,100 @@
       return nav;
     }
 
+    // --- Render: Settings ---
     function renderSettingsPage() {
-      const frag = document.createDocumentFragment();
+      var frag = document.createDocumentFragment();
       frag.appendChild(renderNav());
       frag.appendChild(renderSettings());
       app.replaceChildren(frag);
     }
 
+    function renderSettings() {
+      var panel = document.createElement('div');
+      panel.className = 'settings-panel';
+      var h3 = document.createElement('h3');
+      h3.textContent = 'Settings';
+      panel.appendChild(h3);
+
+      // Anthropic API Key
+      var aiRow = document.createElement('div');
+      aiRow.className = 'setting-row';
+      var aiLabel = document.createElement('div');
+      aiLabel.className = 'setting-label';
+      aiLabel.textContent = 'Anthropic API Key (for AI Insights & Converge)';
+      var aiDesc = document.createElement('div');
+      aiDesc.className = 'setting-desc';
+      aiDesc.textContent = 'Stored in session memory only. Cleared when you close the browser.';
+      var aiInput = document.createElement('input');
+      aiInput.className = 'setting-input';
+      aiInput.type = 'password';
+      aiInput.placeholder = 'sk-ant-...';
+      aiInput.value = state.anthropicKey || '';
+      var aiSaved = document.createElement('span');
+      aiSaved.className = 'setting-saved';
+      aiSaved.textContent = 'Saved';
+      aiInput.addEventListener('change', function() {
+        state.anthropicKey = aiInput.value.trim();
+        if (state.anthropicKey) {
+          sessionStorage.setItem('htmldrop_anthropic_key', state.anthropicKey);
+        } else {
+          sessionStorage.removeItem('htmldrop_anthropic_key');
+        }
+        aiSaved.classList.add('show');
+        setTimeout(function() { aiSaved.classList.remove('show'); }, 2000);
+      });
+      aiRow.append(aiLabel, aiDesc, aiInput, aiSaved);
+      panel.appendChild(aiRow);
+
+      // Worker URL
+      var workerRow = document.createElement('div');
+      workerRow.className = 'setting-row';
+      var wLabel = document.createElement('div');
+      wLabel.className = 'setting-label';
+      wLabel.textContent = 'Worker URL';
+      var wDesc = document.createElement('div');
+      wDesc.className = 'setting-desc';
+      wDesc.textContent = 'The feedback relay backend. Change only if self-hosting.';
+      var wInput = document.createElement('input');
+      wInput.className = 'setting-input';
+      wInput.type = 'url';
+      wInput.value = state.workerUrl;
+      wInput.addEventListener('change', function() {
+        state.workerUrl = wInput.value.trim() || DEFAULT_WORKER_URL;
+      });
+      workerRow.append(wLabel, wDesc, wInput);
+      panel.appendChild(workerRow);
+
+      // Author key
+      if (state.authorKey) {
+        var authRow = document.createElement('div');
+        authRow.className = 'setting-row';
+        var authLabel = document.createElement('div');
+        authLabel.className = 'setting-label';
+        authLabel.textContent = 'Author Key';
+        var authDesc = document.createElement('div');
+        authDesc.className = 'setting-desc';
+        authDesc.textContent = 'Your author identity. Generated by `htmldrop auth setup`.';
+        var authValue = document.createElement('code');
+        authValue.style.fontSize = '12px';
+        authValue.style.color = 'var(--muted)';
+        authValue.textContent = state.authorKey.slice(0, 8) + '...' + state.authorKey.slice(-4);
+        authRow.append(authLabel, authDesc, authValue);
+        panel.appendChild(authRow);
+      }
+
+      return panel;
+    }
+
+    // --- Loading ---
     async function loadFiles() {
       renderLoading('Loading your files...');
       try {
-        const res = await fetch(state.workerUrl + '/api/author/files', {
+        var res = await fetch(state.workerUrl + '/api/author/files', {
           headers: { 'Authorization': 'Bearer ' + state.authorKey },
         });
         if (!res.ok) throw new Error('Failed to load files');
-        const data = await res.json();
+        var data = await res.json();
         state.files = data.files || [];
         if (state.files.length > 0) {
           state.selectedFile = state.files[0];
@@ -517,762 +582,442 @@
     async function loadFeedback(docId) {
       renderLoading('Loading feedback...');
       try {
-        const res = await fetch(state.workerUrl + '/api/feedback/' + docId);
-        const data = await res.json();
+        var res = await fetch(state.workerUrl + '/api/feedback/' + docId);
+        var data = await res.json();
         state.feedback = data.items || [];
         state.currentDocId = docId;
-        state.selectedFile = state.selectedFile || { docId, name: docId.slice(0, 8) };
-        await loadSegments(docId);
+        state.selectedFile = state.selectedFile || { docId: docId, name: docId.slice(0, 8) };
+        updateLastTimestamp();
+        state.segments = fallbackSegmentation(state.feedback);
+        // Fetch doc URL and insights in parallel
+        await Promise.all([fetchDocUrl(docId), fetchInsights(docId)]);
+        renderDashboard();
+        startPolling();
       } catch (e) {
         state.feedback = [];
+        state.segments = [];
+        await fetchDocUrl(docId);
         renderDashboard();
+        startPolling();
       }
-    }
-
-    async function loadSegments(docId) {
-      if (state.authorKey) {
-        try {
-          const res = await fetch(state.workerUrl + '/api/segments/' + docId, {
-            method: 'POST',
-            headers: {
-              'Authorization': 'Bearer ' + state.authorKey,
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({ items: state.feedback }),
-          });
-          if (res.ok) {
-            const data = await res.json();
-            state.segments = data.segments || [];
-            renderDashboard();
-            return;
-          }
-        } catch (e) { /* fall through to client-side */ }
-      }
-      state.segments = fallbackSegmentation(state.feedback);
-      renderDashboard();
     }
 
     function fallbackSegmentation(items) {
-      const groups = {};
-      for (const item of items) {
-        const key = item.anchor?.selectedText?.slice(0, 40) || item.anchor?.selector || 'page-level';
+      var groups = {};
+      for (var i = 0; i < items.length; i++) {
+        var item = items[i];
+        if (item.parentId) continue; // skip replies
+        var key = (item.anchor && item.anchor.selectedText) ? item.anchor.selectedText.slice(0, 40) : (item.anchor && item.anchor.selector) ? item.anchor.selector : 'page-level';
         if (!groups[key]) groups[key] = { title: key, items: [], hasDebate: false };
         groups[key].items.push(item);
       }
-      for (const seg of Object.values(groups)) {
+      var result = [];
+      for (var k in groups) {
+        if (!groups.hasOwnProperty(k)) continue;
+        var seg = groups[k];
         if (seg.items.length >= 2) {
-          const authors = new Set(seg.items.map(i => i.author?.displayName));
-          seg.hasDebate = authors.size >= 2;
+          var authors = {};
+          for (var j = 0; j < seg.items.length; j++) {
+            var dn = seg.items[j].author ? seg.items[j].author.displayName : '';
+            if (dn) authors[dn] = true;
+          }
+          seg.hasDebate = Object.keys(authors).length >= 2;
         }
+        result.push(seg);
       }
-      return Object.values(groups);
+      return result;
+    }
+
+    function getRepliesFor(commentId) {
+      return state.feedback.filter(function(f) { return f.parentId === commentId; });
     }
 
     function renderLoading(msg) {
-      const div = document.createElement('div');
+      var div = document.createElement('div');
       div.className = 'empty-state';
-      const spin = document.createElement('div');
+      var spin = document.createElement('div');
       spin.className = 'spinner';
       spin.style.margin = '0 auto 12px';
-      const text = document.createElement('p');
+      var text = document.createElement('p');
       text.textContent = msg;
       div.append(spin, text);
       app.replaceChildren(div);
     }
 
     function renderEmpty() {
-      const div = document.createElement('div');
+      var div = document.createElement('div');
       div.className = 'empty-state';
-      const h2 = document.createElement('h2');
+      var h2 = document.createElement('h2');
       h2.textContent = 'No feedback files yet';
-      const p = document.createElement('p');
+      var p = document.createElement('p');
       p.textContent = 'Push a file with --feedback flag to get started: htmldrop push spec.html --feedback';
       div.append(h2, p);
       app.replaceChildren(div);
     }
 
+    // --- Render: Dashboard ---
     function renderDashboard() {
-      const frag = document.createDocumentFragment();
+      var frag = document.createDocumentFragment();
       frag.appendChild(renderNav());
 
-      const container = app.parentElement;
+      var container = app.parentElement;
       container.style.maxWidth = '100%';
       container.style.padding = '0 16px';
 
-      const viewer = document.createElement('div');
+      var viewer = document.createElement('div');
       viewer.className = 'doc-viewer';
 
-      // Left: interactive document content
-      const contentWrap = document.createElement('div');
+      // Left: iframe with published doc
+      var contentWrap = document.createElement('div');
       contentWrap.className = 'doc-content-wrap';
 
-      // Toolbar
-      const toolbar = document.createElement('div');
-      toolbar.className = 'doc-toolbar';
-      const textBtn = document.createElement('button');
-      textBtn.className = 'toolbar-btn active';
-      textBtn.textContent = '✎ Text Select';
-      const areaBtn = document.createElement('button');
-      areaBtn.className = 'toolbar-btn';
-      areaBtn.textContent = '▢ Area Annotate';
-      const docLabel = document.createElement('span');
-      docLabel.style.cssText = 'margin-left:auto;font-size:12px;color:var(--muted);';
-      docLabel.textContent = 'Doc: ' + (state.currentDocId || state.selectedFile?.docId || '').slice(0, 12);
+      // URL bar
+      var urlBar = document.createElement('div');
+      urlBar.className = 'doc-url-bar';
+      var urlLabel = document.createElement('span');
+      urlLabel.textContent = 'Document:';
+      var urlCode = document.createElement('code');
+      urlCode.textContent = state.docUrl || state.currentDocId || '';
+      urlBar.append(urlLabel, urlCode);
+      contentWrap.appendChild(urlBar);
 
-      textBtn.addEventListener('click', () => {
-        state.annotateMode = 'text';
-        textBtn.classList.add('active'); areaBtn.classList.remove('active');
-        docContent.classList.remove('area-mode');
-      });
-      areaBtn.addEventListener('click', () => {
-        state.annotateMode = 'area';
-        areaBtn.classList.add('active'); textBtn.classList.remove('active');
-        docContent.classList.add('area-mode');
-      });
-      toolbar.append(textBtn, areaBtn, docLabel);
-      contentWrap.appendChild(toolbar);
+      // iframe container
+      var iframeContainer = document.createElement('div');
+      iframeContainer.className = 'doc-iframe-container';
 
-      // Document content area
-      const docContent = document.createElement('div');
-      docContent.className = 'doc-content';
-      state.annotateMode = state.annotateMode || 'text';
-
-      // Render content with highlights
-      renderDocContent(docContent);
-
-      // Area annotation overlay
-      const areaOverlay = document.createElement('div');
-      areaOverlay.className = 'hd-area-overlay';
-      docContent.appendChild(areaOverlay);
-
-      // Text selection handler
-      setupTextSelection(docContent, contentWrap);
-      // Area draw handler
-      setupAreaDraw(docContent, contentWrap, areaOverlay);
-
-      contentWrap.appendChild(docContent);
-
-      // Right: margin comments
-      const margin = document.createElement('div');
-      margin.className = 'doc-margin';
-
-      const marginHeader = document.createElement('div');
-      marginHeader.className = 'doc-margin-header';
-      const marginTitle = document.createElement('span');
-      marginTitle.textContent = 'Comments';
-      const marginCount = document.createElement('span');
-      marginCount.className = 'doc-margin-count';
-      marginCount.textContent = state.feedback.length + ' total';
-      marginHeader.append(marginTitle, marginCount);
-      margin.appendChild(marginHeader);
-
-      // Render comments grouped by segment
-      if (state.segments.length > 0) {
-        state.segments.forEach((seg, segIdx) => {
-          // Segment label
-          const segLabel = document.createElement('div');
-          segLabel.style.cssText = 'font-size:11px;font-weight:600;color:var(--muted);margin:12px 0 6px;text-transform:uppercase;letter-spacing:0.5px;';
-          segLabel.textContent = seg.title.length > 30 ? seg.title.slice(0, 30) + '...' : seg.title;
-          if (seg.hasDebate) {
-            const badge = document.createElement('span');
-            badge.style.cssText = 'margin-left:6px;background:var(--debate-bg);color:var(--danger);padding:1px 6px;border-radius:99px;font-size:10px;';
-            badge.textContent = 'debate';
-            segLabel.appendChild(badge);
-          }
-          margin.appendChild(segLabel);
-
-          // Comments in segment
-          seg.items.forEach(item => {
-            margin.appendChild(renderMarginComment(item));
-          });
-
-          // Insight (if exists)
-          if (state.insights[segIdx] && !state.insights[segIdx].loading) {
-            margin.appendChild(renderMarginInsight(state.insights[segIdx]));
-          }
-
-          // Actions for this segment
-          const actions = document.createElement('div');
-          actions.className = 'mc-actions';
-          const insightBtn = document.createElement('button');
-          insightBtn.className = 'btn';
-          insightBtn.textContent = state.insights[segIdx] ? '↻ Refresh' : '⚡ Get Insights';
-          insightBtn.style.fontSize = '11px';
-          insightBtn.addEventListener('click', () => getInsights(segIdx));
-          const convBtn = document.createElement('button');
-          convBtn.className = 'btn btn-primary';
-          convBtn.textContent = 'Converge';
-          convBtn.style.fontSize = '11px';
-          convBtn.addEventListener('click', () => convergeSegment(segIdx));
-          actions.append(insightBtn, convBtn);
-          margin.appendChild(actions);
-        });
+      if (state.docUrl) {
+        var iframe = document.createElement('iframe');
+        iframe.src = state.docUrl;
+        iframe.sandbox = 'allow-same-origin allow-scripts';
+        iframe.title = 'Published document';
+        iframeContainer.appendChild(iframe);
       } else {
-        state.feedback.forEach(item => {
-          margin.appendChild(renderMarginComment(item));
-        });
+        var placeholder = document.createElement('div');
+        placeholder.className = 'doc-iframe-placeholder';
+        var msg = document.createElement('p');
+        msg.textContent = 'Document URL not registered yet. Push with --feedback to see content here.';
+        placeholder.appendChild(msg);
+        iframeContainer.appendChild(placeholder);
       }
 
-      // Converge All button at bottom
-      if (state.feedback.length > 0) {
-        const convAll = document.createElement('div');
-        convAll.style.cssText = 'margin-top:16px;padding-top:16px;border-top:1px solid var(--border);';
-        const btn = document.createElement('button');
-        btn.className = 'btn btn-primary';
-        btn.style.width = '100%';
-        btn.textContent = 'Converge All';
-        btn.addEventListener('click', () => convergeAll());
-        convAll.appendChild(btn);
-        margin.appendChild(convAll);
-      }
+      contentWrap.appendChild(iframeContainer);
+
+      // Right: margin comments panel
+      var margin = document.createElement('div');
+      margin.className = 'doc-margin';
+      margin.id = 'margin-panel';
+      renderMarginContent(margin);
 
       viewer.append(contentWrap, margin);
       frag.appendChild(viewer);
       app.replaceChildren(frag);
     }
 
-    function renderMarginComment(item) {
-      const card = document.createElement('div');
+    // --- Render: Margin panel (can be called independently for polling updates) ---
+    function renderMarginPanel() {
+      var margin = document.getElementById('margin-panel');
+      if (!margin) return;
+      while (margin.firstChild) { margin.removeChild(margin.firstChild); }
+      renderMarginContent(margin);
+    }
+
+    function renderMarginContent(margin) {
+      // Header
+      var marginHeader = document.createElement('div');
+      marginHeader.className = 'doc-margin-header';
+      var marginTitle = document.createElement('span');
+      marginTitle.textContent = 'Comments';
+      var marginCount = document.createElement('span');
+      marginCount.className = 'doc-margin-count';
+      var topLevelCount = state.feedback.filter(function(f) { return !f.parentId; }).length;
+      marginCount.textContent = topLevelCount + ' total';
+      marginHeader.append(marginTitle, marginCount);
+      margin.appendChild(marginHeader);
+
+      // Segments with comments
+      if (state.segments.length > 0) {
+        for (var segIdx = 0; segIdx < state.segments.length; segIdx++) {
+          var seg = state.segments[segIdx];
+
+          // Segment label
+          var segLabel = document.createElement('div');
+          segLabel.className = 'seg-label';
+          var labelText = seg.title.length > 30 ? seg.title.slice(0, 30) + '...' : seg.title;
+          segLabel.textContent = labelText;
+          if (seg.hasDebate) {
+            var badge = document.createElement('span');
+            badge.className = 'debate-badge';
+            badge.textContent = 'debate';
+            segLabel.appendChild(badge);
+          }
+          margin.appendChild(segLabel);
+
+          // Comment cards for this segment
+          for (var ci = 0; ci < seg.items.length; ci++) {
+            margin.appendChild(renderCommentCard(seg.items[ci]));
+          }
+
+          // AI Actions divider section
+          var aiArea = document.createElement('div');
+          aiArea.className = 'ai-actions-area';
+          var aiLabel = document.createElement('div');
+          aiLabel.className = 'ai-actions-label';
+          aiLabel.textContent = 'AI Actions';
+          aiArea.appendChild(aiLabel);
+
+          var aiBtns = document.createElement('div');
+          aiBtns.className = 'ai-actions-btns';
+          var insightBtn = createInsightButton(segIdx);
+          var convBtn = createConvergeButton(segIdx);
+          aiBtns.append(insightBtn, convBtn);
+          aiArea.appendChild(aiBtns);
+          margin.appendChild(aiArea);
+
+          // Insight card (if exists for this segment)
+          if (state.insights[segIdx] && !state.insights[segIdx].loading) {
+            margin.appendChild(renderInsightCard(state.insights[segIdx]));
+          } else if (state.insights[segIdx] && state.insights[segIdx].loading) {
+            var loadingCard = document.createElement('div');
+            loadingCard.className = 'mc-insight';
+            var loading = document.createElement('div');
+            loading.className = 'mc-insight-loading';
+            var spin = document.createElement('div');
+            spin.className = 'spinner';
+            var txt = document.createElement('span');
+            txt.textContent = 'Generating insights...';
+            loading.append(spin, txt);
+            loadingCard.appendChild(loading);
+            margin.appendChild(loadingCard);
+          }
+        }
+      } else {
+        // No segments, show flat comments
+        var topLevel = state.feedback.filter(function(f) { return !f.parentId; });
+        for (var ti = 0; ti < topLevel.length; ti++) {
+          margin.appendChild(renderCommentCard(topLevel[ti]));
+        }
+      }
+
+      // Converge All footer
+      if (state.feedback.length > 0) {
+        var footer = document.createElement('div');
+        footer.className = 'margin-footer';
+        var btn = document.createElement('button');
+        btn.className = 'btn btn-primary';
+        btn.textContent = 'Converge All';
+        btn.addEventListener('click', function() { convergeAll(); });
+        footer.appendChild(btn);
+        margin.appendChild(footer);
+      }
+    }
+
+    function createInsightButton(segIdx) {
+      var btn = document.createElement('button');
+      btn.className = 'btn';
+      btn.textContent = state.insights[segIdx] ? 'Refresh Insights' : 'Get Insights';
+      btn.addEventListener('click', (function(idx) {
+        return function() { getInsights(idx); };
+      })(segIdx));
+      return btn;
+    }
+
+    function createConvergeButton(segIdx) {
+      var btn = document.createElement('button');
+      btn.className = 'btn btn-primary';
+      btn.textContent = 'Converge';
+      btn.addEventListener('click', (function(idx) {
+        return function() { convergeSegment(idx); };
+      })(segIdx));
+      return btn;
+    }
+
+    // --- Render: Comment Card (Google Docs style) ---
+    function renderCommentCard(item) {
+      var card = document.createElement('div');
       card.className = 'mc';
-      const header = document.createElement('div');
+
+      // Header: avatar, name, time
+      var header = document.createElement('div');
       header.className = 'mc-header';
-      const avatar = document.createElement('div');
+      var avatar = document.createElement('div');
       avatar.className = 'mc-avatar';
-      avatar.textContent = (item.author?.displayName || 'A')[0].toUpperCase();
-      const name = document.createElement('span');
+      var displayName = (item.author && item.author.displayName) ? item.author.displayName : 'Anonymous';
+      avatar.textContent = displayName[0].toUpperCase();
+      var name = document.createElement('span');
       name.className = 'mc-name';
-      name.textContent = item.author?.displayName || 'Anonymous';
-      const time = document.createElement('span');
+      name.textContent = displayName;
+      var time = document.createElement('span');
       time.className = 'mc-time';
       time.textContent = formatTime(item.createdAt);
       header.append(avatar, name, time);
-      const text = document.createElement('div');
+      card.appendChild(header);
+
+      // Text
+      var text = document.createElement('div');
       text.className = 'mc-text';
-      text.textContent = item.content?.text || '';
-      card.append(header, text);
-      if (item.anchor?.selectedText) {
-        const anchor = document.createElement('div');
+      text.textContent = (item.content && item.content.text) ? item.content.text : '';
+      card.appendChild(text);
+
+      // Anchor quote (blue pill)
+      if (item.anchor && item.anchor.selectedText) {
+        var anchor = document.createElement('div');
         anchor.className = 'mc-anchor';
-        anchor.textContent = '"' + item.anchor.selectedText.slice(0, 60) + '"';
+        anchor.textContent = '“' + item.anchor.selectedText.slice(0, 60) + '”';
         card.appendChild(anchor);
       }
+
+      // Replies
+      var replies = getRepliesFor(item.id);
+      if (replies.length > 0) {
+        var repliesContainer = document.createElement('div');
+        repliesContainer.className = 'mc-replies';
+        for (var ri = 0; ri < replies.length; ri++) {
+          repliesContainer.appendChild(renderReplyCard(replies[ri]));
+        }
+        card.appendChild(repliesContainer);
+      }
+
+      // Reply link
+      var replyLink = document.createElement('span');
+      replyLink.className = 'mc-reply-link';
+      replyLink.textContent = 'Reply';
+      card.appendChild(replyLink);
+
+      // Reply form (hidden by default)
+      var replyForm = document.createElement('div');
+      replyForm.className = 'mc-reply-form';
+      var textarea = document.createElement('textarea');
+      textarea.placeholder = 'Write a reply...';
+      textarea.rows = 2;
+      var formActions = document.createElement('div');
+      formActions.className = 'mc-reply-form-actions';
+      var cancelBtn = document.createElement('button');
+      cancelBtn.className = 'btn';
+      cancelBtn.textContent = 'Cancel';
+      var submitBtn = document.createElement('button');
+      submitBtn.className = 'btn btn-primary';
+      submitBtn.textContent = 'Reply';
+      formActions.append(cancelBtn, submitBtn);
+      replyForm.append(textarea, formActions);
+      card.appendChild(replyForm);
+
+      // Toggle reply form
+      replyLink.addEventListener('click', function() {
+        replyForm.classList.toggle('open');
+        if (replyForm.classList.contains('open')) textarea.focus();
+      });
+      cancelBtn.addEventListener('click', function() {
+        replyForm.classList.remove('open');
+        textarea.value = '';
+      });
+      submitBtn.addEventListener('click', (function(commentItem, ta, form, sbtn) {
+        return async function() {
+          var replyText = ta.value.trim();
+          if (!replyText) return;
+          sbtn.disabled = true;
+          sbtn.textContent = '...';
+          var userName = localStorage.getItem('htmldrop_reviewer_name') || 'Anonymous';
+          try {
+            await fetch(state.workerUrl + '/api/feedback/' + state.currentDocId + '/' + commentItem.id + '/reply', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                content: { type: 'text', text: replyText },
+                author: { displayName: userName },
+              }),
+            });
+            ta.value = '';
+            form.classList.remove('open');
+            // Refresh to show new reply
+            await loadFeedback(state.currentDocId);
+          } catch (e) {
+            sbtn.disabled = false;
+            sbtn.textContent = 'Reply';
+          }
+        };
+      })(item, textarea, replyForm, submitBtn));
+
       return card;
     }
 
-    function renderMarginInsight(insight) {
-      const panel = document.createElement('div');
+    // --- Render: Reply Card (nested) ---
+    function renderReplyCard(reply) {
+      var card = document.createElement('div');
+      card.className = 'mc-reply';
+      var header = document.createElement('div');
+      header.className = 'mc-header';
+      var avatar = document.createElement('div');
+      avatar.className = 'mc-avatar';
+      var displayName = (reply.author && reply.author.displayName) ? reply.author.displayName : 'Anonymous';
+      avatar.textContent = displayName[0].toUpperCase();
+      var name = document.createElement('span');
+      name.className = 'mc-name';
+      name.textContent = displayName;
+      var time = document.createElement('span');
+      time.className = 'mc-time';
+      time.textContent = formatTime(reply.createdAt);
+      header.append(avatar, name, time);
+      var text = document.createElement('div');
+      text.className = 'mc-reply-text';
+      text.textContent = (reply.content && reply.content.text) ? reply.content.text : '';
+      card.append(header, text);
+      return card;
+    }
+
+    // --- Render: Insight Card ---
+    function renderInsightCard(insight) {
+      var panel = document.createElement('div');
       panel.className = 'mc-insight';
-      const header = document.createElement('div');
+      var header = document.createElement('div');
       header.className = 'mc-insight-header';
-      header.textContent = '⚡ AI Insight';
+      header.textContent = 'AI Insight';
       panel.appendChild(header);
       if (insight.points) {
-        insight.points.forEach(p => {
-          const text = document.createElement('div');
+        for (var i = 0; i < insight.points.length; i++) {
+          var p = insight.points[i];
+          var text = document.createElement('div');
           text.className = 'mc-insight-text';
           text.textContent = p.text;
           panel.appendChild(text);
           if (p.source) {
-            const src = document.createElement('div');
+            var src = document.createElement('div');
             src.className = 'mc-insight-source';
             src.textContent = 'Source: ' + p.source;
             panel.appendChild(src);
           }
-        });
+        }
       }
       return panel;
     }
 
+    // --- Utilities ---
     function formatTime(iso) {
       if (!iso) return '';
-      const d = new Date(iso);
-      const now = new Date();
-      const diff = now - d;
+      var d = new Date(iso);
+      var now = new Date();
+      var diff = now - d;
       if (diff < 60000) return 'now';
       if (diff < 3600000) return Math.floor(diff / 60000) + 'm ago';
       if (diff < 86400000) return Math.floor(diff / 3600000) + 'h ago';
       return d.toLocaleDateString();
     }
 
-    function renderDocContent(container) {
-      // Render document text with highlights where comments exist
-      const textAnchors = state.feedback.filter(f => f.anchor?.selectedText);
-      const uniqueTexts = [...new Set(textAnchors.map(f => f.anchor.selectedText))];
-
-      // Placeholder doc content — in real use, this would be the actual HTML
-      const title = document.createElement('h1');
-      title.style.cssText = 'font-size:24px;margin-bottom:16px;';
-      title.textContent = 'Document: ' + (state.selectedFile?.name || state.currentDocId || 'Unknown');
-      container.appendChild(title);
-
-      const hint = document.createElement('p');
-      hint.style.cssText = 'font-size:13px;color:var(--muted);margin-bottom:24px;';
-      hint.textContent = 'Select text to comment, or use Area Annotate to mark regions.';
-      container.appendChild(hint);
-
-      // Render text content with highlights
-      uniqueTexts.forEach(txt => {
-        const p = document.createElement('p');
-        p.style.marginBottom = '12px';
-        const mark = document.createElement('mark');
-        mark.className = 'hd-hl';
-        mark.textContent = txt;
-        mark.addEventListener('click', () => {
-          container.querySelectorAll('.hd-hl').forEach(m => m.classList.remove('active'));
-          mark.classList.add('active');
-          // Scroll margin to this comment
-        });
-        p.appendChild(mark);
-        container.appendChild(p);
-      });
-
-      // Page-level indicator
-      const pageComments = state.feedback.filter(f => f.anchor?.type === 'page_level');
-      if (pageComments.length > 0) {
-        const hr = document.createElement('hr');
-        hr.style.cssText = 'margin:24px 0;border:none;border-top:1px solid var(--border);';
-        const plabel = document.createElement('p');
-        plabel.style.cssText = 'font-size:12px;color:var(--muted);';
-        plabel.textContent = pageComments.length + ' page-level comment(s)';
-        container.append(hr, plabel);
-      }
-
-      // Area rects from existing comments
-      const areaComments = state.feedback.filter(f => f.anchor?.type === 'element_rect');
-      areaComments.forEach(item => {
-        if (item.anchor?.rect) {
-          const rect = document.createElement('div');
-          rect.className = 'hd-area-rect';
-          rect.style.left = item.anchor.rect.x + '%';
-          rect.style.top = item.anchor.rect.y + '%';
-          rect.style.width = item.anchor.rect.w + '%';
-          rect.style.height = item.anchor.rect.h + '%';
-          container.appendChild(rect);
-        }
-      });
-    }
-
-    function setupTextSelection(docContent, wrap) {
-      docContent.addEventListener('mouseup', (e) => {
-        if (state.annotateMode !== 'text') return;
-        // Remove any existing tooltip
-        wrap.querySelectorAll('.hd-sel-tooltip').forEach(t => t.remove());
-
-        const sel = window.getSelection();
-        if (!sel || sel.isCollapsed || sel.toString().trim().length === 0) return;
-
-        const range = sel.getRangeAt(0);
-        const rect = range.getBoundingClientRect();
-        const wrapRect = wrap.getBoundingClientRect();
-
-        const tooltip = document.createElement('div');
-        tooltip.className = 'hd-sel-tooltip';
-        tooltip.textContent = '+ Comment';
-        tooltip.style.left = (rect.left - wrapRect.left + rect.width / 2 - 40) + 'px';
-        tooltip.style.top = (rect.bottom - wrapRect.top + wrap.scrollTop + 6) + 'px';
-        tooltip.addEventListener('click', () => {
-          const selectedText = sel.toString().trim().slice(0, 2000);
-          tooltip.remove();
-          showCommentPopover(wrap, rect, wrapRect, { type: 'text_range', selectedText: selectedText });
-        });
-        wrap.appendChild(tooltip);
-      });
-
-      docContent.addEventListener('mousedown', () => {
-        wrap.querySelectorAll('.hd-sel-tooltip').forEach(t => t.remove());
-        wrap.querySelectorAll('.hd-comment-popover').forEach(p => p.remove());
-      });
-    }
-
-    function setupAreaDraw(docContent, wrap, overlay) {
-      let drawing = false, startX = 0, startY = 0, drawRect = null;
-
-      docContent.addEventListener('mousedown', (e) => {
-        if (state.annotateMode !== 'area') return;
-        drawing = true;
-        const contentRect = docContent.getBoundingClientRect();
-        startX = e.clientX - contentRect.left;
-        startY = e.clientY - contentRect.top + docContent.parentElement.scrollTop;
-        drawRect = document.createElement('div');
-        drawRect.className = 'hd-drawing-rect';
-        drawRect.style.left = startX + 'px';
-        drawRect.style.top = startY + 'px';
-        docContent.appendChild(drawRect);
-      });
-
-      docContent.addEventListener('mousemove', (e) => {
-        if (!drawing || !drawRect) return;
-        const contentRect = docContent.getBoundingClientRect();
-        const curX = e.clientX - contentRect.left;
-        const curY = e.clientY - contentRect.top + docContent.parentElement.scrollTop;
-        const x = Math.min(startX, curX);
-        const y = Math.min(startY, curY);
-        const w = Math.abs(curX - startX);
-        const h = Math.abs(curY - startY);
-        drawRect.style.left = x + 'px'; drawRect.style.top = y + 'px';
-        drawRect.style.width = w + 'px'; drawRect.style.height = h + 'px';
-      });
-
-      docContent.addEventListener('mouseup', (e) => {
-        if (!drawing || !drawRect) return;
-        drawing = false;
-        const w = parseInt(drawRect.style.width);
-        const h = parseInt(drawRect.style.height);
-        if (w < 20 || h < 20) { drawRect.remove(); drawRect = null; return; }
-
-        const contentRect = docContent.getBoundingClientRect();
-        const wrapRect = wrap.getBoundingClientRect();
-        const rectData = {
-          x: (parseInt(drawRect.style.left) / contentRect.width * 100).toFixed(1),
-          y: (parseInt(drawRect.style.top) / contentRect.height * 100).toFixed(1),
-          w: (w / contentRect.width * 100).toFixed(1),
-          h: (h / contentRect.height * 100).toFixed(1),
-        };
-
-        // Convert drawn rect to permanent
-        drawRect.classList.remove('hd-drawing-rect');
-        drawRect.classList.add('hd-area-rect');
-        drawRect.style.pointerEvents = 'auto';
-        const finalRect = drawRect;
-        drawRect = null;
-
-        const popRect = finalRect.getBoundingClientRect();
-        showCommentPopover(wrap, popRect, wrapRect, {
-          type: 'element_rect',
-          rect: rectData,
-          selector: 'area:' + Object.values(rectData).join(','),
-        });
-      });
-    }
-
-    function showCommentPopover(wrap, triggerRect, wrapRect, anchor) {
-      wrap.querySelectorAll('.hd-comment-popover').forEach(p => p.remove());
-
-      const popover = document.createElement('div');
-      popover.className = 'hd-comment-popover';
-      popover.style.left = Math.max(0, Math.min(triggerRect.left - wrapRect.left, wrapRect.width - 320)) + 'px';
-      popover.style.top = (triggerRect.bottom - wrapRect.top + wrap.scrollTop + 10) + 'px';
-
-      const userName = localStorage.getItem('htmldrop_reviewer_name') || '';
-
-      const header = document.createElement('div');
-      header.className = 'hd-cp-header';
-      const avatar = document.createElement('div');
-      avatar.className = 'hd-cp-avatar';
-      avatar.textContent = (userName || '?')[0].toUpperCase();
-      const nameInput = document.createElement('input');
-      nameInput.className = 'hd-cp-name';
-      nameInput.placeholder = 'Your name';
-      nameInput.value = userName;
-      nameInput.addEventListener('change', () => {
-        localStorage.setItem('htmldrop_reviewer_name', nameInput.value.trim());
-        avatar.textContent = (nameInput.value.trim() || '?')[0].toUpperCase();
-      });
-      header.append(avatar, nameInput);
-
-      const body = document.createElement('div');
-      body.className = 'hd-cp-body';
-      const textarea = document.createElement('textarea');
-      textarea.placeholder = 'Add a comment...';
-      textarea.rows = 3;
-      body.appendChild(textarea);
-
-      const actions = document.createElement('div');
-      actions.className = 'hd-cp-actions';
-      const cancelBtn = document.createElement('button');
-      cancelBtn.className = 'hd-cp-btn hd-cp-cancel';
-      cancelBtn.textContent = 'Cancel';
-      cancelBtn.addEventListener('click', () => popover.remove());
-      const submitBtn = document.createElement('button');
-      submitBtn.className = 'hd-cp-btn hd-cp-submit';
-      submitBtn.textContent = 'Comment';
-      submitBtn.addEventListener('click', async () => {
-        const text = textarea.value.trim();
-        if (!text) return;
-        submitBtn.textContent = '...';
-        submitBtn.disabled = true;
-        const name = nameInput.value.trim() || 'Anonymous';
-        const feedbackBody = {
-          anchor: anchor,
-          content: { type: 'text', text: text },
-          author: { displayName: name },
-          parentId: null,
-        };
-        try {
-          await fetch(state.workerUrl + '/api/feedback/' + (state.currentDocId || state.selectedFile?.docId), {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(feedbackBody),
-          });
-          popover.remove();
-          await loadFeedback(state.currentDocId || state.selectedFile?.docId);
-        } catch(e) {
-          alert('Failed to submit');
-          submitBtn.textContent = 'Comment';
-          submitBtn.disabled = false;
-        }
-      });
-      actions.append(cancelBtn, submitBtn);
-
-      popover.append(header, body, actions);
-      wrap.appendChild(popover);
-      setTimeout(() => textarea.focus(), 50);
-    }
-
-    function renderSettings() {
-      const panel = document.createElement('div');
-      panel.className = 'settings-panel';
-      const h3 = document.createElement('h3');
-      h3.textContent = 'Settings';
-      panel.appendChild(h3);
-
-      // Anthropic API Key
-      const aiRow = document.createElement('div');
-      aiRow.className = 'setting-row';
-      const aiLabel = document.createElement('div');
-      aiLabel.className = 'setting-label';
-      aiLabel.textContent = 'Anthropic API Key (for AI Insights & Converge)';
-      const aiDesc = document.createElement('div');
-      aiDesc.className = 'setting-desc';
-      aiDesc.textContent = 'Stored in session memory only — automatically cleared when you close the browser. Never persisted to disk or sent to our servers.';
-      const aiInput = document.createElement('input');
-      aiInput.className = 'setting-input';
-      aiInput.type = 'password';
-      aiInput.placeholder = 'sk-ant-...';
-      aiInput.value = state.anthropicKey || '';
-      const aiSaved = document.createElement('span');
-      aiSaved.className = 'setting-saved';
-      aiSaved.textContent = 'Saved';
-      aiInput.addEventListener('change', () => {
-        state.anthropicKey = aiInput.value.trim();
-        if (state.anthropicKey) {
-          sessionStorage.setItem('htmldrop_anthropic_key', state.anthropicKey);
-        } else {
-          sessionStorage.removeItem('htmldrop_anthropic_key');
-        }
-        aiSaved.classList.add('show');
-        setTimeout(() => aiSaved.classList.remove('show'), 2000);
-        renderDashboard();
-      });
-      const aiAction = document.createElement('div');
-      aiAction.style.marginTop = '8px';
-      aiAction.style.fontSize = '12px';
-      const aiLink = document.createElement('a');
-      aiLink.href = 'https://console.anthropic.com/settings/keys';
-      aiLink.target = '_blank';
-      aiLink.textContent = 'Get an API key from Anthropic Console';
-      aiLink.style.color = 'var(--accent)';
-      aiAction.appendChild(aiLink);
-      aiRow.append(aiLabel, aiDesc, aiInput, aiSaved, aiAction);
-      panel.appendChild(aiRow);
-
-      // Worker URL
-      const workerRow = document.createElement('div');
-      workerRow.className = 'setting-row';
-      const wLabel = document.createElement('div');
-      wLabel.className = 'setting-label';
-      wLabel.textContent = 'Worker URL';
-      const wDesc = document.createElement('div');
-      wDesc.className = 'setting-desc';
-      wDesc.textContent = 'The feedback relay backend. Change only if self-hosting.';
-      const wInput = document.createElement('input');
-      wInput.className = 'setting-input';
-      wInput.type = 'url';
-      wInput.value = state.workerUrl;
-      wInput.addEventListener('change', () => {
-        state.workerUrl = wInput.value.trim() || DEFAULT_WORKER_URL;
-      });
-      workerRow.append(wLabel, wDesc, wInput);
-      panel.appendChild(workerRow);
-
-      // Author key (read-only display)
-      const authRow = document.createElement('div');
-      authRow.className = 'setting-row';
-      const authLabel = document.createElement('div');
-      authLabel.className = 'setting-label';
-      authLabel.textContent = 'Author Key';
-      const authDesc = document.createElement('div');
-      authDesc.className = 'setting-desc';
-      authDesc.textContent = 'Your author identity. Generated by `htmldrop auth setup`.';
-      const authValue = document.createElement('code');
-      authValue.style.fontSize = '12px';
-      authValue.style.color = 'var(--muted)';
-      authValue.textContent = state.authorKey.slice(0, 8) + '...' + state.authorKey.slice(-4);
-      authRow.append(authLabel, authDesc, authValue);
-      panel.appendChild(authRow);
-
-      return panel;
-    }
-
-    function renderReferences() {
-      const div = document.createElement('div');
-      div.className = 'references';
-      const h3 = document.createElement('h3');
-      h3.textContent = 'Reference URLs (AI will consult these for insights)';
-      div.appendChild(h3);
-
-      const list = document.createElement('ul');
-      list.className = 'ref-list';
-      for (let i = 0; i < state.references.length; i++) {
-        const li = document.createElement('li');
-        li.className = 'ref-item';
-        const link = document.createElement('span');
-        link.textContent = state.references[i];
-        const rm = document.createElement('span');
-        rm.className = 'ref-remove';
-        rm.textContent = '×';
-        rm.addEventListener('click', () => {
-          state.references.splice(i, 1);
-          renderDashboard();
-        });
-        li.append(link, rm);
-        list.appendChild(li);
-      }
-      div.appendChild(list);
-
-      const addRow = document.createElement('div');
-      addRow.className = 'ref-add';
-      const input = document.createElement('input');
-      input.type = 'url';
-      input.placeholder = 'https://example.com/reference-doc';
-      const addBtn = document.createElement('button');
-      addBtn.className = 'btn';
-      addBtn.textContent = '+ Add';
-      addBtn.addEventListener('click', () => {
-        if (input.value.trim()) {
-          state.references.push(input.value.trim());
-          renderDashboard();
-        }
-      });
-      addRow.append(input, addBtn);
-      div.appendChild(addRow);
-      return div;
-    }
-
-    function renderSegment(seg, idx) {
-      const div = document.createElement('div');
-      div.className = 'segment';
-
-      // Header
-      const header = document.createElement('div');
-      header.className = 'segment-header';
-      const title = document.createElement('span');
-      title.className = 'segment-title';
-      title.textContent = seg.title.length > 60 ? seg.title.slice(0, 60) + '...' : seg.title;
-      header.appendChild(title);
-      if (seg.hasDebate) {
-        const badge = document.createElement('span');
-        badge.className = 'segment-badge badge-debate';
-        badge.textContent = 'Debate';
-        header.appendChild(badge);
-      } else if (seg.items.length >= 2) {
-        const badge = document.createElement('span');
-        badge.className = 'segment-badge badge-consensus';
-        badge.textContent = 'Consensus';
-        header.appendChild(badge);
-      }
-      div.appendChild(header);
-
-      // Comments
-      const comments = document.createElement('div');
-      comments.className = 'comments';
-      for (const item of seg.items) {
-        const comment = document.createElement('div');
-        comment.className = 'comment';
-        const meta = document.createElement('div');
-        meta.className = 'comment-meta';
-        const author = document.createElement('span');
-        author.className = 'comment-author';
-        author.textContent = item.author?.displayName || 'Anonymous';
-        const time = document.createElement('span');
-        time.textContent = new Date(item.createdAt).toLocaleDateString();
-        meta.append(author, time);
-        const text = document.createElement('div');
-        text.className = 'comment-text';
-        text.textContent = item.content?.text || '';
-        comment.append(meta, text);
-        if (item.anchor?.selectedText) {
-          const anchor = document.createElement('div');
-          anchor.className = 'comment-anchor';
-          anchor.textContent = '“' + item.anchor.selectedText.slice(0, 80) + '”';
-          comment.appendChild(anchor);
-        }
-        comments.appendChild(comment);
-      }
-      div.appendChild(comments);
-
-      // Insight panel (if exists)
-      if (state.insights[idx]) {
-        div.appendChild(renderInsight(state.insights[idx]));
-      }
-
-      // Actions
-      const actions = document.createElement('div');
-      actions.className = 'segment-actions';
-      const insightBtn = document.createElement('button');
-      insightBtn.className = 'btn';
-      insightBtn.textContent = state.insights[idx] ? 'Refresh Insights' : 'Get Insights';
-      insightBtn.addEventListener('click', () => getInsights(idx));
-      const convergeBtn = document.createElement('button');
-      convergeBtn.className = 'btn btn-primary';
-      convergeBtn.textContent = 'Converge this segment';
-      convergeBtn.addEventListener('click', () => convergeSegment(idx));
-      actions.append(insightBtn, convergeBtn);
-      div.appendChild(actions);
-
-      return div;
-    }
-
-    function renderInsight(insight) {
-      const panel = document.createElement('div');
-      panel.className = 'insight-panel';
-      const header = document.createElement('div');
-      header.className = 'insight-header';
-      header.textContent = '⚡ AI Insight';
-      panel.appendChild(header);
-      const content = document.createElement('div');
-      content.className = 'insight-content';
-      if (insight.loading) {
-        const loading = document.createElement('div');
-        loading.className = 'insight-loading';
-        const spin = document.createElement('div');
-        spin.className = 'spinner';
-        const text = document.createElement('span');
-        text.textContent = 'Researching...';
-        loading.append(spin, text);
-        content.appendChild(loading);
-      } else if (insight.points) {
-        const ul = document.createElement('ul');
-        for (const point of insight.points) {
-          const li = document.createElement('li');
-          li.textContent = point.text;
-          if (point.source) {
-            const src = document.createElement('div');
-            src.className = 'insight-source';
-            src.textContent = 'Source: ' + point.source;
-            li.appendChild(src);
-          }
-          ul.appendChild(li);
-        }
-        content.appendChild(ul);
-      }
-      panel.appendChild(content);
-      return panel;
-    }
-
+    // --- AI actions ---
     async function getInsights(segIdx) {
       if (!state.anthropicKey) {
         alert('Add your Anthropic API key in Settings to use AI features.');
+        stopPolling();
         state.page = 'settings';
         renderSettingsPage();
         return;
       }
       state.insights[segIdx] = { loading: true };
-      renderDashboard();
+      renderMarginPanel();
 
       try {
-        const seg = state.segments[segIdx];
-        const res = await fetch(state.workerUrl + '/api/insights/' + state.selectedFile.docId, {
+        var seg = state.segments[segIdx];
+        var docId = state.currentDocId || (state.selectedFile && state.selectedFile.docId);
+        var res = await fetch(state.workerUrl + '/api/insights/' + docId, {
           method: 'POST',
           headers: {
             'Authorization': 'Bearer ' + state.authorKey,
@@ -1285,28 +1030,30 @@
           }),
         });
         if (res.ok) {
-          const data = await res.json();
+          var data = await res.json();
           state.insights[segIdx] = data;
         } else {
           state.insights[segIdx] = { points: [{ text: 'Could not generate insights. Check Worker deployment.' }] };
         }
       } catch (e) {
-        state.insights[segIdx] = { points: [{ text: 'Network error — is the Worker deployed?' }] };
+        state.insights[segIdx] = { points: [{ text: 'Network error -- is the Worker deployed?' }] };
       }
-      renderDashboard();
+      renderMarginPanel();
     }
 
     async function convergeSegment(segIdx) {
       if (!state.anthropicKey) {
         alert('Add your Anthropic API key in Settings to use AI features.');
+        stopPolling();
         state.page = 'settings';
         renderSettingsPage();
         return;
       }
-      const seg = state.segments[segIdx];
-      const insight = state.insights[segIdx];
+      var seg = state.segments[segIdx];
+      var insight = state.insights[segIdx];
+      var docId = state.currentDocId || (state.selectedFile && state.selectedFile.docId);
       try {
-        const res = await fetch(state.workerUrl + '/api/converge/' + state.selectedFile.docId, {
+        var res = await fetch(state.workerUrl + '/api/converge/' + docId, {
           method: 'POST',
           headers: {
             'Authorization': 'Bearer ' + state.authorKey,
@@ -1320,7 +1067,7 @@
           }),
         });
         if (res.ok) {
-          const data = await res.json();
+          var data = await res.json();
           alert('Segment converged. Suggestion: ' + (data.suggestion || '').slice(0, 200));
         }
       } catch (e) {
@@ -1329,8 +1076,11 @@
     }
 
     async function convergeAll() {
-      alert('Converging all segments... This will call the AI for each debated segment.');
-      for (let i = 0; i < state.segments.length; i++) {
+      if (!state.anthropicKey) {
+        alert('Add your Anthropic API key in Settings to use AI features.');
+        return;
+      }
+      for (var i = 0; i < state.segments.length; i++) {
         if (state.segments[i].hasDebate || state.segments[i].items.length >= 2) {
           if (!state.insights[i]) await getInsights(i);
           await convergeSegment(i);
