@@ -129,6 +129,9 @@ export async function push(file, options = {}) {
 
   const url = getFileUrl(config, filename);
   console.log(`\nPublished: ${url}`);
+  if (docId) {
+    console.log(`Feedback URL: ${feedbackWorkerUrl}/doc/${docId}`);
+  }
 
   // Register doc with the feedback worker (after deploy so URL is live)
   if (docId && feedbackAuthorKey && feedbackWorkerUrl) {
@@ -146,6 +149,21 @@ export async function push(file, options = {}) {
       }
     } catch {
       console.warn('Warning: feedback worker unreachable. Comments may not work until worker is deployed.');
+    }
+
+    // Upload HTML content to Worker for single-URL serving
+    try {
+      await fetch(`${feedbackWorkerUrl}/api/doc/${docId}/content`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${feedbackAuthorKey}`,
+          'Content-Type': 'text/html',
+        },
+        body: content,
+      });
+      console.log(`Document available at: ${feedbackWorkerUrl}/doc/${docId}`);
+    } catch {
+      console.warn('Warning: could not upload document content to worker.');
     }
   }
 

@@ -1,8 +1,9 @@
 import { FeedbackItemSchema, type FeedbackStored } from './schema';
-import { type Env, getFeedback, addFeedback, deleteFeedback, storeDocUrl, getDocUrl, storeInsight, getInsights, type StoredInsight } from './storage';
+import { type Env, getFeedback, addFeedback, deleteFeedback, storeDocUrl, getDocUrl, storeDocContent, getDocContent, storeInsight, getInsights, type StoredInsight } from './storage';
 import { checkRateLimit, incrementRateLimit } from './rate-limit';
 import { isAuthorOfDoc, registerAuthorKey, getAuthorDocs } from './auth';
 import DASHBOARD_HTML from './dashboard.html';
+import WIDGET_HTML from './annotation-widget.html';
 
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
@@ -25,6 +26,48 @@ export default {
         return new Response(DASHBOARD_HTML, {
           headers: { 'Content-Type': 'text/html; charset=utf-8' },
         });
+      }
+
+      // GET /doc/:docId — serve stored HTML with annotation widget injected
+      const docMatch = path.match(/^\/doc\/([a-zA-Z0-9_-]+)$/);
+      if (docMatch && request.method === 'GET') {
+        const docId = docMatch[1];
+        const html = await getDocContent(env, docId);
+        if (!html) {
+          return new Response('<html><body><h1>404 — Document not found</h1></body></html>', {
+            status: 404,
+            headers: { 'Content-Type': 'text/html; charset=utf-8' },
+          });
+        }
+        const configScript = `<script type="application/json" id="htmldrop-config">{"docId":"${docId}","workerUrl":""}</script>`;
+        const injection = configScript + '\n' + WIDGET_HTML;
+        // Inject before </body> if present, otherwise append
+        let served: string;
+        if (html.includes('</body>')) {
+          served = html.replace('</body>', injection + '\n</body>');
+        } else {
+          served = html + '\n' + injection;
+        }
+        return new Response(served, {
+          headers: { 'Content-Type': 'text/html; charset=utf-8' },
+        });
+      }
+
+      // POST /api/doc/:docId/content — store HTML content (author only)
+      const docContentMatch = path.match(/^\/api\/doc\/([a-zA-Z0-9_-]+)\/content$/);
+      if (docContentMatch && request.method === 'POST') {
+        const docId = docContentMatch[1];
+        const authHeader = request.headers.get('Authorization');
+        const isAuthor = await isAuthorOfDoc(env, authHeader, docId);
+        if (!isAuthor) {
+          return json({ error: 'Unauthorized — only the document author can upload content' }, 403, corsHeaders);
+        }
+        const html = await request.text();
+        if (!html) {
+          return json({ error: 'HTML body required' }, 400, corsHeaders);
+        }
+        await storeDocContent(env, docId, html);
+        return json({ stored: true, docId }, 200, corsHeaders);
       }
 
       if (path === '/api/author/files' && request.method === 'GET') {

@@ -36,6 +36,18 @@ export async function getDocCount(env: Env, docId: string): Promise<number> {
   return items.length;
 }
 
+// --- Doc HTML content storage ---
+
+export async function storeDocContent(env: Env, docId: string, html: string): Promise<void> {
+  await env.FEEDBACK.put(`content:${docId}`, html, {
+    expirationTtl: NINETY_DAYS_SECONDS,
+  });
+}
+
+export async function getDocContent(env: Env, docId: string): Promise<string | null> {
+  return env.FEEDBACK.get(`content:${docId}`);
+}
+
 // --- Doc URL storage ---
 
 export async function storeDocUrl(env: Env, docId: string, url: string): Promise<void> {
