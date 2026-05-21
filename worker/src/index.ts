@@ -273,10 +273,6 @@ async function handleInsights(request: Request, env: Env, docId: string, headers
 }
 
 async function handleGetInsights(request: Request, env: Env, docId: string, headers: Record<string, string>): Promise<Response> {
-  const authHeader = request.headers.get('Authorization');
-  const isAuthor = await isAuthorOfDoc(env, authHeader, docId);
-  if (!isAuthor) return json({ error: 'Unauthorized' }, 403, headers);
-
   const insights = await getInsights(env, docId);
   return json({ docId, insights }, 200, headers);
 }
