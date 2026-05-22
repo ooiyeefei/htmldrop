@@ -418,7 +418,7 @@
     composeActions.className = 'hd-compose-actions';
     const nameInput = document.createElement('input');
     nameInput.className = 'hd-compose-name';
-    nameInput.placeholder = 'Your name';
+    nameInput.placeholder = 'Display name';
     nameInput.value = userName;
     nameInput.addEventListener('change', () => { userName = nameInput.value.trim(); localStorage.setItem('htmldrop_reviewer_name', userName); });
     const submitBtn = document.createElement('button');
@@ -577,7 +577,21 @@
       range.setEnd(node, idx + searchText.length);
       const mark = document.createElement('mark');
       mark.className = 'hd-hl';
+      mark.dataset.anchor = lower;
       range.surroundContents(mark);
+      // Click highlight → scroll panel to associated comment
+      mark.addEventListener('click', () => {
+        const commentEls = panel.querySelectorAll('.hd-comment');
+        for (const cel of commentEls) {
+          const anchorEl = cel.querySelector('.hd-anchor');
+          if (anchorEl && anchorEl.textContent.toLowerCase().includes(lower.slice(0, 20))) {
+            panel.querySelectorAll('.hd-comment').forEach(c => c.classList.remove('active'));
+            cel.classList.add('active');
+            cel.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            return;
+          }
+        }
+      });
       break;
     }
   }
