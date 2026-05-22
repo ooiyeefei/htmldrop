@@ -71,7 +71,7 @@
     .hd-margin-comments {
       position: fixed;
       top: 0; right: 0;
-      width: 300px; height: 100vh;
+      width: 390px; height: 100vh;
       overflow-y: auto;
       padding: 16px 12px;
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
@@ -135,7 +135,7 @@
       font-family: inherit;
     }
     .hd-toggle-btn {
-      position: fixed; top: 12px; right: 316px;
+      position: fixed; top: 12px; right: 404px;
       background: var(--surface, #fff); border: 1px solid #e2e8f0;
       width: 28px; height: 28px; border-radius: 50%;
       display: flex; align-items: center; justify-content: center;
@@ -207,7 +207,7 @@
   marginEl.className = 'hd-margin-comments';
   marginEl.style.display = 'block';
   shadow.appendChild(marginEl);
-  document.body.style.marginRight = '312px';
+  document.body.style.marginRight = '402px';
 
   // Minimize toggle (top-right of margin)
   const toggleBtn = document.createElement('button');
@@ -223,7 +223,7 @@
     toggleBtn.textContent = showMargin ? '✕' : '\u{1F4AC}';
     toggleBtn.title = showMargin ? 'Close comments' : 'Open comments';
     toggleBtn.className = showMargin ? 'hd-toggle-btn' : 'hd-toggle-btn hd-toggle-closed';
-    if (showMargin) document.body.style.marginRight = '312px';
+    if (showMargin) document.body.style.marginRight = '402px';
     else document.body.style.marginRight = '';
   }
 
