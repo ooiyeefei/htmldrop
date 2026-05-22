@@ -134,22 +134,21 @@
       padding: 6px 10px; font-size: 12px; margin-bottom: 8px;
       font-family: inherit;
     }
-    .hd-badge {
-      position: fixed; bottom: 16px; right: 16px;
-      background: #1e293b; color: #fff;
-      padding: 8px 14px; border-radius: 20px;
-      font-size: 12px; font-family: -apple-system, sans-serif;
-      z-index: 999999; cursor: pointer;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.15);
-      display: flex; align-items: center; gap: 6px;
-    }
-    .hd-badge:hover { background: #334155; }
-    .hd-badge-count {
-      background: #3b82f6; color: #fff;
-      width: 18px; height: 18px; border-radius: 50%;
+    .hd-toggle-btn {
+      position: fixed; top: 12px; right: 316px;
+      background: var(--surface, #fff); border: 1px solid #e2e8f0;
+      width: 28px; height: 28px; border-radius: 50%;
       display: flex; align-items: center; justify-content: center;
-      font-size: 10px; font-weight: 600;
+      font-size: 14px; cursor: pointer; z-index: 999999;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+      color: #64748b; transition: all 0.15s;
     }
+    .hd-toggle-btn:hover { background: #f1f5f9; color: #1e293b; }
+    .hd-toggle-btn.hd-toggle-closed {
+      right: 12px; background: #1e293b; color: #fff; border-color: #1e293b;
+      width: 36px; height: 36px; font-size: 16px;
+    }
+    .hd-toggle-btn.hd-toggle-closed:hover { background: #334155; }
     .hd-margin-reply {
       margin-left: 16px;
       border-left: 2px solid #e2e8f0;
@@ -198,26 +197,32 @@
 
   let comments = [];
   let insights = {};
-  let showMargin = false;
+  let showMargin = true;
   let activePopover = null;
   let tooltip = null;
   let userName = localStorage.getItem('htmldrop_reviewer_name') || '';
 
-  // Margin comments container
+  // Margin comments container — open by default
   const marginEl = document.createElement('div');
   marginEl.className = 'hd-margin-comments';
-  marginEl.style.display = 'none';
+  marginEl.style.display = 'block';
   shadow.appendChild(marginEl);
+  document.body.style.marginRight = '312px';
 
-  // Badge (bottom-right)
-  const badge = document.createElement('div');
-  badge.className = 'hd-badge';
-  shadow.appendChild(badge);
-  badge.addEventListener('click', toggleMargin);
+  // Minimize toggle (top-right of margin)
+  const toggleBtn = document.createElement('button');
+  toggleBtn.className = 'hd-toggle-btn';
+  toggleBtn.textContent = '✕';
+  toggleBtn.title = 'Close comments';
+  shadow.appendChild(toggleBtn);
+  toggleBtn.addEventListener('click', toggleMargin);
 
   function toggleMargin() {
     showMargin = !showMargin;
     marginEl.style.display = showMargin ? 'block' : 'none';
+    toggleBtn.textContent = showMargin ? '✕' : '\u{1F4AC}';
+    toggleBtn.title = showMargin ? 'Close comments' : 'Open comments';
+    toggleBtn.className = showMargin ? 'hd-toggle-btn' : 'hd-toggle-btn hd-toggle-closed';
     if (showMargin) document.body.style.marginRight = '312px';
     else document.body.style.marginRight = '';
   }
@@ -383,19 +388,7 @@
   }
 
   function renderBadge() {
-    badge.replaceChildren();
-    const icon = document.createElement('span');
-    icon.textContent = '\u{1F4AC}';
-    badge.appendChild(icon);
-    if (comments.length > 0) {
-      const count = document.createElement('span');
-      count.className = 'hd-badge-count';
-      count.textContent = String(comments.length);
-      badge.appendChild(count);
-    }
-    const label = document.createElement('span');
-    label.textContent = comments.length ? '' : 'Add feedback';
-    badge.appendChild(label);
+    // No-op — badge replaced by toggle button
   }
 
   function renderMarginComments() {
@@ -451,6 +444,25 @@
       anchor.textContent = '"' + item.anchor.selectedText.slice(0, 60) + '"';
       card.appendChild(anchor);
     }
+
+    // Click card → scroll to highlighted text in document
+    card.addEventListener('click', () => {
+      if (!item.anchor?.selectedText) return;
+      const marks = document.querySelectorAll('mark.hd-highlight');
+      for (const mark of marks) {
+        if (mark.textContent && mark.textContent.includes(item.anchor.selectedText.slice(0, 20))) {
+          mark.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          mark.style.transition = 'background 0.2s';
+          mark.style.background = '#fde68a';
+          mark.style.boxShadow = '0 0 0 3px rgba(251,191,36,0.4)';
+          setTimeout(() => { mark.style.background = ''; mark.style.boxShadow = ''; }, 2000);
+          // Also highlight this card
+          marginEl.querySelectorAll('.hd-margin-comment').forEach(c => c.classList.remove('active'));
+          card.classList.add('active');
+          return;
+        }
+      }
+    });
 
     // Reply button
     const replyBtn = document.createElement('button');
