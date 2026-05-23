@@ -70,10 +70,20 @@ export async function push(file, options = {}) {
   let feedbackWorkerUrl = null;
   if (options.feedback && !isEncrypted) {
     feedbackAuthorKey = getAuthorKey();
-    docId = randomUUID();
     feedbackWorkerUrl = options.workerUrl || DEFAULT_WORKER_URL;
+
+    // Reuse existing docId so the shareable link stays stable across re-pushes.
+    // --new-doc forces a fresh doc (clean slate, new URL, drops old comments' anchor).
+    const priorEntry = loadManifest().files.find((f) => f.name === filename);
+    if (priorEntry?.docId && !options.newDoc) {
+      docId = priorEntry.docId;
+      console.log(`Updating existing feedback doc for ${filename} (docId: ${docId.slice(0, 8)}...)`);
+    } else {
+      docId = randomUUID();
+      console.log(`Feedback enabled for ${filename} (docId: ${docId.slice(0, 8)}...)`);
+    }
+
     content = injectFeedbackWidget(content, { docId, workerUrl: feedbackWorkerUrl });
-    console.log(`Feedback enabled for ${filename} (docId: ${docId.slice(0, 8)}...)`);
   }
 
   // Write to site directory

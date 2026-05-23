@@ -8,6 +8,7 @@ import { deleteFile } from '../src/delete.js';
 import { openFile } from '../src/index.js';
 import { authSetup, authSetupForce } from '../src/auth.js';
 import { feedbackPull } from '../src/feedback/pull.js';
+import { feedbackAdd } from '../src/feedback/add.js';
 import { feedbackList } from '../src/feedback/list.js';
 import { feedbackClear } from '../src/feedback/clear.js';
 import { converge } from '../src/feedback/converge.js';
@@ -36,6 +37,7 @@ program
   .option('-p, --password <password>', 'Password-protect the file with client-side encryption')
   .option('-n, --noindex', 'Block search engines and AI crawlers from indexing this file')
   .option('-f, --feedback', 'Enable inline feedback annotations for reviewers')
+  .option('--new-doc', 'Force a fresh feedback doc/link instead of reusing the existing one')
   .option('-o, --open', 'Open the URL in browser after deploy')
   .action(async (file, options) => {
     try {
@@ -93,6 +95,22 @@ feedback
   .action(async (file, options) => {
     try {
       await feedbackPull(file, options);
+    } catch (err) {
+      console.error(`Error: ${err.message}`);
+      process.exit(1);
+    }
+  });
+
+feedback
+  .command('add <file>')
+  .description('Add a comment programmatically (for agents/automation)')
+  .requiredOption('--text <text>', 'The comment text')
+  .option('--name <name>', 'Display name for the comment author', 'AI Agent')
+  .option('--on <text>', 'Anchor the comment to specific text in the document')
+  .option('--parent-id <id>', 'Reply to an existing comment by its ID')
+  .action(async (file, options) => {
+    try {
+      await feedbackAdd(file, options);
     } catch (err) {
       console.error(`Error: ${err.message}`);
       process.exit(1);
