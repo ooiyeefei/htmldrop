@@ -1,5 +1,5 @@
 {
-  "name": "@ooiyeefei/htmldrop",
+  "name": "@yeefeiooi/htmldrop",
   "version": "1.1.0",
   "description": "Publish HTML files and get shareable links via Surge.sh",
   "type": "module",

@@ -5,7 +5,7 @@ Publish HTML files and get shareable links. Uses [Surge.sh](https://surge.sh) un
 ## Install
 
 ```bash
-npm install -g @ooiyeefei/htmldrop
+npm install -g @yeefeiooi/htmldrop
 ```
 
 (The installed command is `htmldrop`.)
