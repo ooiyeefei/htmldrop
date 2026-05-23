@@ -180,6 +180,20 @@ Because re-push keeps the same URL, the document can iterate in place while revi
 
 ## Multi-provider AI
 
+> ### The AI key is optional — and bring-your-own
+>
+> **You only need an LLM API key for the AI features** (`htmldrop converge` and the dashboard’s AI insights). Everything else works without one.
+>
+> | Without an AI key | With an AI key |
+> |---|---|
+> | Publish, password-protect, `list`, `delete`; enable `--feedback`; collect, `pull`, `list`, `add`, reply to, and `clear` comments; view everything in Converge Studio | All of the above **plus** `converge` (AI synthesis into an improved doc) and per-segment AI research insights |
+>
+> If you don’t set a key, the AI commands simply tell you one is required and stop — nothing else is affected. If you do set one, it unlocks converge + insights.
+>
+> - **Your key, your cost.** It’s bring-your-own-key: you pay your provider (Anthropic / OpenAI / Gemini) directly at their published rates. htmldrop adds no markup and ships no key of its own.
+> - **We never store your key.** The CLI reads it from your terminal environment (or `--api-key`) for that single run only. The browser dashboard holds it in session memory and wipes it when you close the tab. The Worker uses it for one request and forgets it — it is never written to disk or KV.
+> - **Handle it securely — it lives in your terminal.** Keep it in an environment variable, don’t commit it to git, don’t paste it into shared logs or chats, and rotate it at your provider if it’s ever exposed.
+
 `converge` and the dashboard’s AI insights work with **Anthropic, OpenAI, or Gemini**. The provider is auto-detected from your API key’s prefix, and you can override it.
 
 **Key resolution (CLI):** `--api-key`, else `LLM_API_KEY`, `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, or `GEMINI_API_KEY`.
