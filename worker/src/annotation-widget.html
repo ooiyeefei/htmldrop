@@ -222,22 +222,18 @@
     document.body.style.marginRight = panelOpen ? '390px' : '0';
   }
 
-  // Text selection → tooltip
-  document.addEventListener('mouseup', (e) => {
-    // Bail BEFORE removing the tooltip when the mouseup is on our own UI.
-    // Otherwise clicking the "+ Comment" tooltip removes it during this mouseup,
-    // before its own click handler can fire — so the popover never opens.
-    if (e.target && (host.contains(e.target) || shadow.contains(e.target))) return;
-    removeTooltip();
+  // Text selection → tooltip (shared logic for desktop + mobile)
+  function tryShowTooltip() {
+    if (tooltip) return; // already showing
     const sel = window.getSelection();
     if (!sel || sel.isCollapsed || sel.toString().trim().length === 0) return;
 
     const range = sel.getRangeAt(0);
     const rect = range.getBoundingClientRect();
+    if (rect.width === 0 && rect.height === 0) return;
 
-    // Capture the selection NOW. Clicking the tooltip clears the page's text
-    // selection, so reading window.getSelection() later returns empty — which
-    // is why anchored comments were silently falling back to page-level.
+    // Capture the selection NOW — clicking the tooltip or the native
+    // mobile menu clears the page selection before our click handler fires.
     const selectedText = sel.toString().trim().slice(0, 2000);
     const node = sel.anchorNode && sel.anchorNode.parentElement;
     const selector = node ? buildSelector(node) : '';
@@ -245,13 +241,37 @@
     tooltip = document.createElement('div');
     tooltip.className = 'hd-tooltip';
     tooltip.textContent = '+ Comment';
-    tooltip.style.left = (rect.left + rect.width / 2 - 40) + 'px';
+    tooltip.style.left = Math.max(8, Math.min(rect.left + rect.width / 2 - 40, window.innerWidth - 100)) + 'px';
     tooltip.style.top = (rect.bottom + window.scrollY + 8) + 'px';
     tooltip.addEventListener('click', () => {
       removeTooltip();
       showPopover(rect, selectedText, selector);
     });
+    // On mobile, also handle touchend on the tooltip (click may not fire reliably)
+    tooltip.addEventListener('touchend', (te) => {
+      te.preventDefault();
+      removeTooltip();
+      showPopover(rect, selectedText, selector);
+    });
     shadow.appendChild(tooltip);
+  }
+
+  // Desktop: mouseup
+  document.addEventListener('mouseup', (e) => {
+    if (e.target && (host.contains(e.target) || shadow.contains(e.target))) return;
+    removeTooltip();
+    tryShowTooltip();
+  });
+
+  // Mobile: selectionchange fires when the user selects text via tap-hold.
+  // Debounce because it fires many times during selection adjustment.
+  let selChangeTimer;
+  document.addEventListener('selectionchange', () => {
+    clearTimeout(selChangeTimer);
+    selChangeTimer = setTimeout(() => {
+      removeTooltip();
+      tryShowTooltip();
+    }, 400);
   });
 
   document.addEventListener('mousedown', (e) => {
