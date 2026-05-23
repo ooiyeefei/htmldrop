@@ -1,5 +1,8 @@
 #!/usr/bin/env node
 
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { dirname, join } from 'node:path';
 import { program } from 'commander';
 import { init } from '../src/init.js';
 import { push } from '../src/push.js';
@@ -14,10 +17,14 @@ import { feedbackClear } from '../src/feedback/clear.js';
 import { converge } from '../src/feedback/converge.js';
 import { studio } from '../src/studio.js';
 
+const pkg = JSON.parse(
+  readFileSync(join(dirname(fileURLToPath(import.meta.url)), '../package.json'), 'utf-8')
+);
+
 program
   .name('htmldrop')
   .description('Publish HTML files and get shareable links via Surge.sh')
-  .version('1.0.0');
+  .version(pkg.version);
 
 program
   .command('init')

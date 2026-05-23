@@ -4,6 +4,14 @@ All notable changes to this project are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/), and this project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [1.1.1] — 2026-05-23
+
+### Fixed
+
+- `htmldrop --version` now reads the version dynamically from `package.json`
+  instead of a hardcoded string, so it always matches the installed package
+  (was reporting `1.0.0` regardless of the real version).
+
 ## [1.1.0] — 2026-05-23
 
 First public release under the `@yeefeiooi/htmldrop` scope. Adds a complete
@@ -70,5 +78,6 @@ Initial CLI: publish HTML files as shareable links via Surge.sh.
 - `htmldrop delete <file>` — remove a file and redeploy.
 - `htmldrop open <file>` — open a published file in the browser.
 
+[1.1.1]: https://github.com/ooiyeefei/htmldrop/releases/tag/v1.1.1
 [1.1.0]: https://github.com/ooiyeefei/htmldrop/releases/tag/v1.1.0
 [1.0.0]: https://github.com/ooiyeefei/htmldrop/releases/tag/v1.0.0
