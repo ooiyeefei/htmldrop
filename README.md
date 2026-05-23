@@ -5,8 +5,10 @@ Publish HTML files and get shareable links. Uses [Surge.sh](https://surge.sh) un
 ## Install
 
 ```bash
-npm install -g htmldrop
+npm install -g @ooiyeefei/htmldrop
 ```
+
+(The installed command is `htmldrop`.)
 
 You'll also need Surge installed globally (or it will use `npx surge` automatically):
 

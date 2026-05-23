@@ -1,10 +1,13 @@
 {
-  "name": "htmldrop",
+  "name": "@ooiyeefei/htmldrop",
   "version": "1.1.0",
   "description": "Publish HTML files and get shareable links via Surge.sh",
   "type": "module",
+  "publishConfig": {
+    "access": "public"
+  },
   "bin": {
-    "htmldrop": "./bin/htmldrop.js"
+    "htmldrop": "bin/htmldrop.js"
   },
   "exports": {
     ".": "./src/index.js"
