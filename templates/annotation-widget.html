@@ -1,0 +1,622 @@
+<!-- htmldrop annotation widget -->
+<script>
+(function() {
+  const configEl = document.getElementById('htmldrop-config');
+  if (!configEl) return;
+  const config = JSON.parse(configEl.textContent);
+
+  // Inject highlight styles into document head (light DOM)
+  const docStyle = document.createElement('style');
+  docStyle.textContent = `
+    mark.hd-hl { background: #e0e7ff; border-bottom: 2px solid #6366f1; border-radius: 2px; padding: 0 1px; cursor: pointer; transition: background 0.2s, box-shadow 0.2s; }
+    mark.hd-hl:hover { background: #c7d2fe; }
+    mark.hd-hl.flash { background: #a5b4fc; box-shadow: 0 0 0 3px rgba(99,102,241,0.25); }
+  `;
+  document.head.appendChild(docStyle);
+
+  // Widget host (Shadow DOM for panel isolation)
+  const host = document.createElement('div');
+  host.id = 'htmldrop-widget-host';
+  document.body.appendChild(host);
+  const shadow = host.attachShadow({ mode: 'open' });
+
+  const style = document.createElement('style');
+  style.textContent = `
+    :host { all: initial; }
+    * { box-sizing: border-box; }
+    .hd-panel {
+      position: fixed; top: 0; right: 0;
+      width: 390px; height: 100vh;
+      background: #fff; border-left: 1px solid #e5e7eb;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Inter, system-ui, sans-serif;
+      font-size: 13px; color: #111827;
+      display: flex; flex-direction: column;
+      z-index: 999990;
+      box-shadow: -1px 0 3px rgba(0,0,0,0.04);
+    }
+    .hd-panel-header {
+      padding: 16px 20px; border-bottom: 1px solid #f3f4f6;
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    .hd-panel-title { font-size: 13px; font-weight: 600; color: #111827; letter-spacing: -0.2px; }
+    .hd-panel-count { font-size: 12px; color: #6b7280; font-weight: 400; margin-left: 8px; }
+    .hd-close {
+      width: 24px; height: 24px; border-radius: 6px;
+      border: none; background: transparent;
+      display: flex; align-items: center; justify-content: center;
+      cursor: pointer; color: #9ca3af; font-size: 16px; transition: all 0.15s;
+    }
+    .hd-close:hover { background: #f3f4f6; color: #374151; }
+    .hd-list { flex: 1; overflow-y: auto; padding: 12px 0; }
+    .hd-comment {
+      padding: 14px 20px; cursor: pointer;
+      transition: background 0.1s;
+    }
+    .hd-comment:hover { background: #f9fafb; }
+    .hd-comment.active { background: #eef2ff; }
+    .hd-comment-header { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
+    .hd-avatar {
+      width: 24px; height: 24px; border-radius: 50%;
+      background: #6366f1; color: #fff;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 11px; font-weight: 600; flex-shrink: 0;
+    }
+    .hd-name { font-weight: 500; font-size: 13px; color: #111827; }
+    .hd-time { font-size: 11px; color: #9ca3af; margin-left: auto; }
+    .hd-text { color: #374151; line-height: 1.5; padding-left: 32px; }
+    .hd-anchor {
+      display: inline-block; margin-top: 6px; margin-left: 32px;
+      padding: 2px 8px; background: #eef2ff; color: #4f46e5;
+      border-radius: 4px; font-size: 11px; font-weight: 500;
+    }
+    .hd-reply-section {
+      margin-left: 32px; margin-top: 8px;
+      padding-left: 12px; border-left: 2px solid #e5e7eb;
+    }
+    .hd-reply-item { padding: 6px 0; }
+    .hd-reply-item .hd-name { font-size: 12px; }
+    .hd-reply-item .hd-text { font-size: 12px; padding-left: 0; color: #4b5563; }
+    .hd-reply-btn {
+      background: none; border: none; color: #6366f1;
+      font-size: 11px; cursor: pointer; padding: 0; margin-top: 4px; margin-left: 32px;
+      font-weight: 500;
+    }
+    .hd-reply-btn:hover { text-decoration: underline; }
+    .hd-reply-input {
+      display: flex; gap: 6px; margin-top: 8px; margin-left: 32px; align-items: center;
+    }
+    .hd-reply-input input {
+      flex: 1; border: 1px solid #e5e7eb; border-radius: 6px;
+      padding: 6px 10px; font-size: 12px; font-family: inherit;
+      outline: none; transition: border-color 0.15s;
+    }
+    .hd-reply-input input:focus { border-color: #6366f1; }
+    .hd-reply-input button {
+      background: #6366f1; color: #fff; border: none;
+      border-radius: 6px; padding: 6px 12px; font-size: 11px;
+      cursor: pointer; font-weight: 500; white-space: nowrap;
+    }
+    .hd-reply-input button:hover { background: #4f46e5; }
+    .hd-separator { height: 1px; background: #f3f4f6; margin: 0 20px; }
+    .hd-compose {
+      padding: 16px 20px; border-top: 1px solid #f3f4f6;
+    }
+    .hd-compose textarea {
+      width: 100%; border: 1px solid #e5e7eb; border-radius: 8px;
+      padding: 10px 12px; font-size: 13px; font-family: inherit;
+      resize: none; min-height: 44px; outline: none;
+      transition: border-color 0.15s;
+      line-height: 1.4;
+    }
+    .hd-compose textarea:focus { border-color: #6366f1; }
+    .hd-compose textarea::placeholder { color: #9ca3af; }
+    .hd-compose-actions {
+      display: flex; justify-content: space-between; align-items: center; margin-top: 8px;
+    }
+    .hd-compose-name {
+      border: 1px solid #e5e7eb; border-radius: 6px;
+      padding: 5px 10px; font-size: 12px; width: 140px;
+      font-family: inherit; outline: none;
+    }
+    .hd-compose-name:focus { border-color: #6366f1; }
+    .hd-compose-submit {
+      background: #6366f1; color: #fff; border: none;
+      border-radius: 6px; padding: 7px 16px; font-size: 12px;
+      cursor: pointer; font-weight: 500; transition: background 0.15s;
+    }
+    .hd-compose-submit:hover { background: #4f46e5; }
+    .hd-compose-submit:disabled { opacity: 0.5; cursor: not-allowed; }
+    .hd-tooltip {
+      position: absolute; z-index: 999999;
+      background: #111827; color: #fff;
+      padding: 6px 12px; border-radius: 6px;
+      font-size: 12px; font-family: -apple-system, sans-serif;
+      cursor: pointer; white-space: nowrap;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.12);
+      animation: hd-pop 0.1s ease;
+    }
+    @keyframes hd-pop { from { opacity:0; transform: translateY(2px); } to { opacity:1; transform: translateY(0); } }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .hd-tooltip::after {
+      content:''; position:absolute; top:-4px; left:50%; transform:translateX(-50%);
+      border-left: 4px solid transparent; border-right: 4px solid transparent;
+      border-bottom: 4px solid #111827;
+    }
+    .hd-popover {
+      position: absolute; z-index: 999999;
+      background: #fff; border: 1px solid #e5e7eb;
+      border-radius: 10px; box-shadow: 0 10px 40px rgba(0,0,0,0.1);
+      width: 300px; animation: hd-pop 0.15s ease;
+    }
+    .hd-popover-body { padding: 14px 16px; }
+    .hd-popover-body textarea {
+      width: 100%; border: 1px solid #e5e7eb; border-radius: 6px;
+      padding: 8px 10px; font-size: 13px; font-family: inherit;
+      resize: none; min-height: 60px; outline: none;
+    }
+    .hd-popover-body textarea:focus { border-color: #6366f1; }
+    .hd-popover-body textarea::placeholder { color: #9ca3af; }
+    .hd-popover-actions {
+      padding: 10px 16px 14px; display: flex; justify-content: flex-end; gap: 8px;
+    }
+    .hd-popover-cancel {
+      background: transparent; border: 1px solid #e5e7eb; border-radius: 6px;
+      padding: 6px 12px; font-size: 12px; cursor: pointer; color: #6b7280;
+    }
+    .hd-popover-cancel:hover { background: #f9fafb; }
+    .hd-popover-submit {
+      background: #6366f1; color: #fff; border: none;
+      border-radius: 6px; padding: 6px 14px; font-size: 12px;
+      cursor: pointer; font-weight: 500;
+    }
+    .hd-popover-submit:hover { background: #4f46e5; }
+    .hd-open-btn {
+      position: fixed; top: 16px; right: 16px;
+      background: #111827; color: #fff;
+      border: none; border-radius: 8px;
+      padding: 8px 14px; font-size: 12px;
+      cursor: pointer; z-index: 999999;
+      display: flex; align-items: center; gap: 6px;
+      font-family: -apple-system, sans-serif; font-weight: 500;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.12);
+    }
+    .hd-open-btn:hover { background: #1f2937; }
+    .hd-insight {
+      padding: 12px 20px; margin: 4px 0;
+      background: #fefce8; border-left: 3px solid #eab308;
+    }
+    .hd-insight-title { font-size: 11px; font-weight: 600; color: #854d0e; margin-bottom: 4px; }
+    .hd-insight-text { font-size: 12px; color: #422006; line-height: 1.5; }
+    .hd-insight-source { font-size: 10px; color: #92400e; margin-top: 2px; }
+    .hd-empty {
+      padding: 40px 20px; text-align: center; color: #9ca3af; font-size: 13px;
+    }
+  `;
+  shadow.appendChild(style);
+
+  let comments = [];
+  let insights = {};
+  let panelOpen = true;
+  let activePopover = null;
+  let tooltip = null;
+  let userName = localStorage.getItem('htmldrop_reviewer_name') || '';
+
+  // Panel
+  const panel = document.createElement('div');
+  panel.className = 'hd-panel';
+  shadow.appendChild(panel);
+  document.body.style.marginRight = '390px';
+
+  // Open button (shown when panel is closed)
+  const openBtn = document.createElement('button');
+  openBtn.className = 'hd-open-btn';
+  openBtn.style.display = 'none';
+  openBtn.textContent = '\u{1F4AC} Comments';
+  openBtn.addEventListener('click', togglePanel);
+  shadow.appendChild(openBtn);
+
+  function togglePanel() {
+    panelOpen = !panelOpen;
+    panel.style.display = panelOpen ? 'flex' : 'none';
+    openBtn.style.display = panelOpen ? 'none' : 'flex';
+    document.body.style.marginRight = panelOpen ? '390px' : '0';
+  }
+
+  // Text selection → tooltip
+  document.addEventListener('mouseup', (e) => {
+    removeTooltip();
+    const sel = window.getSelection();
+    if (!sel || sel.isCollapsed || sel.toString().trim().length === 0) return;
+    if (e.target && (host.contains(e.target) || shadow.contains(e.target))) return;
+
+    const range = sel.getRangeAt(0);
+    const rect = range.getBoundingClientRect();
+
+    tooltip = document.createElement('div');
+    tooltip.className = 'hd-tooltip';
+    tooltip.textContent = '+ Comment';
+    tooltip.style.left = (rect.left + rect.width / 2 - 40) + 'px';
+    tooltip.style.top = (rect.bottom + window.scrollY + 8) + 'px';
+    tooltip.addEventListener('click', () => {
+      const selectedText = sel.toString().trim().slice(0, 2000);
+      const node = sel.anchorNode && sel.anchorNode.parentElement;
+      const selector = node ? buildSelector(node) : '';
+      removeTooltip();
+      showPopover(rect, selectedText, selector);
+    });
+    shadow.appendChild(tooltip);
+  });
+
+  document.addEventListener('mousedown', (e) => {
+    if (e.target && (host.contains(e.target) || shadow.contains(e.target))) return;
+    removeTooltip();
+    removePopover();
+  });
+
+  function removeTooltip() { if (tooltip) { tooltip.remove(); tooltip = null; } }
+  function removePopover() { if (activePopover) { activePopover.remove(); activePopover = null; } }
+
+  function showPopover(anchorRect, selectedText, selector) {
+    removePopover();
+    const popover = document.createElement('div');
+    popover.className = 'hd-popover';
+    popover.style.left = Math.min(anchorRect.left, window.innerWidth - 340) + 'px';
+    popover.style.top = (anchorRect.bottom + window.scrollY + 12) + 'px';
+
+    const body = document.createElement('div');
+    body.className = 'hd-popover-body';
+    const textarea = document.createElement('textarea');
+    textarea.placeholder = 'Add a comment...';
+    textarea.rows = 3;
+    body.appendChild(textarea);
+
+    const actions = document.createElement('div');
+    actions.className = 'hd-popover-actions';
+    const cancelBtn = document.createElement('button');
+    cancelBtn.className = 'hd-popover-cancel';
+    cancelBtn.textContent = 'Cancel';
+    cancelBtn.addEventListener('click', removePopover);
+    const submitBtn = document.createElement('button');
+    submitBtn.className = 'hd-popover-submit';
+    submitBtn.textContent = 'Comment';
+    submitBtn.addEventListener('click', async () => {
+      const text = textarea.value.trim();
+      if (!text) return;
+      submitBtn.disabled = true;
+      submitBtn.textContent = '...';
+      await submitComment(selectedText, selector, text);
+      removePopover();
+    });
+    actions.append(cancelBtn, submitBtn);
+
+    popover.append(body, actions);
+    shadow.appendChild(popover);
+    activePopover = popover;
+    setTimeout(() => textarea.focus(), 50);
+  }
+
+  async function submitComment(selectedText, selector, text) {
+    const name = userName || 'Anonymous';
+    const body = {
+      anchor: { type: selectedText ? 'text_range' : 'page_level', selector: selector || undefined, selectedText: selectedText || undefined },
+      content: { type: 'text', text },
+      author: { displayName: name },
+      parentId: null,
+    };
+    try {
+      await fetch((config.workerUrl || '') + '/api/feedback/' + config.docId, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      await loadComments();
+    } catch(e) { /* silent fail */ }
+  }
+
+  async function submitReply(parentItem, replyText) {
+    const name = userName || 'Anonymous';
+    const body = {
+      anchor: parentItem.anchor || { type: 'page_level' },
+      content: { type: 'text', text: replyText },
+      author: { displayName: name },
+      parentId: parentItem.id,
+    };
+    try {
+      await fetch((config.workerUrl || '') + '/api/feedback/' + config.docId + '/' + parentItem.id + '/reply', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      await loadComments();
+    } catch(e) { /* silent fail */ }
+  }
+
+  function buildSelector(node) {
+    const parts = [];
+    while (node && node !== document.body) {
+      let part = node.tagName.toLowerCase();
+      if (node.id) { parts.unshift('#' + node.id); break; }
+      const parent = node.parentElement;
+      if (parent) {
+        const siblings = Array.from(parent.children).filter(c => c.tagName === node.tagName);
+        if (siblings.length > 1) part += ':nth-of-type(' + (siblings.indexOf(node) + 1) + ')';
+      }
+      parts.unshift(part);
+      node = parent;
+    }
+    return parts.join(' > ');
+  }
+
+  async function loadComments() {
+    try {
+      const res = await fetch((config.workerUrl || '') + '/api/feedback/' + config.docId);
+      const data = await res.json();
+      comments = data.items || [];
+      renderPanel();
+      highlightAnchors();
+    } catch(e) { comments = []; renderPanel(); }
+  }
+
+  async function loadInsights() {
+    try {
+      const res = await fetch((config.workerUrl || '') + '/api/insights/' + config.docId);
+      const data = await res.json();
+      insights = data.insights || {};
+    } catch(e) { insights = {}; }
+  }
+
+  function renderPanel() {
+    panel.replaceChildren();
+
+    // Header
+    const header = document.createElement('div');
+    header.className = 'hd-panel-header';
+    const titleWrap = document.createElement('div');
+    const title = document.createElement('span');
+    title.className = 'hd-panel-title';
+    title.textContent = 'Comments';
+    const count = document.createElement('span');
+    count.className = 'hd-panel-count';
+    const topLevel = comments.filter(c => !c.parentId);
+    count.textContent = topLevel.length ? String(topLevel.length) : '';
+    titleWrap.append(title, count);
+    const headerBtns = document.createElement('div');
+    headerBtns.style.cssText = 'display:flex;gap:4px;';
+    const refreshBtn = document.createElement('button');
+    refreshBtn.className = 'hd-close';
+    refreshBtn.textContent = '↻';
+    refreshBtn.title = 'Refresh comments';
+    refreshBtn.addEventListener('click', () => { refreshBtn.style.animation = 'spin 0.5s'; loadComments(); loadInsights(); setTimeout(() => refreshBtn.style.animation = '', 600); });
+    const closeBtn = document.createElement('button');
+    closeBtn.className = 'hd-close';
+    closeBtn.textContent = '×';
+    closeBtn.addEventListener('click', togglePanel);
+    headerBtns.append(refreshBtn, closeBtn);
+    header.append(titleWrap, headerBtns);
+    panel.appendChild(header);
+
+    // Comment list
+    const list = document.createElement('div');
+    list.className = 'hd-list';
+
+    if (topLevel.length === 0) {
+      const empty = document.createElement('div');
+      empty.className = 'hd-empty';
+      empty.textContent = 'No comments yet. Select text to leave feedback.';
+      list.appendChild(empty);
+    }
+
+    const replies = comments.filter(c => c.parentId);
+    const replyMap = {};
+    replies.forEach(r => { if (!replyMap[r.parentId]) replyMap[r.parentId] = []; replyMap[r.parentId].push(r); });
+
+    topLevel.forEach(item => {
+      list.appendChild(renderComment(item, replyMap));
+    });
+
+    panel.appendChild(list);
+
+    // Compose area
+    const compose = document.createElement('div');
+    compose.className = 'hd-compose';
+    const textarea = document.createElement('textarea');
+    textarea.placeholder = 'Add a comment...';
+    textarea.rows = 2;
+    const composeActions = document.createElement('div');
+    composeActions.className = 'hd-compose-actions';
+    const nameInput = document.createElement('input');
+    nameInput.className = 'hd-compose-name';
+    nameInput.placeholder = 'Display name';
+    nameInput.value = userName;
+    nameInput.addEventListener('change', () => { userName = nameInput.value.trim(); localStorage.setItem('htmldrop_reviewer_name', userName); });
+    const submitBtn = document.createElement('button');
+    submitBtn.className = 'hd-compose-submit';
+    submitBtn.textContent = 'Comment';
+    submitBtn.addEventListener('click', async () => {
+      const text = textarea.value.trim();
+      if (!text) return;
+      submitBtn.disabled = true;
+      await submitComment(null, null, text);
+      textarea.value = '';
+      submitBtn.disabled = false;
+    });
+    composeActions.append(nameInput, submitBtn);
+    compose.append(textarea, composeActions);
+    panel.appendChild(compose);
+  }
+
+  function renderComment(item, replyMap) {
+    const el = document.createElement('div');
+    el.className = 'hd-comment';
+
+    // Click → scroll to highlight
+    el.addEventListener('click', (e) => {
+      if (e.target.tagName === 'BUTTON' || e.target.tagName === 'INPUT') return;
+      scrollToHighlight(item);
+      panel.querySelectorAll('.hd-comment').forEach(c => c.classList.remove('active'));
+      el.classList.add('active');
+    });
+
+    const header = document.createElement('div');
+    header.className = 'hd-comment-header';
+    const avatar = document.createElement('div');
+    avatar.className = 'hd-avatar';
+    avatar.textContent = (item.author?.displayName || 'A')[0].toUpperCase();
+    const name = document.createElement('span');
+    name.className = 'hd-name';
+    name.textContent = item.author?.displayName || 'Anonymous';
+    const time = document.createElement('span');
+    time.className = 'hd-time';
+    time.textContent = formatTime(item.createdAt);
+    header.append(avatar, name, time);
+
+    const text = document.createElement('div');
+    text.className = 'hd-text';
+    text.textContent = item.content?.text || '';
+
+    el.append(header, text);
+
+    if (item.anchor?.selectedText) {
+      const anchor = document.createElement('span');
+      anchor.className = 'hd-anchor';
+      anchor.textContent = '"' + item.anchor.selectedText.slice(0, 50) + '"';
+      el.appendChild(anchor);
+    }
+
+    // Reply button
+    const replyBtn = document.createElement('button');
+    replyBtn.className = 'hd-reply-btn';
+    replyBtn.textContent = 'Reply';
+    replyBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      let existing = el.querySelector('.hd-reply-input');
+      if (existing) { existing.remove(); return; }
+      const wrap = document.createElement('div');
+      wrap.className = 'hd-reply-input';
+      const input = document.createElement('input');
+      input.placeholder = 'Reply...';
+      const sendBtn = document.createElement('button');
+      sendBtn.textContent = 'Reply';
+      sendBtn.addEventListener('click', async (ev) => {
+        ev.stopPropagation();
+        const t = input.value.trim();
+        if (!t) return;
+        sendBtn.disabled = true;
+        await submitReply(item, t);
+      });
+      wrap.append(input, sendBtn);
+      el.appendChild(wrap);
+      input.focus();
+    });
+    el.appendChild(replyBtn);
+
+    // Nested replies
+    const childReplies = replyMap[item.id] || [];
+    if (childReplies.length > 0) {
+      const section = document.createElement('div');
+      section.className = 'hd-reply-section';
+      childReplies.forEach(reply => {
+        const r = document.createElement('div');
+        r.className = 'hd-reply-item';
+        const rHeader = document.createElement('div');
+        rHeader.className = 'hd-comment-header';
+        const rAvatar = document.createElement('div');
+        rAvatar.className = 'hd-avatar';
+        rAvatar.style.width = '20px'; rAvatar.style.height = '20px'; rAvatar.style.fontSize = '9px';
+        rAvatar.textContent = (reply.author?.displayName || 'A')[0].toUpperCase();
+        const rName = document.createElement('span');
+        rName.className = 'hd-name';
+        rName.textContent = reply.author?.displayName || 'Anonymous';
+        const rTime = document.createElement('span');
+        rTime.className = 'hd-time';
+        rTime.textContent = formatTime(reply.createdAt);
+        rHeader.append(rAvatar, rName, rTime);
+        const rText = document.createElement('div');
+        rText.className = 'hd-text';
+        rText.textContent = reply.content?.text || '';
+        r.append(rHeader, rText);
+        section.appendChild(r);
+      });
+      el.appendChild(section);
+    }
+
+    return el;
+  }
+
+  function scrollToHighlight(item) {
+    if (!item.anchor?.selectedText) return;
+    const marks = document.querySelectorAll('mark.hd-hl');
+    const searchLower = item.anchor.selectedText.slice(0, 30).toLowerCase();
+    for (const mark of marks) {
+      if (mark.textContent.toLowerCase().includes(searchLower)) {
+        mark.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        mark.classList.add('flash');
+        setTimeout(() => mark.classList.remove('flash'), 2000);
+        return;
+      }
+    }
+  }
+
+  function highlightAnchors() {
+    document.querySelectorAll('mark.hd-hl').forEach(el => {
+      const parent = el.parentNode;
+      parent.replaceChild(document.createTextNode(el.textContent), el);
+      parent.normalize();
+    });
+    const seen = new Set();
+    comments.forEach(item => {
+      if (item.anchor?.type === 'text_range' && item.anchor?.selectedText) {
+        const key = item.anchor.selectedText.toLowerCase();
+        if (!seen.has(key)) { seen.add(key); highlightText(item.anchor.selectedText); }
+      }
+    });
+  }
+
+  function highlightText(searchText) {
+    const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+    const lower = searchText.toLowerCase();
+    while (walker.nextNode()) {
+      const node = walker.currentNode;
+      if (node.parentElement && (node.parentElement.id === 'htmldrop-widget-host' || node.parentElement.closest('#htmldrop-widget-host'))) continue;
+      const idx = node.textContent.toLowerCase().indexOf(lower);
+      if (idx === -1) continue;
+      const range = document.createRange();
+      range.setStart(node, idx);
+      range.setEnd(node, idx + searchText.length);
+      const mark = document.createElement('mark');
+      mark.className = 'hd-hl';
+      mark.dataset.anchor = lower;
+      range.surroundContents(mark);
+      // Click highlight → scroll panel to associated comment
+      mark.addEventListener('click', () => {
+        const commentEls = panel.querySelectorAll('.hd-comment');
+        for (const cel of commentEls) {
+          const anchorEl = cel.querySelector('.hd-anchor');
+          if (anchorEl && anchorEl.textContent.toLowerCase().includes(lower.slice(0, 20))) {
+            panel.querySelectorAll('.hd-comment').forEach(c => c.classList.remove('active'));
+            cel.classList.add('active');
+            cel.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            return;
+          }
+        }
+      });
+      break;
+    }
+  }
+
+  function formatTime(iso) {
+    if (!iso) return '';
+    const d = new Date(iso);
+    const now = new Date();
+    const diff = now - d;
+    if (diff < 60000) return 'now';
+    if (diff < 3600000) return Math.floor(diff / 60000) + 'm';
+    if (diff < 86400000) return Math.floor(diff / 3600000) + 'h';
+    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  }
+
+  // Initial load only — use ↻ button to refresh manually
+  loadComments();
+  loadInsights();
+})();
+</script>

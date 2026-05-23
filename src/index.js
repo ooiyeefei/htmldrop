@@ -8,6 +8,7 @@ export { list } from './list.js';
 export { generateGallery } from './gallery.js';
 export { encryptHtml } from './encrypt.js';
 export { readConfig, writeConfig, requireConfig, getFileUrl } from './config.js';
+export { authSetup, authSetupForce, getAuthorKey } from './auth.js';
 
 export async function openFile(filename) {
   const config = requireConfig();

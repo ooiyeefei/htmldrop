@@ -1,4 +1,5 @@
 import { existsSync, readFileSync, writeFileSync, statSync } from 'node:fs';
+import { randomUUID } from 'node:crypto';
 import { execSync } from 'node:child_process';
 import { basename, resolve, join } from 'node:path';
 import open from 'open';
@@ -6,6 +7,10 @@ import { requireConfig, getSiteDir, ensureSiteDir, getFileUrl } from './config.j
 import { encryptHtml } from './encrypt.js';
 import { generateGallery } from './gallery.js';
 import { loadManifest, saveManifest } from './manifest.js';
+import { injectFeedbackWidget } from './feedback/inject.js';
+import { getAuthorKey } from './auth.js';
+
+const DEFAULT_WORKER_URL = 'https://htmldrop-feedback.htmldrop.workers.dev';
 
 function getSurgeCommand() {
   try {
@@ -59,6 +64,28 @@ export async function push(file, options = {}) {
     console.log(`Added noindex tag to ${filename} (crawlers blocked).`);
   }
 
+  // Inject feedback widget if --feedback flag
+  let docId = null;
+  let feedbackAuthorKey = null;
+  let feedbackWorkerUrl = null;
+  if (options.feedback && !isEncrypted) {
+    feedbackAuthorKey = getAuthorKey();
+    feedbackWorkerUrl = options.workerUrl || DEFAULT_WORKER_URL;
+
+    // Reuse existing docId so the shareable link stays stable across re-pushes.
+    // --new-doc forces a fresh doc (clean slate, new URL, drops old comments' anchor).
+    const priorEntry = loadManifest().files.find((f) => f.name === filename);
+    if (priorEntry?.docId && !options.newDoc) {
+      docId = priorEntry.docId;
+      console.log(`Updating existing feedback doc for ${filename} (docId: ${docId.slice(0, 8)}...)`);
+    } else {
+      docId = randomUUID();
+      console.log(`Feedback enabled for ${filename} (docId: ${docId.slice(0, 8)}...)`);
+    }
+
+    content = injectFeedbackWidget(content, { docId, workerUrl: feedbackWorkerUrl });
+  }
+
   // Write to site directory
   const destPath = join(siteDir, filename);
   writeFileSync(destPath, content, 'utf-8');
@@ -73,6 +100,8 @@ export async function push(file, options = {}) {
     size: fileSizeBytes,
     encrypted: isEncrypted,
     noindex: Boolean(options.noindex),
+    feedback: Boolean(options.feedback),
+    docId: docId || undefined,
   };
 
   if (existingIndex >= 0) {
@@ -110,6 +139,43 @@ export async function push(file, options = {}) {
 
   const url = getFileUrl(config, filename);
   console.log(`\nPublished: ${url}`);
+  if (docId) {
+    console.log(`Feedback URL: ${feedbackWorkerUrl}/doc/${docId}`);
+  }
+
+  // Register doc with the feedback worker (after deploy so URL is live)
+  if (docId && feedbackAuthorKey && feedbackWorkerUrl) {
+    try {
+      const res = await fetch(`${feedbackWorkerUrl}/api/register/${docId}`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${feedbackAuthorKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ url }),
+      });
+      if (!res.ok) {
+        console.warn('Warning: could not register doc with feedback worker.');
+      }
+    } catch {
+      console.warn('Warning: feedback worker unreachable. Comments may not work until worker is deployed.');
+    }
+
+    // Upload HTML content to Worker for single-URL serving
+    try {
+      await fetch(`${feedbackWorkerUrl}/api/doc/${docId}/content`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${feedbackAuthorKey}`,
+          'Content-Type': 'text/html',
+        },
+        body: content,
+      });
+      console.log(`Document available at: ${feedbackWorkerUrl}/doc/${docId}`);
+    } catch {
+      console.warn('Warning: could not upload document content to worker.');
+    }
+  }
 
   if (isEncrypted) {
     console.log('(Password-protected — viewer must enter password to access content)');

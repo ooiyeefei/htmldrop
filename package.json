@@ -32,10 +32,14 @@
     "open": "^10.1.0"
   },
   "peerDependencies": {
-    "surge": ">=0.23.0"
+    "surge": ">=0.23.0",
+    "@anthropic-ai/sdk": ">=0.30.0"
   },
   "peerDependenciesMeta": {
     "surge": {
+      "optional": true
+    },
+    "@anthropic-ai/sdk": {
       "optional": true
     }
   }

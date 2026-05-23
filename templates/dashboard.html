@@ -1,0 +1,1144 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Converge Studio — htmldrop</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    :root {
+      --bg: #f8fafc; --surface: #fff; --border: #e2e8f0;
+      --text: #1e293b; --muted: #64748b; --accent: #3b82f6;
+      --accent-soft: #eff6ff; --danger: #ef4444; --success: #10b981;
+      --insight-bg: #fefce8; --insight-border: #fbbf24;
+      --debate-bg: #fef2f2; --debate-border: #f87171;
+    }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Inter, sans-serif;
+      background: var(--bg); color: var(--text); line-height: 1.5;
+    }
+    .container { max-width: 1200px; margin: 0 auto; padding: 24px 20px; }
+    header {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 16px 0; margin-bottom: 24px; border-bottom: 1px solid var(--border);
+    }
+    header h1 { font-size: 20px; font-weight: 700; }
+    header h1 span { color: var(--accent); }
+    .empty-state {
+      text-align: center; padding: 80px 20px; color: var(--muted);
+    }
+    .empty-state h2 { font-size: 18px; margin-bottom: 8px; color: var(--text); }
+    .setup-panel, .home-panel {
+      max-width: 400px; margin: 80px auto; padding: 32px;
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 12px; text-align: center;
+    }
+    .setup-panel h2 { margin-bottom: 8px; }
+    .setup-panel p { font-size: 13px; color: var(--muted); margin-bottom: 16px; }
+    .setup-panel input {
+      width: 100%; padding: 10px 14px; border: 1px solid var(--border);
+      border-radius: 6px; font-size: 13px; margin-bottom: 12px;
+    }
+    .header-actions { display: flex; gap: 8px; align-items: center; }
+    .key-status {
+      display: inline-flex; align-items: center; gap: 6px;
+      font-size: 12px; padding: 4px 10px; border-radius: 99px;
+    }
+    .key-status.active { background: #ecfdf5; color: var(--success); }
+    .key-status.missing { background: var(--insight-bg); color: #92400e; }
+    .btn {
+      padding: 7px 14px; border-radius: 6px; font-size: 12px;
+      font-weight: 500; cursor: pointer; border: 1px solid var(--border);
+      background: var(--surface); color: var(--text); transition: all 0.15s;
+    }
+    .btn:hover { border-color: var(--accent); color: var(--accent); }
+    .btn-primary {
+      background: var(--accent); color: #fff; border-color: var(--accent);
+    }
+    .btn-primary:hover { background: #2563eb; }
+    .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+    .btn-icon {
+      background: none; border: 1px solid var(--border); border-radius: 6px;
+      padding: 6px 10px; cursor: pointer; font-size: 13px; color: var(--muted);
+      transition: all 0.15s;
+    }
+    .btn-icon:hover { border-color: var(--accent); color: var(--accent); }
+    .btn-danger { color: var(--danger); }
+    .btn-danger:hover { border-color: var(--danger); color: var(--danger); }
+    .spinner {
+      width: 14px; height: 14px; border: 2px solid var(--border);
+      border-top-color: var(--accent); border-radius: 50%;
+      animation: spin 0.6s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* Settings */
+    .settings-panel {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 10px; padding: 24px; margin-bottom: 24px;
+    }
+    .settings-panel h3 { font-size: 15px; font-weight: 600; margin-bottom: 16px; }
+    .setting-row {
+      margin-bottom: 16px; padding-bottom: 16px;
+      border-bottom: 1px solid var(--border);
+    }
+    .setting-row:last-child { border-bottom: none; margin-bottom: 0; padding-bottom: 0; }
+    .setting-label { font-size: 13px; font-weight: 600; margin-bottom: 4px; }
+    .setting-desc { font-size: 12px; color: var(--muted); margin-bottom: 8px; }
+    .setting-input {
+      width: 100%; padding: 8px 12px; border: 1px solid var(--border);
+      border-radius: 6px; font-size: 13px; font-family: monospace;
+    }
+    .setting-saved {
+      display: inline-block; font-size: 11px; color: var(--success);
+      margin-left: 8px; opacity: 0; transition: opacity 0.3s;
+    }
+    .setting-saved.show { opacity: 1; }
+
+    /* Doc viewer layout */
+    .doc-viewer {
+      display: flex; gap: 0; height: calc(100vh - 80px);
+      border: 1px solid var(--border); border-radius: 10px; overflow: hidden;
+      background: var(--surface);
+    }
+    .doc-content-wrap {
+      flex: 1; border-right: 1px solid var(--border); position: relative;
+      display: flex; flex-direction: column;
+    }
+    .doc-iframe-container {
+      flex: 1; position: relative; overflow: hidden;
+    }
+    .doc-iframe-container iframe {
+      width: 100%; height: 100%; border: none;
+    }
+    .doc-iframe-placeholder {
+      display: flex; align-items: center; justify-content: center;
+      height: 100%; padding: 40px; text-align: center; color: var(--muted);
+    }
+    .doc-iframe-placeholder p { font-size: 14px; line-height: 1.6; max-width: 360px; }
+    .doc-url-bar {
+      padding: 8px 16px; background: var(--bg);
+      border-bottom: 1px solid var(--border);
+      font-size: 12px; color: var(--muted);
+      display: flex; align-items: center; gap: 8px;
+    }
+    .doc-url-bar code {
+      background: var(--surface); padding: 2px 8px;
+      border-radius: 4px; border: 1px solid var(--border);
+      font-size: 11px; overflow: hidden; text-overflow: ellipsis;
+      white-space: nowrap; max-width: 400px;
+    }
+
+    /* Right panel: margin comments */
+    .doc-margin {
+      width: 360px; overflow-y: auto; padding: 0;
+      background: var(--bg);
+    }
+    .doc-margin-header {
+      font-size: 13px; font-weight: 600;
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 14px 16px; border-bottom: 1px solid var(--border);
+      background: var(--surface); position: sticky; top: 0; z-index: 5;
+    }
+    .doc-margin-count {
+      font-size: 11px; color: var(--muted); font-weight: 400;
+      background: var(--bg); padding: 2px 8px; border-radius: 99px;
+      border: 1px solid var(--border);
+    }
+
+    /* Segment label */
+    .seg-label {
+      font-size: 11px; font-weight: 600; color: var(--muted);
+      margin: 0; padding: 10px 16px 6px;
+      text-transform: uppercase; letter-spacing: 0.5px;
+      background: var(--bg);
+    }
+    .seg-label .debate-badge {
+      margin-left: 6px; background: var(--debate-bg); color: var(--danger);
+      padding: 1px 6px; border-radius: 99px; font-size: 10px;
+    }
+
+    /* Comment card - Google Docs style */
+    .mc {
+      background: var(--surface); margin: 0 12px 2px;
+      border-radius: 8px; padding: 12px 14px;
+      transition: background 0.15s;
+    }
+    .mc:first-of-type { margin-top: 6px; }
+    .mc:hover { background: #f8fafc; }
+    .mc-header { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
+    .mc-avatar {
+      width: 26px; height: 26px; border-radius: 50%;
+      background: var(--accent); color: #fff;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 11px; font-weight: 600; flex-shrink: 0;
+    }
+    .mc-name { font-weight: 600; font-size: 12px; color: var(--text); }
+    .mc-time { font-size: 11px; color: var(--muted); margin-left: auto; }
+    .mc-text { font-size: 13px; color: var(--text); line-height: 1.4; margin-left: 34px; }
+    .mc-anchor {
+      margin-top: 6px; margin-left: 34px; padding: 3px 8px;
+      background: var(--accent-soft); color: var(--accent);
+      border-radius: 99px; font-size: 11px; display: inline-block;
+    }
+
+    /* Reply link */
+    .mc-reply-link {
+      margin-left: 34px; margin-top: 6px;
+      font-size: 11px; color: var(--muted); cursor: pointer;
+      display: inline-block;
+    }
+    .mc-reply-link:hover { color: var(--accent); }
+
+    /* Reply form */
+    .mc-reply-form {
+      margin: 8px 0 0 34px; display: none;
+    }
+    .mc-reply-form.open { display: block; }
+    .mc-reply-form textarea {
+      width: 100%; border: 1px solid var(--border); border-radius: 6px;
+      padding: 8px 10px; font-size: 12px; font-family: inherit;
+      resize: none; min-height: 48px; outline: none;
+      transition: border-color 0.15s;
+    }
+    .mc-reply-form textarea:focus { border-color: var(--accent); }
+    .mc-reply-form-actions {
+      display: flex; justify-content: flex-end; gap: 6px; margin-top: 6px;
+    }
+    .mc-reply-form-actions .btn { font-size: 11px; padding: 5px 10px; }
+
+    /* Reply cards (nested) */
+    .mc-replies {
+      margin-left: 34px; margin-top: 8px;
+      border-left: 2px solid var(--border); padding-left: 12px;
+    }
+    .mc-reply {
+      margin-bottom: 8px;
+    }
+    .mc-reply .mc-header { margin-bottom: 2px; }
+    .mc-reply .mc-avatar { width: 20px; height: 20px; font-size: 9px; }
+    .mc-reply .mc-name { font-size: 11px; }
+    .mc-reply .mc-time { font-size: 10px; }
+    .mc-reply .mc-reply-text { font-size: 12px; color: var(--text); line-height: 1.4; margin-left: 28px; }
+
+    /* AI Actions divider area */
+    .ai-actions-area {
+      margin: 4px 12px 12px; padding: 10px 14px;
+      border-top: 1px solid var(--border);
+    }
+    .ai-actions-label {
+      font-size: 10px; font-weight: 600; color: var(--muted);
+      text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px;
+    }
+    .ai-actions-btns { display: flex; gap: 6px; }
+    .ai-actions-btns .btn { font-size: 11px; padding: 5px 10px; }
+
+    /* Insight card in margin */
+    .mc-insight {
+      margin: 4px 12px 10px; padding: 12px 14px;
+      background: var(--insight-bg); border: 1px solid var(--insight-border);
+      border-radius: 8px;
+    }
+    .mc-insight-header {
+      font-size: 11px; font-weight: 600; color: #92400e; margin-bottom: 6px;
+      display: flex; align-items: center; gap: 4px;
+    }
+    .mc-insight-text { font-size: 12px; line-height: 1.5; margin-bottom: 4px; }
+    .mc-insight-source { font-size: 10px; color: var(--muted); margin-top: 2px; }
+    .mc-insight-loading {
+      display: flex; align-items: center; gap: 8px;
+      font-size: 12px; color: var(--muted);
+    }
+
+    /* Converge All footer */
+    .margin-footer {
+      padding: 12px 16px; border-top: 1px solid var(--border);
+      position: sticky; bottom: 0; background: var(--surface);
+    }
+    .margin-footer .btn { width: 100%; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div id="app"></div>
+  </div>
+  <script>
+  (function() {
+    const app = document.getElementById('app');
+    const DEFAULT_WORKER_URL = 'https://htmldrop-feedback.htmldrop.workers.dev';
+
+    let state = {
+      workerUrl: DEFAULT_WORKER_URL,
+      authorKey: '',
+      anthropicKey: '',
+      currentDocId: '',
+      page: 'home',
+      files: [],
+      selectedFile: null,
+      feedback: [],
+      segments: [],
+      references: [],
+      insights: {},
+      showSettings: false,
+      docUrl: null,
+      docUrlError: false,
+      lastTimestamp: null,
+      pollTimer: null,
+    };
+
+    function init() {
+      const hash = window.location.hash.slice(1);
+      const params = new URLSearchParams(hash);
+      if (params.get('key')) state.authorKey = params.get('key');
+      if (params.get('worker')) state.workerUrl = params.get('worker');
+      if (params.get('doc')) state.currentDocId = params.get('doc');
+
+      const savedAuthorKey = localStorage.getItem('htmldrop_author_key');
+      if (savedAuthorKey && !state.authorKey) state.authorKey = savedAuthorKey;
+      if (state.authorKey) localStorage.setItem('htmldrop_author_key', state.authorKey);
+
+      const savedAnthropicKey = sessionStorage.getItem('htmldrop_anthropic_key');
+      if (savedAnthropicKey) state.anthropicKey = savedAnthropicKey;
+
+      if (state.currentDocId) {
+        loadFeedback(state.currentDocId);
+      } else if (state.authorKey) {
+        loadFiles();
+      } else {
+        state.page = 'home';
+        renderHome();
+      }
+    }
+
+    // --- Polling (disabled — use manual refresh) ---
+    function startPolling() {
+      // No-op: polling disabled to conserve KV free tier
+    }
+
+    function stopPolling() {
+      if (state.pollTimer) {
+        clearInterval(state.pollTimer);
+        state.pollTimer = null;
+      }
+    }
+
+    async function pollNewFeedback() {
+      if (!state.currentDocId) return;
+      var since = state.lastTimestamp || new Date(0).toISOString();
+      try {
+        var url = state.workerUrl + '/api/feedback/' + state.currentDocId + '?since=' + encodeURIComponent(since);
+        var res = await fetch(url);
+        if (!res.ok) return;
+        var data = await res.json();
+        var newItems = data.items || [];
+        if (newItems.length > 0) {
+          state.feedback = state.feedback.concat(newItems);
+          updateLastTimestamp();
+          state.segments = fallbackSegmentation(state.feedback);
+          renderMarginPanel();
+        }
+      } catch (e) { /* silent */ }
+    }
+
+    function updateLastTimestamp() {
+      if (state.feedback.length > 0) {
+        var times = state.feedback.map(function(f) { return f.createdAt; }).filter(Boolean).sort();
+        if (times.length > 0) state.lastTimestamp = times[times.length - 1];
+      }
+    }
+
+    // --- Doc URL fetching ---
+    async function fetchDocUrl(docId) {
+      try {
+        var res = await fetch(state.workerUrl + '/api/doc/' + docId + '/url');
+        if (res.ok) {
+          var data = await res.json();
+          if (data.url) {
+            state.docUrl = data.url;
+            state.docUrlError = false;
+            return;
+          }
+        }
+        state.docUrl = null;
+        state.docUrlError = true;
+      } catch (e) {
+        state.docUrl = null;
+        state.docUrlError = true;
+      }
+    }
+
+    // --- Insights fetching ---
+    async function fetchInsights(docId) {
+      try {
+        var res = await fetch(state.workerUrl + '/api/insights/' + docId);
+        if (res.ok) {
+          var data = await res.json();
+          if (data.insights) {
+            state.insights = {};
+            for (var key in data.insights) {
+              if (data.insights.hasOwnProperty(key)) {
+                state.insights[parseInt(key)] = data.insights[key];
+              }
+            }
+          }
+        }
+      } catch (e) { /* silent */ }
+    }
+
+    // --- Render: Home ---
+    function renderHome() {
+      var frag = document.createDocumentFragment();
+      frag.appendChild(renderNav());
+
+      var hero = document.createElement('div');
+      hero.className = 'empty-state';
+      var h2 = document.createElement('h2');
+      h2.textContent = 'Converge Studio';
+      var p1 = document.createElement('p');
+      p1.textContent = 'AI-facilitated document feedback and synthesis.';
+      p1.style.marginBottom = '24px';
+      hero.append(h2, p1);
+
+      var docRow = document.createElement('div');
+      docRow.style.cssText = 'display:flex;gap:8px;max-width:400px;margin:0 auto 16px;';
+      var docInput = document.createElement('input');
+      docInput.className = 'setting-input';
+      docInput.placeholder = 'Enter a document ID to view feedback';
+      docInput.style.margin = '0';
+      var goBtn = document.createElement('button');
+      goBtn.className = 'btn btn-primary';
+      goBtn.textContent = 'View';
+      goBtn.addEventListener('click', function() {
+        if (docInput.value.trim()) {
+          state.currentDocId = docInput.value.trim();
+          window.location.hash = 'doc=' + state.currentDocId;
+          loadFeedback(state.currentDocId);
+        }
+      });
+      docRow.append(docInput, goBtn);
+      hero.appendChild(docRow);
+
+      var hint = document.createElement('p');
+      hint.style.cssText = 'font-size:12px;color:var(--muted);margin-top:12px;';
+      hint.textContent = 'Or connect your author key in Settings to see all your documents.';
+      hero.appendChild(hint);
+
+      frag.appendChild(hero);
+      app.replaceChildren(frag);
+    }
+
+    // --- Render: Nav ---
+    function renderNav() {
+      var nav = document.createElement('header');
+      var h1 = document.createElement('h1');
+      h1.textContent = 'Converge ';
+      var span = document.createElement('span');
+      span.textContent = 'Studio';
+      h1.appendChild(span);
+      h1.style.cursor = 'pointer';
+      h1.addEventListener('click', function() { stopPolling(); state.page = 'home'; renderHome(); });
+
+      var actions = document.createElement('div');
+      actions.className = 'header-actions';
+
+      var keyStatus = document.createElement('span');
+      keyStatus.className = 'key-status ' + (state.anthropicKey ? 'active' : 'missing');
+      keyStatus.textContent = state.anthropicKey ? 'AI Ready' : 'No AI Key';
+
+      var settingsBtn = document.createElement('button');
+      settingsBtn.className = 'btn-icon';
+      settingsBtn.textContent = 'Settings';
+      settingsBtn.addEventListener('click', function() { stopPolling(); state.page = 'settings'; renderSettingsPage(); });
+
+      actions.append(keyStatus, settingsBtn);
+
+      if (state.authorKey) {
+        var logoutBtn = document.createElement('button');
+        logoutBtn.className = 'btn-icon btn-danger';
+        logoutBtn.textContent = 'Logout';
+        logoutBtn.addEventListener('click', function() {
+          localStorage.removeItem('htmldrop_author_key');
+          sessionStorage.removeItem('htmldrop_anthropic_key');
+          state.authorKey = '';
+          state.anthropicKey = '';
+          window.location.hash = '';
+          stopPolling();
+          renderHome();
+        });
+        actions.appendChild(logoutBtn);
+      }
+
+      nav.append(h1, actions);
+      return nav;
+    }
+
+    // --- Render: Settings ---
+    function renderSettingsPage() {
+      var frag = document.createDocumentFragment();
+      frag.appendChild(renderNav());
+      frag.appendChild(renderSettings());
+      app.replaceChildren(frag);
+    }
+
+    function renderSettings() {
+      var panel = document.createElement('div');
+      panel.className = 'settings-panel';
+      var h3 = document.createElement('h3');
+      h3.textContent = 'Settings';
+      panel.appendChild(h3);
+
+      // Anthropic API Key
+      var aiRow = document.createElement('div');
+      aiRow.className = 'setting-row';
+      var aiLabel = document.createElement('div');
+      aiLabel.className = 'setting-label';
+      aiLabel.textContent = 'Anthropic API Key (for AI Insights & Converge)';
+      var aiDesc = document.createElement('div');
+      aiDesc.className = 'setting-desc';
+      aiDesc.textContent = 'Stored in session memory only. Cleared when you close the browser.';
+      var aiInput = document.createElement('input');
+      aiInput.className = 'setting-input';
+      aiInput.type = 'password';
+      aiInput.placeholder = 'sk-ant-...';
+      aiInput.value = state.anthropicKey || '';
+      var aiSaved = document.createElement('span');
+      aiSaved.className = 'setting-saved';
+      aiSaved.textContent = 'Saved';
+      aiInput.addEventListener('change', function() {
+        state.anthropicKey = aiInput.value.trim();
+        if (state.anthropicKey) {
+          sessionStorage.setItem('htmldrop_anthropic_key', state.anthropicKey);
+        } else {
+          sessionStorage.removeItem('htmldrop_anthropic_key');
+        }
+        aiSaved.classList.add('show');
+        setTimeout(function() { aiSaved.classList.remove('show'); }, 2000);
+      });
+      aiRow.append(aiLabel, aiDesc, aiInput, aiSaved);
+      panel.appendChild(aiRow);
+
+      // Worker URL
+      var workerRow = document.createElement('div');
+      workerRow.className = 'setting-row';
+      var wLabel = document.createElement('div');
+      wLabel.className = 'setting-label';
+      wLabel.textContent = 'Worker URL';
+      var wDesc = document.createElement('div');
+      wDesc.className = 'setting-desc';
+      wDesc.textContent = 'The feedback relay backend. Change only if self-hosting.';
+      var wInput = document.createElement('input');
+      wInput.className = 'setting-input';
+      wInput.type = 'url';
+      wInput.value = state.workerUrl;
+      wInput.addEventListener('change', function() {
+        state.workerUrl = wInput.value.trim() || DEFAULT_WORKER_URL;
+      });
+      workerRow.append(wLabel, wDesc, wInput);
+      panel.appendChild(workerRow);
+
+      // Author key
+      if (state.authorKey) {
+        var authRow = document.createElement('div');
+        authRow.className = 'setting-row';
+        var authLabel = document.createElement('div');
+        authLabel.className = 'setting-label';
+        authLabel.textContent = 'Author Key';
+        var authDesc = document.createElement('div');
+        authDesc.className = 'setting-desc';
+        authDesc.textContent = 'Your author identity. Generated by `htmldrop auth setup`.';
+        var authValue = document.createElement('code');
+        authValue.style.fontSize = '12px';
+        authValue.style.color = 'var(--muted)';
+        authValue.textContent = state.authorKey.slice(0, 8) + '...' + state.authorKey.slice(-4);
+        authRow.append(authLabel, authDesc, authValue);
+        panel.appendChild(authRow);
+      }
+
+      return panel;
+    }
+
+    // --- Loading ---
+    async function loadFiles() {
+      renderLoading('Loading your files...');
+      try {
+        var res = await fetch(state.workerUrl + '/api/author/files', {
+          headers: { 'Authorization': 'Bearer ' + state.authorKey },
+        });
+        if (!res.ok) throw new Error('Failed to load files');
+        var data = await res.json();
+        state.files = data.files || [];
+        if (state.files.length > 0) {
+          state.selectedFile = state.files[0];
+          await loadFeedback(state.selectedFile.docId);
+        } else {
+          renderEmpty();
+        }
+      } catch (e) {
+        renderEmpty();
+      }
+    }
+
+    async function loadFeedback(docId) {
+      renderLoading('Loading feedback...');
+      try {
+        var res = await fetch(state.workerUrl + '/api/feedback/' + docId);
+        var data = await res.json();
+        state.feedback = data.items || [];
+        state.currentDocId = docId;
+        state.selectedFile = state.selectedFile || { docId: docId, name: docId.slice(0, 8) };
+        updateLastTimestamp();
+        state.segments = fallbackSegmentation(state.feedback);
+        // Fetch doc URL and insights in parallel
+        await Promise.all([fetchDocUrl(docId), fetchInsights(docId)]);
+        renderDashboard();
+        startPolling();
+      } catch (e) {
+        state.feedback = [];
+        state.segments = [];
+        await fetchDocUrl(docId);
+        renderDashboard();
+        startPolling();
+      }
+    }
+
+    function fallbackSegmentation(items) {
+      var groups = {};
+      for (var i = 0; i < items.length; i++) {
+        var item = items[i];
+        if (item.parentId) continue; // skip replies
+        var key = (item.anchor && item.anchor.selectedText) ? item.anchor.selectedText.slice(0, 40) : (item.anchor && item.anchor.selector) ? item.anchor.selector : 'page-level';
+        if (!groups[key]) groups[key] = { title: key, items: [], hasDebate: false };
+        groups[key].items.push(item);
+      }
+      var result = [];
+      for (var k in groups) {
+        if (!groups.hasOwnProperty(k)) continue;
+        var seg = groups[k];
+        if (seg.items.length >= 2) {
+          var authors = {};
+          for (var j = 0; j < seg.items.length; j++) {
+            var dn = seg.items[j].author ? seg.items[j].author.displayName : '';
+            if (dn) authors[dn] = true;
+          }
+          seg.hasDebate = Object.keys(authors).length >= 2;
+        }
+        result.push(seg);
+      }
+      return result;
+    }
+
+    function getRepliesFor(commentId) {
+      return state.feedback.filter(function(f) { return f.parentId === commentId; });
+    }
+
+    function renderLoading(msg) {
+      var div = document.createElement('div');
+      div.className = 'empty-state';
+      var spin = document.createElement('div');
+      spin.className = 'spinner';
+      spin.style.margin = '0 auto 12px';
+      var text = document.createElement('p');
+      text.textContent = msg;
+      div.append(spin, text);
+      app.replaceChildren(div);
+    }
+
+    function renderEmpty() {
+      var div = document.createElement('div');
+      div.className = 'empty-state';
+      var h2 = document.createElement('h2');
+      h2.textContent = 'No feedback files yet';
+      var p = document.createElement('p');
+      p.textContent = 'Push a file with --feedback flag to get started: htmldrop push spec.html --feedback';
+      div.append(h2, p);
+      app.replaceChildren(div);
+    }
+
+    // --- Render: Dashboard ---
+    function renderDashboard() {
+      var frag = document.createDocumentFragment();
+      frag.appendChild(renderNav());
+
+      var container = app.parentElement;
+      container.style.maxWidth = '100%';
+      container.style.padding = '0 16px';
+
+      var viewer = document.createElement('div');
+      viewer.className = 'doc-viewer';
+
+      // Left: iframe with published doc
+      var contentWrap = document.createElement('div');
+      contentWrap.className = 'doc-content-wrap';
+
+      // URL bar
+      var urlBar = document.createElement('div');
+      urlBar.className = 'doc-url-bar';
+      var urlLabel = document.createElement('span');
+      urlLabel.textContent = 'Document:';
+      var urlCode = document.createElement('code');
+      urlCode.textContent = state.docUrl || state.currentDocId || '';
+      urlBar.append(urlLabel, urlCode);
+      contentWrap.appendChild(urlBar);
+
+      // iframe container
+      var iframeContainer = document.createElement('div');
+      iframeContainer.className = 'doc-iframe-container';
+
+      if (state.docUrl) {
+        var iframe = document.createElement('iframe');
+        iframe.src = state.docUrl;
+        iframe.sandbox = 'allow-same-origin allow-scripts';
+        iframe.title = 'Published document';
+        iframeContainer.appendChild(iframe);
+      } else {
+        var placeholder = document.createElement('div');
+        placeholder.className = 'doc-iframe-placeholder';
+        var msg = document.createElement('p');
+        msg.textContent = 'Document URL not registered yet. Push with --feedback to see content here.';
+        placeholder.appendChild(msg);
+        iframeContainer.appendChild(placeholder);
+      }
+
+      contentWrap.appendChild(iframeContainer);
+
+      // Right: margin comments panel
+      var margin = document.createElement('div');
+      margin.className = 'doc-margin';
+      margin.id = 'margin-panel';
+      renderMarginContent(margin);
+
+      viewer.append(contentWrap, margin);
+      frag.appendChild(viewer);
+      app.replaceChildren(frag);
+    }
+
+    // --- Render: Margin panel (can be called independently for polling updates) ---
+    function renderMarginPanel() {
+      var margin = document.getElementById('margin-panel');
+      if (!margin) return;
+      while (margin.firstChild) { margin.removeChild(margin.firstChild); }
+      renderMarginContent(margin);
+    }
+
+    function renderMarginContent(margin) {
+      // Header
+      var marginHeader = document.createElement('div');
+      marginHeader.className = 'doc-margin-header';
+      var marginTitle = document.createElement('span');
+      marginTitle.textContent = 'Comments';
+      var marginCount = document.createElement('span');
+      marginCount.className = 'doc-margin-count';
+      var topLevelCount = state.feedback.filter(function(f) { return !f.parentId; }).length;
+      marginCount.textContent = topLevelCount + ' total';
+      marginHeader.append(marginTitle, marginCount);
+      margin.appendChild(marginHeader);
+
+      // Add comment input at top of margin
+      var addCommentBox = document.createElement('div');
+      addCommentBox.style.cssText = 'padding:12px 16px;border-bottom:1px solid var(--border);background:var(--surface);';
+      var addInput = document.createElement('textarea');
+      addInput.style.cssText = 'width:100%;border:1px solid var(--border);border-radius:6px;padding:8px 10px;font-size:13px;font-family:inherit;resize:none;min-height:36px;';
+      addInput.placeholder = 'Add a comment...';
+      addInput.rows = 1;
+      var addActions = document.createElement('div');
+      addActions.style.cssText = 'display:none;margin-top:8px;text-align:right;';
+      var addCancel = document.createElement('button');
+      addCancel.className = 'btn';
+      addCancel.textContent = 'Cancel';
+      addCancel.style.cssText = 'margin-right:6px;font-size:11px;padding:5px 10px;';
+      var addSubmit = document.createElement('button');
+      addSubmit.className = 'btn btn-primary';
+      addSubmit.textContent = 'Comment';
+      addSubmit.style.cssText = 'font-size:11px;padding:5px 10px;';
+      addActions.append(addCancel, addSubmit);
+      addInput.addEventListener('focus', function() { addActions.style.display = 'block'; addInput.rows = 3; });
+      addCancel.addEventListener('click', function() { addInput.value = ''; addActions.style.display = 'none'; addInput.rows = 1; addInput.blur(); });
+      addSubmit.addEventListener('click', async function() {
+        var text = addInput.value.trim();
+        if (!text) return;
+        addSubmit.disabled = true;
+        addSubmit.textContent = '...';
+        var name = localStorage.getItem('htmldrop_reviewer_name') || 'Author';
+        try {
+          await fetch(state.workerUrl + '/api/feedback/' + (state.currentDocId || state.selectedFile?.docId), {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              anchor: { type: 'page_level' },
+              content: { type: 'text', text: text },
+              author: { displayName: name },
+              parentId: null,
+            }),
+          });
+          addInput.value = '';
+          addActions.style.display = 'none';
+          addInput.rows = 1;
+          await loadFeedback(state.currentDocId || state.selectedFile?.docId);
+        } catch(e) {
+          alert('Failed to submit');
+        }
+        addSubmit.disabled = false;
+        addSubmit.textContent = 'Comment';
+      });
+      addCommentBox.append(addInput, addActions);
+      margin.appendChild(addCommentBox);
+
+      // Segments with comments
+      if (state.segments.length > 0) {
+        for (var segIdx = 0; segIdx < state.segments.length; segIdx++) {
+          var seg = state.segments[segIdx];
+
+          // Segment label
+          var segLabel = document.createElement('div');
+          segLabel.className = 'seg-label';
+          var labelText = seg.title.length > 30 ? seg.title.slice(0, 30) + '...' : seg.title;
+          segLabel.textContent = labelText;
+          if (seg.hasDebate) {
+            var badge = document.createElement('span');
+            badge.className = 'debate-badge';
+            badge.textContent = 'debate';
+            segLabel.appendChild(badge);
+          }
+          margin.appendChild(segLabel);
+
+          // Comment cards for this segment
+          for (var ci = 0; ci < seg.items.length; ci++) {
+            margin.appendChild(renderCommentCard(seg.items[ci]));
+          }
+
+          // AI Actions divider section
+          var aiArea = document.createElement('div');
+          aiArea.className = 'ai-actions-area';
+          var aiLabel = document.createElement('div');
+          aiLabel.className = 'ai-actions-label';
+          aiLabel.textContent = 'AI Actions';
+          aiArea.appendChild(aiLabel);
+
+          var aiBtns = document.createElement('div');
+          aiBtns.className = 'ai-actions-btns';
+          var insightBtn = createInsightButton(segIdx);
+          var convBtn = createConvergeButton(segIdx);
+          aiBtns.append(insightBtn, convBtn);
+          aiArea.appendChild(aiBtns);
+          margin.appendChild(aiArea);
+
+          // Insight card (if exists for this segment)
+          if (state.insights[segIdx] && !state.insights[segIdx].loading) {
+            margin.appendChild(renderInsightCard(state.insights[segIdx]));
+          } else if (state.insights[segIdx] && state.insights[segIdx].loading) {
+            var loadingCard = document.createElement('div');
+            loadingCard.className = 'mc-insight';
+            var loading = document.createElement('div');
+            loading.className = 'mc-insight-loading';
+            var spin = document.createElement('div');
+            spin.className = 'spinner';
+            var txt = document.createElement('span');
+            txt.textContent = 'Generating insights...';
+            loading.append(spin, txt);
+            loadingCard.appendChild(loading);
+            margin.appendChild(loadingCard);
+          }
+        }
+      } else {
+        // No segments, show flat comments
+        var topLevel = state.feedback.filter(function(f) { return !f.parentId; });
+        for (var ti = 0; ti < topLevel.length; ti++) {
+          margin.appendChild(renderCommentCard(topLevel[ti]));
+        }
+      }
+
+      // Converge All footer
+      if (state.feedback.length > 0) {
+        var footer = document.createElement('div');
+        footer.className = 'margin-footer';
+        var btn = document.createElement('button');
+        btn.className = 'btn btn-primary';
+        btn.textContent = 'Converge All';
+        btn.addEventListener('click', function() { convergeAll(); });
+        footer.appendChild(btn);
+        margin.appendChild(footer);
+      }
+    }
+
+    function createInsightButton(segIdx) {
+      var btn = document.createElement('button');
+      btn.className = 'btn';
+      btn.textContent = state.insights[segIdx] ? 'Refresh Insights' : 'Get Insights';
+      btn.addEventListener('click', (function(idx) {
+        return function() { getInsights(idx); };
+      })(segIdx));
+      return btn;
+    }
+
+    function createConvergeButton(segIdx) {
+      var btn = document.createElement('button');
+      btn.className = 'btn btn-primary';
+      btn.textContent = 'Converge';
+      btn.addEventListener('click', (function(idx) {
+        return function() { convergeSegment(idx); };
+      })(segIdx));
+      return btn;
+    }
+
+    // --- Render: Comment Card (Google Docs style) ---
+    function renderCommentCard(item) {
+      var card = document.createElement('div');
+      card.className = 'mc';
+
+      // Header: avatar, name, time
+      var header = document.createElement('div');
+      header.className = 'mc-header';
+      var avatar = document.createElement('div');
+      avatar.className = 'mc-avatar';
+      var displayName = (item.author && item.author.displayName) ? item.author.displayName : 'Anonymous';
+      avatar.textContent = displayName[0].toUpperCase();
+      var name = document.createElement('span');
+      name.className = 'mc-name';
+      name.textContent = displayName;
+      var time = document.createElement('span');
+      time.className = 'mc-time';
+      time.textContent = formatTime(item.createdAt);
+      header.append(avatar, name, time);
+      card.appendChild(header);
+
+      // Text
+      var text = document.createElement('div');
+      text.className = 'mc-text';
+      text.textContent = (item.content && item.content.text) ? item.content.text : '';
+      card.appendChild(text);
+
+      // Anchor quote (blue pill)
+      if (item.anchor && item.anchor.selectedText) {
+        var anchor = document.createElement('div');
+        anchor.className = 'mc-anchor';
+        anchor.textContent = '“' + item.anchor.selectedText.slice(0, 60) + '”';
+        card.appendChild(anchor);
+      }
+
+      // Replies
+      var replies = getRepliesFor(item.id);
+      if (replies.length > 0) {
+        var repliesContainer = document.createElement('div');
+        repliesContainer.className = 'mc-replies';
+        for (var ri = 0; ri < replies.length; ri++) {
+          repliesContainer.appendChild(renderReplyCard(replies[ri]));
+        }
+        card.appendChild(repliesContainer);
+      }
+
+      // Reply link
+      var replyLink = document.createElement('span');
+      replyLink.className = 'mc-reply-link';
+      replyLink.textContent = 'Reply';
+      card.appendChild(replyLink);
+
+      // Reply form (hidden by default)
+      var replyForm = document.createElement('div');
+      replyForm.className = 'mc-reply-form';
+      var textarea = document.createElement('textarea');
+      textarea.placeholder = 'Write a reply...';
+      textarea.rows = 2;
+      var formActions = document.createElement('div');
+      formActions.className = 'mc-reply-form-actions';
+      var cancelBtn = document.createElement('button');
+      cancelBtn.className = 'btn';
+      cancelBtn.textContent = 'Cancel';
+      var submitBtn = document.createElement('button');
+      submitBtn.className = 'btn btn-primary';
+      submitBtn.textContent = 'Reply';
+      formActions.append(cancelBtn, submitBtn);
+      replyForm.append(textarea, formActions);
+      card.appendChild(replyForm);
+
+      // Toggle reply form
+      replyLink.addEventListener('click', function() {
+        replyForm.classList.toggle('open');
+        if (replyForm.classList.contains('open')) textarea.focus();
+      });
+      cancelBtn.addEventListener('click', function() {
+        replyForm.classList.remove('open');
+        textarea.value = '';
+      });
+      submitBtn.addEventListener('click', (function(commentItem, ta, form, sbtn) {
+        return async function() {
+          var replyText = ta.value.trim();
+          if (!replyText) return;
+          sbtn.disabled = true;
+          sbtn.textContent = '...';
+          var userName = localStorage.getItem('htmldrop_reviewer_name') || 'Anonymous';
+          try {
+            await fetch(state.workerUrl + '/api/feedback/' + state.currentDocId + '/' + commentItem.id + '/reply', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                content: { type: 'text', text: replyText },
+                author: { displayName: userName },
+              }),
+            });
+            ta.value = '';
+            form.classList.remove('open');
+            // Refresh to show new reply
+            await loadFeedback(state.currentDocId);
+          } catch (e) {
+            sbtn.disabled = false;
+            sbtn.textContent = 'Reply';
+          }
+        };
+      })(item, textarea, replyForm, submitBtn));
+
+      return card;
+    }
+
+    // --- Render: Reply Card (nested) ---
+    function renderReplyCard(reply) {
+      var card = document.createElement('div');
+      card.className = 'mc-reply';
+      var header = document.createElement('div');
+      header.className = 'mc-header';
+      var avatar = document.createElement('div');
+      avatar.className = 'mc-avatar';
+      var displayName = (reply.author && reply.author.displayName) ? reply.author.displayName : 'Anonymous';
+      avatar.textContent = displayName[0].toUpperCase();
+      var name = document.createElement('span');
+      name.className = 'mc-name';
+      name.textContent = displayName;
+      var time = document.createElement('span');
+      time.className = 'mc-time';
+      time.textContent = formatTime(reply.createdAt);
+      header.append(avatar, name, time);
+      var text = document.createElement('div');
+      text.className = 'mc-reply-text';
+      text.textContent = (reply.content && reply.content.text) ? reply.content.text : '';
+      card.append(header, text);
+      return card;
+    }
+
+    // --- Render: Insight Card ---
+    function renderInsightCard(insight) {
+      var panel = document.createElement('div');
+      panel.className = 'mc-insight';
+      var header = document.createElement('div');
+      header.className = 'mc-insight-header';
+      header.textContent = 'AI Insight';
+      panel.appendChild(header);
+      if (insight.points) {
+        for (var i = 0; i < insight.points.length; i++) {
+          var p = insight.points[i];
+          var text = document.createElement('div');
+          text.className = 'mc-insight-text';
+          text.textContent = p.text;
+          panel.appendChild(text);
+          if (p.source) {
+            var src = document.createElement('div');
+            src.className = 'mc-insight-source';
+            src.textContent = 'Source: ' + p.source;
+            panel.appendChild(src);
+          }
+        }
+      }
+      return panel;
+    }
+
+    // --- Utilities ---
+    function formatTime(iso) {
+      if (!iso) return '';
+      var d = new Date(iso);
+      var now = new Date();
+      var diff = now - d;
+      if (diff < 60000) return 'now';
+      if (diff < 3600000) return Math.floor(diff / 60000) + 'm ago';
+      if (diff < 86400000) return Math.floor(diff / 3600000) + 'h ago';
+      return d.toLocaleDateString();
+    }
+
+    // --- AI actions ---
+    async function getInsights(segIdx) {
+      if (!state.anthropicKey) {
+        alert('Add your Anthropic API key in Settings to use AI features.');
+        stopPolling();
+        state.page = 'settings';
+        renderSettingsPage();
+        return;
+      }
+      state.insights[segIdx] = { loading: true };
+      renderMarginPanel();
+
+      try {
+        var seg = state.segments[segIdx];
+        var docId = state.currentDocId || (state.selectedFile && state.selectedFile.docId);
+        var res = await fetch(state.workerUrl + '/api/insights/' + docId, {
+          method: 'POST',
+          headers: {
+            'Authorization': 'Bearer ' + state.authorKey,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            segment: seg,
+            references: state.references,
+            anthropicKey: state.anthropicKey,
+          }),
+        });
+        if (res.ok) {
+          var data = await res.json();
+          state.insights[segIdx] = data;
+        } else {
+          state.insights[segIdx] = { points: [{ text: 'Could not generate insights. Check Worker deployment.' }] };
+        }
+      } catch (e) {
+        state.insights[segIdx] = { points: [{ text: 'Network error -- is the Worker deployed?' }] };
+      }
+      renderMarginPanel();
+    }
+
+    async function convergeSegment(segIdx) {
+      if (!state.anthropicKey) {
+        alert('Add your Anthropic API key in Settings to use AI features.');
+        stopPolling();
+        state.page = 'settings';
+        renderSettingsPage();
+        return;
+      }
+      var seg = state.segments[segIdx];
+      var insight = state.insights[segIdx];
+      var docId = state.currentDocId || (state.selectedFile && state.selectedFile.docId);
+      try {
+        var res = await fetch(state.workerUrl + '/api/converge/' + docId, {
+          method: 'POST',
+          headers: {
+            'Authorization': 'Bearer ' + state.authorKey,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            segment: seg,
+            insight: insight,
+            references: state.references,
+            anthropicKey: state.anthropicKey,
+          }),
+        });
+        if (res.ok) {
+          var data = await res.json();
+          alert('Segment converged. Suggestion: ' + (data.suggestion || '').slice(0, 200));
+        }
+      } catch (e) {
+        alert('Failed to converge segment');
+      }
+    }
+
+    async function convergeAll() {
+      if (!state.anthropicKey) {
+        alert('Add your Anthropic API key in Settings to use AI features.');
+        return;
+      }
+      for (var i = 0; i < state.segments.length; i++) {
+        if (state.segments[i].hasDebate || state.segments[i].items.length >= 2) {
+          if (!state.insights[i]) await getInsights(i);
+          await convergeSegment(i);
+        }
+      }
+    }
+
+    init();
+  })();
+  </script>
+</body>
+</html>
