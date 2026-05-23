@@ -1,10 +1,13 @@
+import { basename } from 'node:path';
 import { loadManifest } from '../manifest.js';
 
 const DEFAULT_WORKER_URL = 'https://htmldrop-feedback.htmldrop.workers.dev';
 
 export async function feedbackAdd(file, options = {}) {
+  // Accept absolute path, relative path, or bare name — match how push stores it (basename).
+  const name = basename(file);
   const manifest = loadManifest();
-  const entry = manifest.files.find((f) => f.name === file);
+  const entry = manifest.files.find((f) => f.name === name);
 
   if (!entry) {
     throw new Error(`File "${file}" not found in published files. Run \`htmldrop list\` to see files.`);

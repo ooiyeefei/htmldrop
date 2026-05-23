@@ -4,6 +4,16 @@ All notable changes to this project are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/), and this project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [1.1.4] — 2026-05-23
+
+### Fixed
+
+- **`feedback pull` / `feedback add` / `feedback clear` now accept absolute and
+  relative paths**, not just the bare filename. They normalize the file argument
+  to its basename before looking it up in the manifest — matching how `push`
+  accepts paths. Previously passing an absolute path (as the skill docs show)
+  failed with "not found in published files".
+
 ## [1.1.3] — 2026-05-23
 
 ### Fixed
@@ -102,6 +112,7 @@ Initial CLI: publish HTML files as shareable links via Surge.sh.
 - `htmldrop delete <file>` — remove a file and redeploy.
 - `htmldrop open <file>` — open a published file in the browser.
 
+[1.1.4]: https://github.com/ooiyeefei/htmldrop/releases/tag/v1.1.4
 [1.1.3]: https://github.com/ooiyeefei/htmldrop/releases/tag/v1.1.3
 [1.1.2]: https://github.com/ooiyeefei/htmldrop/releases/tag/v1.1.2
 [1.1.1]: https://github.com/ooiyeefei/htmldrop/releases/tag/v1.1.1
