@@ -4,6 +4,17 @@ All notable changes to this project are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/), and this project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [1.1.3] — 2026-05-23
+
+### Fixed
+
+- **Highlight → "+ Comment" now actually opens the comment popover.** The
+  document `mouseup` handler removed the selection tooltip before its own click
+  could fire, so clicking "+ Comment" did nothing and reviewers could only leave
+  page-level comments via the compose box. The handler now ignores mouseup events
+  on its own UI. Verified end-to-end in a real browser (anchored `text_range`
+  comment confirmed).
+
 ## [1.1.2] — 2026-05-23
 
 ### Fixed
@@ -91,6 +102,7 @@ Initial CLI: publish HTML files as shareable links via Surge.sh.
 - `htmldrop delete <file>` — remove a file and redeploy.
 - `htmldrop open <file>` — open a published file in the browser.
 
+[1.1.3]: https://github.com/ooiyeefei/htmldrop/releases/tag/v1.1.3
 [1.1.2]: https://github.com/ooiyeefei/htmldrop/releases/tag/v1.1.2
 [1.1.1]: https://github.com/ooiyeefei/htmldrop/releases/tag/v1.1.1
 [1.1.0]: https://github.com/ooiyeefei/htmldrop/releases/tag/v1.1.0

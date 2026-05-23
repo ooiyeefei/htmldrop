@@ -224,10 +224,13 @@
 
   // Text selection → tooltip
   document.addEventListener('mouseup', (e) => {
+    // Bail BEFORE removing the tooltip when the mouseup is on our own UI.
+    // Otherwise clicking the "+ Comment" tooltip removes it during this mouseup,
+    // before its own click handler can fire — so the popover never opens.
+    if (e.target && (host.contains(e.target) || shadow.contains(e.target))) return;
     removeTooltip();
     const sel = window.getSelection();
     if (!sel || sel.isCollapsed || sel.toString().trim().length === 0) return;
-    if (e.target && (host.contains(e.target) || shadow.contains(e.target))) return;
 
     const range = sel.getRangeAt(0);
     const rect = range.getBoundingClientRect();
