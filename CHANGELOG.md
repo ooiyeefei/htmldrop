@@ -4,6 +4,32 @@ All notable changes to this project are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/), and this project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [1.2.0] — 2026-05-23
+
+### Added
+
+- **Multi-provider LLM support for `converge` and AI insights.** Anthropic,
+  OpenAI, and Gemini are all supported. The provider is **auto-detected from the
+  API key prefix** (`sk-ant-` → Anthropic, `AIza` → Gemini, `sk-` → OpenAI), with
+  optional explicit override.
+  - CLI: `htmldrop converge <file> [--provider <p>] [--model <m>] [--api-key <k>]`.
+    Key is read from `LLM_API_KEY` / `ANTHROPIC_API_KEY` / `OPENAI_API_KEY` /
+    `GEMINI_API_KEY` if not passed.
+  - Dashboard Settings: paste any provider's key (provider shown as detected),
+    with a provider dropdown and model field to override.
+  - Sensible default models per provider (claude-sonnet-4-6 / gpt-4o /
+    gemini-2.0-flash), overridable with `--model` or the model field.
+
+### Changed
+
+- **Dropped the `@anthropic-ai/sdk` dependency.** `converge` now uses raw `fetch`,
+  which works uniformly across all providers and removes an optional peer dep.
+
+### Fixed
+
+- **`converge` strips Markdown code fences** from model output, so the written
+  `.converged.html` is valid HTML rather than starting with ` ```html `.
+
 ## [1.1.4] — 2026-05-23
 
 ### Fixed
@@ -112,6 +138,7 @@ Initial CLI: publish HTML files as shareable links via Surge.sh.
 - `htmldrop delete <file>` — remove a file and redeploy.
 - `htmldrop open <file>` — open a published file in the browser.
 
+[1.2.0]: https://github.com/ooiyeefei/htmldrop/releases/tag/v1.2.0
 [1.1.4]: https://github.com/ooiyeefei/htmldrop/releases/tag/v1.1.4
 [1.1.3]: https://github.com/ooiyeefei/htmldrop/releases/tag/v1.1.3
 [1.1.2]: https://github.com/ooiyeefei/htmldrop/releases/tag/v1.1.2

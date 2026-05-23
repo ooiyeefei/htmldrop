@@ -1,6 +1,7 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 import { resolve, basename, dirname, join } from 'node:path';
 import { feedbackPull } from './pull.js';
+import { callLLM, detectProvider, DEFAULT_MODELS } from './llm.js';
 
 const SYSTEM_PROMPT = `You are an expert HTML document editor. You receive an original HTML document and feedback from multiple reviewers. Your job is to produce an improved version of the HTML.
 
@@ -50,41 +51,43 @@ export async function converge(file, options = {}) {
     return;
   }
 
-  // Dynamic import of Anthropic SDK
-  let Anthropic;
-  try {
-    const sdk = await import('@anthropic-ai/sdk');
-    Anthropic = sdk.default || sdk.Anthropic;
-  } catch {
+  // Resolve API key (any provider) + provider/model (auto-detect, overridable)
+  const apiKey = options.apiKey
+    || process.env.LLM_API_KEY
+    || process.env.ANTHROPIC_API_KEY
+    || process.env.OPENAI_API_KEY
+    || process.env.GEMINI_API_KEY;
+
+  if (!apiKey) {
     throw new Error(
-      'The @anthropic-ai/sdk package is required for converge.\n' +
-      'Install it: npm install @anthropic-ai/sdk\n' +
-      'Set your API key: export ANTHROPIC_API_KEY=sk-...'
+      'No API key found. Set one of LLM_API_KEY / ANTHROPIC_API_KEY / OPENAI_API_KEY / GEMINI_API_KEY,\n' +
+      'or pass --api-key. Anthropic: https://console.anthropic.com/settings/keys'
     );
   }
 
-  if (!process.env.ANTHROPIC_API_KEY) {
-    throw new Error(
-      'ANTHROPIC_API_KEY environment variable is required.\n' +
-      'Get one at: https://console.anthropic.com/settings/keys'
-    );
-  }
+  const provider = options.provider || detectProvider(apiKey);
+  const model = options.model || (provider ? DEFAULT_MODELS[provider] : undefined);
+  console.log(`Synthesizing feedback via ${provider || 'auto-detect'}${model ? ` (${model})` : ''}...`);
 
-  const client = new Anthropic();
-  console.log('Calling Claude to synthesize feedback...');
-
-  const response = await client.messages.create({
-    model: 'claude-sonnet-4-6-20250514',
-    max_tokens: 16000,
+  let revisedHtml = await callLLM({
+    apiKey,
+    provider: options.provider,
+    model: options.model,
     system: SYSTEM_PROMPT,
-    messages: [{ role: 'user', content: userPrompt }],
+    user: userPrompt,
+    maxTokens: 16000,
   });
 
-  const revisedHtml = response.content[0]?.text || '';
-
   if (!revisedHtml) {
-    throw new Error('Claude returned an empty response.');
+    throw new Error('The model returned an empty response.');
   }
+
+  // Models sometimes wrap the HTML in a ```html ... ``` fence despite instructions.
+  // Strip it so the output file is valid HTML, not literal backticks.
+  revisedHtml = revisedHtml.trim()
+    .replace(/^```(?:html)?\s*\n?/i, '')
+    .replace(/\n?```\s*$/, '')
+    .trim();
 
   // Write the converged output
   const outputPath = join(dirname(filePath), `${basename(filename, '.html')}.converged.html`);

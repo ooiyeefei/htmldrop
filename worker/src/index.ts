@@ -3,6 +3,7 @@ import { type Env, getFeedback, addFeedback, deleteFeedback, storeDocUrl, getDoc
 import { checkRateLimit, incrementRateLimit } from './rate-limit';
 import { isAuthorOfDoc, registerAuthorKey, getAuthorDocs } from './auth';
 import { getProtectedResourceMetadata, getAuthServerMetadata, handleAgentAuth, handleAgentRevoke } from './agent-auth';
+import { callLLM } from './llm';
 import DASHBOARD_HTML from './dashboard.html';
 import WIDGET_HTML from './annotation-widget.html';
 
@@ -284,16 +285,19 @@ async function handleInsights(request: Request, env: Env, docId: string, headers
     segment?: { title: string; items: FeedbackStored[] };
     segmentIndex?: number;
     references?: string[];
+    apiKey?: string;
     anthropicKey?: string;
+    provider?: string;
+    model?: string;
   } | null;
   if (!body?.segment) return json({ error: 'Segment required' }, 400, headers);
 
-  const anthropicKey = body.anthropicKey || env.ANTHROPIC_API_KEY;
-  if (!anthropicKey) {
-    return json({ error: 'API key required. Add your Anthropic API key in Settings.' }, 400, headers);
+  const apiKey = body.apiKey || body.anthropicKey || env.ANTHROPIC_API_KEY;
+  if (!apiKey) {
+    return json({ error: 'API key required. Add an LLM API key in Settings.' }, 400, headers);
   }
 
-  const points = await generateInsights(anthropicKey, body.segment, body.references || []);
+  const points = await generateInsights(apiKey, body.provider, body.model, body.segment, body.references || []);
 
   // Persist insights in KV
   const segmentIdx = body.segmentIndex ?? 0;
@@ -368,16 +372,19 @@ async function handleConverge(request: Request, env: Env, docId: string, headers
     segment?: { title: string; items: FeedbackStored[] };
     insight?: { points?: { text: string; source?: string }[] };
     references?: string[];
+    apiKey?: string;
     anthropicKey?: string;
+    provider?: string;
+    model?: string;
   } | null;
   if (!body?.segment) return json({ error: 'Segment required' }, 400, headers);
 
-  const anthropicKey = body.anthropicKey || env.ANTHROPIC_API_KEY;
-  if (!anthropicKey) {
-    return json({ error: 'API key required. Add your Anthropic API key in Settings.' }, 400, headers);
+  const apiKey = body.apiKey || body.anthropicKey || env.ANTHROPIC_API_KEY;
+  if (!apiKey) {
+    return json({ error: 'API key required. Add an LLM API key in Settings.' }, 400, headers);
   }
 
-  const suggestion = await generateConvergence(anthropicKey, body.segment, body.insight, body.references || []);
+  const suggestion = await generateConvergence(apiKey, body.provider, body.model, body.segment, body.insight, body.references || []);
   return json({ suggestion }, 200, headers);
 }
 
@@ -410,6 +417,8 @@ function clusterSegments(items: FeedbackStored[]): Segment[] {
 
 async function generateInsights(
   apiKey: string,
+  provider: string | undefined,
+  model: string | undefined,
   segment: { title: string; items: FeedbackStored[] },
   references: string[]
 ): Promise<{ text: string; source?: string }[]> {
@@ -421,9 +430,8 @@ async function generateInsights(
     ? `\n\nReference URLs provided by the author (consider these as authoritative sources):\n${references.join('\n')}`
     : '';
 
-  const prompt = `You are a neutral research assistant facilitating a document review discussion.
-
-The reviewers are discussing this segment: "${segment.title}"
+  const system = 'You are a neutral research assistant facilitating a document review discussion. Respond ONLY with the requested JSON array, no prose.';
+  const user = `The reviewers are discussing this segment: "${segment.title}"
 
 Their comments:
 ${feedbackSummary}
@@ -436,26 +444,12 @@ Provide 2-4 factual, evidence-backed insights that help both sides understand th
 
 Respond as JSON array: [{"text": "insight text", "source": "source reference"}]`;
 
-  const response = await fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-api-key': apiKey,
-      'anthropic-version': '2023-06-01',
-    },
-    body: JSON.stringify({
-      model: 'claude-sonnet-4-6-20250514',
-      max_tokens: 2000,
-      messages: [{ role: 'user', content: prompt }],
-    }),
-  });
-
-  if (!response.ok) {
-    return [{ text: 'Failed to generate insights', source: undefined }];
+  let text: string;
+  try {
+    text = await callLLM({ apiKey, provider, model, system, user, maxTokens: 2000 });
+  } catch (err) {
+    return [{ text: err instanceof Error ? err.message : 'Failed to generate insights', source: undefined }];
   }
-
-  const data = await response.json() as { content: { text: string }[] };
-  const text = data.content?.[0]?.text || '[]';
 
   try {
     const jsonMatch = text.match(/\[[\s\S]*\]/);
@@ -467,6 +461,8 @@ Respond as JSON array: [{"text": "insight text", "source": "source reference"}]`
 
 async function generateConvergence(
   apiKey: string,
+  provider: string | undefined,
+  model: string | undefined,
   segment: { title: string; items: FeedbackStored[] },
   insight: { points?: { text: string; source?: string }[] } | undefined,
   references: string[]
@@ -483,7 +479,8 @@ async function generateConvergence(
     ? `\nAuthor references: ${references.join(', ')}`
     : '';
 
-  const prompt = `You are synthesizing reviewer feedback on this document segment: "${segment.title}"
+  const system = 'You synthesize reviewer feedback into a brief, actionable revision recommendation.';
+  const user = `Document segment: "${segment.title}"
 
 Reviewer comments:
 ${feedbackSummary}
@@ -492,24 +489,11 @@ ${refContext}
 
 Based on all feedback and evidence, provide a brief (2-3 sentence) recommendation for how this segment should be revised. Be specific and actionable. If reviewers agree, state the consensus. If they disagree, recommend the approach best supported by evidence.`;
 
-  const response = await fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-api-key': apiKey,
-      'anthropic-version': '2023-06-01',
-    },
-    body: JSON.stringify({
-      model: 'claude-sonnet-4-6-20250514',
-      max_tokens: 1000,
-      messages: [{ role: 'user', content: prompt }],
-    }),
-  });
-
-  if (!response.ok) return 'Failed to generate convergence suggestion';
-
-  const data = await response.json() as { content: { text: string }[] };
-  return data.content?.[0]?.text || 'No suggestion generated';
+  try {
+    return await callLLM({ apiKey, provider, model, system, user, maxTokens: 1000 }) || 'No suggestion generated';
+  } catch (err) {
+    return err instanceof Error ? err.message : 'Failed to generate convergence suggestion';
+  }
 }
 
 function json(data: unknown, status: number, extraHeaders: Record<string, string>): Response {

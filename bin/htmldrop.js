@@ -152,6 +152,9 @@ program
   .command('converge <file>')
   .description('Synthesize reviewer feedback into an improved HTML version via AI')
   .option('--dry-run', 'Show the prompt without calling the LLM')
+  .option('--provider <provider>', 'LLM provider: anthropic | openai | gemini (auto-detected from key if omitted)')
+  .option('--model <model>', 'Model id (defaults to a sensible model for the provider)')
+  .option('--api-key <key>', 'API key (otherwise read from LLM_API_KEY / ANTHROPIC_API_KEY / OPENAI_API_KEY / GEMINI_API_KEY)')
   .action(async (file, options) => {
     try {
       await converge(file, options);

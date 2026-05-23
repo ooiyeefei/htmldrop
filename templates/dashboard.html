@@ -266,11 +266,22 @@
   (function() {
     const app = document.getElementById('app');
     const DEFAULT_WORKER_URL = 'https://htmldrop-feedback.htmldrop.workers.dev';
+    const DEFAULT_MODELS = { anthropic: 'claude-sonnet-4-6', openai: 'gpt-4o', gemini: 'gemini-2.0-flash' };
+
+    function detectProvider(key) {
+      if (!key) return null;
+      if (key.startsWith('sk-ant-')) return 'anthropic';
+      if (key.startsWith('AIza')) return 'gemini';
+      if (key.startsWith('sk-')) return 'openai';
+      return null;
+    }
 
     let state = {
       workerUrl: DEFAULT_WORKER_URL,
       authorKey: '',
       anthropicKey: '',
+      llmProvider: '',
+      llmModel: '',
       currentDocId: '',
       page: 'home',
       files: [],
@@ -299,6 +310,8 @@
 
       const savedAnthropicKey = sessionStorage.getItem('htmldrop_anthropic_key');
       if (savedAnthropicKey) state.anthropicKey = savedAnthropicKey;
+      state.llmProvider = localStorage.getItem('htmldrop_llm_provider') || '';
+      state.llmModel = localStorage.getItem('htmldrop_llm_model') || '';
 
       if (state.currentDocId) {
         loadFeedback(state.currentDocId);
@@ -487,34 +500,77 @@
       h3.textContent = 'Settings';
       panel.appendChild(h3);
 
-      // Anthropic API Key
+      // LLM API Key (any provider)
       var aiRow = document.createElement('div');
       aiRow.className = 'setting-row';
       var aiLabel = document.createElement('div');
       aiLabel.className = 'setting-label';
-      aiLabel.textContent = 'Anthropic API Key (for AI Insights & Converge)';
+      aiLabel.textContent = 'LLM API Key (for AI Insights & Converge)';
       var aiDesc = document.createElement('div');
       aiDesc.className = 'setting-desc';
-      aiDesc.textContent = 'Stored in session memory only. Cleared when you close the browser.';
+      aiDesc.textContent = 'Anthropic, OpenAI, or Gemini — provider auto-detected from the key. Stored in session memory only, cleared when you close the browser.';
       var aiInput = document.createElement('input');
       aiInput.className = 'setting-input';
       aiInput.type = 'password';
-      aiInput.placeholder = 'sk-ant-...';
+      aiInput.placeholder = 'sk-ant-… / sk-… / AIza…';
       aiInput.value = state.anthropicKey || '';
       var aiSaved = document.createElement('span');
       aiSaved.className = 'setting-saved';
       aiSaved.textContent = 'Saved';
+
+      // Detected-provider indicator
+      var detected = document.createElement('div');
+      detected.className = 'setting-desc';
+      detected.style.marginTop = '6px';
+      function refreshDetected() {
+        var auto = detectProvider(state.anthropicKey);
+        var eff = state.llmProvider || auto;
+        detected.textContent = state.anthropicKey
+          ? (eff ? ('Provider: ' + eff + (state.llmProvider ? ' (override)' : ' (auto-detected)') + ' · model: ' + (state.llmModel || DEFAULT_MODELS[eff] || 'default')) : 'Provider: unknown — set it below')
+          : '';
+      }
+
       aiInput.addEventListener('change', function() {
         state.anthropicKey = aiInput.value.trim();
-        if (state.anthropicKey) {
-          sessionStorage.setItem('htmldrop_anthropic_key', state.anthropicKey);
-        } else {
-          sessionStorage.removeItem('htmldrop_anthropic_key');
-        }
+        if (state.anthropicKey) sessionStorage.setItem('htmldrop_anthropic_key', state.anthropicKey);
+        else sessionStorage.removeItem('htmldrop_anthropic_key');
         aiSaved.classList.add('show');
         setTimeout(function() { aiSaved.classList.remove('show'); }, 2000);
+        refreshDetected();
       });
-      aiRow.append(aiLabel, aiDesc, aiInput, aiSaved);
+
+      // Provider override
+      var provSelect = document.createElement('select');
+      provSelect.className = 'setting-input';
+      provSelect.style.marginTop = '8px';
+      [['', 'Auto-detect from key'], ['anthropic', 'Anthropic'], ['openai', 'OpenAI'], ['gemini', 'Gemini']].forEach(function(o) {
+        var opt = document.createElement('option');
+        opt.value = o[0]; opt.textContent = o[1];
+        if (o[0] === state.llmProvider) opt.selected = true;
+        provSelect.appendChild(opt);
+      });
+      provSelect.addEventListener('change', function() {
+        state.llmProvider = provSelect.value;
+        if (state.llmProvider) localStorage.setItem('htmldrop_llm_provider', state.llmProvider);
+        else localStorage.removeItem('htmldrop_llm_provider');
+        refreshDetected();
+      });
+
+      // Model override
+      var modelInput = document.createElement('input');
+      modelInput.className = 'setting-input';
+      modelInput.style.marginTop = '8px';
+      modelInput.placeholder = 'Model (optional — leave blank for provider default)';
+      modelInput.value = state.llmModel || '';
+      modelInput.addEventListener('change', function() {
+        state.llmModel = modelInput.value.trim();
+        if (state.llmModel) localStorage.setItem('htmldrop_llm_model', state.llmModel);
+        else localStorage.removeItem('htmldrop_llm_model');
+        refreshDetected();
+      });
+
+      refreshDetected();
+      aiRow.append(aiLabel, aiDesc, aiInput, aiSaved, detected, provSelect, modelInput);
       panel.appendChild(aiRow);
 
       // Worker URL
@@ -1054,7 +1110,7 @@
     // --- AI actions ---
     async function getInsights(segIdx) {
       if (!state.anthropicKey) {
-        alert('Add your Anthropic API key in Settings to use AI features.');
+        alert('Add an LLM API key (Anthropic, OpenAI, or Gemini) in Settings to use AI features.');
         stopPolling();
         state.page = 'settings';
         renderSettingsPage();
@@ -1075,7 +1131,9 @@
           body: JSON.stringify({
             segment: seg,
             references: state.references,
-            anthropicKey: state.anthropicKey,
+            apiKey: state.anthropicKey,
+            provider: state.llmProvider || undefined,
+            model: state.llmModel || undefined,
           }),
         });
         if (res.ok) {
@@ -1092,7 +1150,7 @@
 
     async function convergeSegment(segIdx) {
       if (!state.anthropicKey) {
-        alert('Add your Anthropic API key in Settings to use AI features.');
+        alert('Add an LLM API key (Anthropic, OpenAI, or Gemini) in Settings to use AI features.');
         stopPolling();
         state.page = 'settings';
         renderSettingsPage();
@@ -1112,7 +1170,9 @@
             segment: seg,
             insight: insight,
             references: state.references,
-            anthropicKey: state.anthropicKey,
+            apiKey: state.anthropicKey,
+            provider: state.llmProvider || undefined,
+            model: state.llmModel || undefined,
           }),
         });
         if (res.ok) {
@@ -1126,7 +1186,7 @@
 
     async function convergeAll() {
       if (!state.anthropicKey) {
-        alert('Add your Anthropic API key in Settings to use AI features.');
+        alert('Add an LLM API key (Anthropic, OpenAI, or Gemini) in Settings to use AI features.');
         return;
       }
       for (var i = 0; i < state.segments.length; i++) {

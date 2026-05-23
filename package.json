@@ -1,6 +1,6 @@
 {
   "name": "@yeefeiooi/htmldrop",
-  "version": "1.1.4",
+  "version": "1.2.0",
   "description": "Publish HTML files and get shareable links via Surge.sh",
   "type": "module",
   "publishConfig": {
@@ -40,14 +40,10 @@
     "open": "^10.1.0"
   },
   "peerDependencies": {
-    "@anthropic-ai/sdk": ">=0.30.0",
     "surge": ">=0.23.0"
   },
   "peerDependenciesMeta": {
     "surge": {
-      "optional": true
-    },
-    "@anthropic-ai/sdk": {
       "optional": true
     }
   }
