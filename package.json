@@ -9,6 +9,11 @@
   "exports": {
     ".": "./src/index.js"
   },
+  "files": [
+    "bin/",
+    "src/",
+    "templates/"
+  ],
   "engines": {
     "node": ">=18"
   },
