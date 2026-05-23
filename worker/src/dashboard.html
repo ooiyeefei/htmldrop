@@ -310,10 +310,9 @@
       }
     }
 
-    // --- Polling ---
+    // --- Polling (disabled — use manual refresh) ---
     function startPolling() {
-      stopPolling();
-      state.pollTimer = setInterval(function() { pollNewFeedback(); }, 30000);
+      // No-op: polling disabled to conserve KV free tier
     }
 
     function stopPolling() {

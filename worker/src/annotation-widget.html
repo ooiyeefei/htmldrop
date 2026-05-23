@@ -136,6 +136,7 @@
       animation: hd-pop 0.1s ease;
     }
     @keyframes hd-pop { from { opacity:0; transform: translateY(2px); } to { opacity:1; transform: translateY(0); } }
+    @keyframes spin { to { transform: rotate(360deg); } }
     .hd-tooltip::after {
       content:''; position:absolute; top:-4px; left:50%; transform:translateX(-50%);
       border-left: 4px solid transparent; border-right: 4px solid transparent;
@@ -379,11 +380,19 @@
     const topLevel = comments.filter(c => !c.parentId);
     count.textContent = topLevel.length ? String(topLevel.length) : '';
     titleWrap.append(title, count);
+    const headerBtns = document.createElement('div');
+    headerBtns.style.cssText = 'display:flex;gap:4px;';
+    const refreshBtn = document.createElement('button');
+    refreshBtn.className = 'hd-close';
+    refreshBtn.textContent = '↻';
+    refreshBtn.title = 'Refresh comments';
+    refreshBtn.addEventListener('click', () => { refreshBtn.style.animation = 'spin 0.5s'; loadComments(); loadInsights(); setTimeout(() => refreshBtn.style.animation = '', 600); });
     const closeBtn = document.createElement('button');
     closeBtn.className = 'hd-close';
     closeBtn.textContent = '×';
     closeBtn.addEventListener('click', togglePanel);
-    header.append(titleWrap, closeBtn);
+    headerBtns.append(refreshBtn, closeBtn);
+    header.append(titleWrap, headerBtns);
     panel.appendChild(header);
 
     // Comment list
@@ -606,9 +615,8 @@
     return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
   }
 
-  // Initial load + polling (30s to conserve KV free tier)
+  // Initial load only — use ↻ button to refresh manually
   loadComments();
   loadInsights();
-  setInterval(loadComments, 30000);
 })();
 </script>
