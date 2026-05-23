@@ -354,7 +354,6 @@
       renderPanel();
       highlightAnchors();
     } catch(e) { comments = []; renderPanel(); }
-    loadInsights();
   }
 
   async function loadInsights() {
@@ -607,8 +606,9 @@
     return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
   }
 
-  // Initial load + polling
+  // Initial load + polling (30s to conserve KV free tier)
   loadComments();
-  setInterval(loadComments, 10000);
+  loadInsights();
+  setInterval(loadComments, 30000);
 })();
 </script>

@@ -313,7 +313,7 @@
     // --- Polling ---
     function startPolling() {
       stopPolling();
-      state.pollTimer = setInterval(function() { pollNewFeedback(); }, 10000);
+      state.pollTimer = setInterval(function() { pollNewFeedback(); }, 30000);
     }
 
     function stopPolling() {
