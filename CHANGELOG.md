@@ -4,6 +4,17 @@ All notable changes to this project are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/), and this project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [1.2.1] — 2026-05-23
+
+### Changed
+
+- **Updated default models** (verified against provider docs) for a cost/quality
+  balance: OpenAI `gpt-5.4-mini` and Gemini `gemini-3.1-flash-lite` (Anthropic
+  stays `claude-sonnet-4-6`). Override any of them with `--model` / the model field.
+  - Fixes an invalid placeholder: `gemini-3.1-flash` does not exist (the 3.1
+    family is flash-lite / pro), which would have 404'd on every Gemini call.
+  - For maximum converge quality on OpenAI, override with `--model gpt-5.4`.
+
 ## [1.2.0] — 2026-05-23
 
 ### Added
@@ -138,6 +149,7 @@ Initial CLI: publish HTML files as shareable links via Surge.sh.
 - `htmldrop delete <file>` — remove a file and redeploy.
 - `htmldrop open <file>` — open a published file in the browser.
 
+[1.2.1]: https://github.com/ooiyeefei/htmldrop/releases/tag/v1.2.1
 [1.2.0]: https://github.com/ooiyeefei/htmldrop/releases/tag/v1.2.0
 [1.1.4]: https://github.com/ooiyeefei/htmldrop/releases/tag/v1.1.4
 [1.1.3]: https://github.com/ooiyeefei/htmldrop/releases/tag/v1.1.3

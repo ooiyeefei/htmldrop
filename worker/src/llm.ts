@@ -5,8 +5,8 @@ export type Provider = 'anthropic' | 'openai' | 'gemini';
 
 export const DEFAULT_MODELS: Record<Provider, string> = {
   anthropic: 'claude-sonnet-4-6',
-  openai: 'gpt-4o',
-  gemini: 'gemini-2.0-flash',
+  openai: 'gpt-5.4-mini',
+  gemini: 'gemini-3.1-flash-lite',
 };
 
 export function detectProvider(key: string | undefined): Provider | null {
