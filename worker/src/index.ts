@@ -2,6 +2,7 @@ import { FeedbackItemSchema, type FeedbackStored } from './schema';
 import { type Env, getFeedback, addFeedback, deleteFeedback, storeDocUrl, getDocUrl, storeDocContent, getDocContent, storeInsight, getInsights, type StoredInsight } from './storage';
 import { checkRateLimit, incrementRateLimit } from './rate-limit';
 import { isAuthorOfDoc, registerAuthorKey, getAuthorDocs } from './auth';
+import { getProtectedResourceMetadata, getAuthServerMetadata, handleAgentAuth, handleAgentRevoke } from './agent-auth';
 import DASHBOARD_HTML from './dashboard.html';
 import WIDGET_HTML from './annotation-widget.html';
 
@@ -24,6 +25,32 @@ export default {
       // Favicon — prevent 404 noise
       if (path === '/favicon.ico') {
         return new Response(null, { status: 204 });
+      }
+
+      const baseUrl = url.origin;
+
+      // auth.md discovery: Protected Resource Metadata (RFC 9728)
+      if (path === '/.well-known/oauth-protected-resource' && request.method === 'GET') {
+        return new Response(JSON.stringify(getProtectedResourceMetadata(baseUrl + '/', baseUrl)), {
+          headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
+        });
+      }
+
+      // auth.md discovery: Authorization Server Metadata
+      if (path === '/.well-known/oauth-authorization-server' && request.method === 'GET') {
+        return new Response(JSON.stringify(getAuthServerMetadata(baseUrl + '/', baseUrl)), {
+          headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
+        });
+      }
+
+      // auth.md: Agent registration / credential exchange
+      if (path === '/agent/auth' && request.method === 'POST') {
+        return handleAgentAuth(request, env, baseUrl);
+      }
+
+      // auth.md: Agent revocation
+      if (path === '/agent/auth/revoke' && request.method === 'POST') {
+        return handleAgentRevoke(request, env);
       }
 
       // Serve dashboard at root
