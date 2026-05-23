@@ -68,6 +68,7 @@ export async function push(file, options = {}) {
   let docId = null;
   let feedbackAuthorKey = null;
   let feedbackWorkerUrl = null;
+  let feedbackCleanContent = null;
   if (options.feedback && !isEncrypted) {
     feedbackAuthorKey = getAuthorKey();
     feedbackWorkerUrl = options.workerUrl || DEFAULT_WORKER_URL;
@@ -83,6 +84,9 @@ export async function push(file, options = {}) {
       console.log(`Feedback enabled for ${filename} (docId: ${docId.slice(0, 8)}...)`);
     }
 
+    // Keep a clean copy (no widget) for the Worker — it injects its own widget
+    // at serve time. Uploading the widget-injected copy would double-inject.
+    feedbackCleanContent = content;
     content = injectFeedbackWidget(content, { docId, workerUrl: feedbackWorkerUrl });
   }
 
@@ -169,7 +173,7 @@ export async function push(file, options = {}) {
           'Authorization': `Bearer ${feedbackAuthorKey}`,
           'Content-Type': 'text/html',
         },
-        body: content,
+        body: feedbackCleanContent || content,
       });
       console.log(`Document available at: ${feedbackWorkerUrl}/doc/${docId}`);
     } catch {

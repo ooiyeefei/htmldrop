@@ -232,15 +232,19 @@
     const range = sel.getRangeAt(0);
     const rect = range.getBoundingClientRect();
 
+    // Capture the selection NOW. Clicking the tooltip clears the page's text
+    // selection, so reading window.getSelection() later returns empty — which
+    // is why anchored comments were silently falling back to page-level.
+    const selectedText = sel.toString().trim().slice(0, 2000);
+    const node = sel.anchorNode && sel.anchorNode.parentElement;
+    const selector = node ? buildSelector(node) : '';
+
     tooltip = document.createElement('div');
     tooltip.className = 'hd-tooltip';
     tooltip.textContent = '+ Comment';
     tooltip.style.left = (rect.left + rect.width / 2 - 40) + 'px';
     tooltip.style.top = (rect.bottom + window.scrollY + 8) + 'px';
     tooltip.addEventListener('click', () => {
-      const selectedText = sel.toString().trim().slice(0, 2000);
-      const node = sel.anchorNode && sel.anchorNode.parentElement;
-      const selector = node ? buildSelector(node) : '';
       removeTooltip();
       showPopover(rect, selectedText, selector);
     });

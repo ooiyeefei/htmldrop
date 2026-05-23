@@ -4,6 +4,19 @@ All notable changes to this project are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/), and this project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [1.1.2] — 2026-05-23
+
+### Fixed
+
+- **Anchored comments now capture the selected text.** The annotation widget
+  read the selection inside the tooltip click handler, but clicking the tooltip
+  clears the page selection — so comments silently fell back to page-level.
+  The selection is now captured at `mouseup`.
+- **No more double-injected widget.** `push --feedback` uploaded the
+  widget-injected HTML to the Worker, which then injected its own widget again
+  (two panels, two sets of handlers). The CLI now uploads clean content; the
+  Worker is the single injector for the `/doc/<id>` URL.
+
 ## [1.1.1] — 2026-05-23
 
 ### Fixed
@@ -78,6 +91,7 @@ Initial CLI: publish HTML files as shareable links via Surge.sh.
 - `htmldrop delete <file>` — remove a file and redeploy.
 - `htmldrop open <file>` — open a published file in the browser.
 
+[1.1.2]: https://github.com/ooiyeefei/htmldrop/releases/tag/v1.1.2
 [1.1.1]: https://github.com/ooiyeefei/htmldrop/releases/tag/v1.1.1
 [1.1.0]: https://github.com/ooiyeefei/htmldrop/releases/tag/v1.1.0
 [1.0.0]: https://github.com/ooiyeefei/htmldrop/releases/tag/v1.0.0
