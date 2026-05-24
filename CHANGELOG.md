@@ -4,6 +4,19 @@ All notable changes to this project are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/), and this project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [1.4.0] — 2026-05-24
+
+### Added
+
+- **Drag-to-annotate an area.** The widget now has an ▢ toggle in the panel
+  header: click it, then drag a rectangle over any region of the document to
+  comment on that area (like a design-review tool) — useful for images, layouts,
+  or anything that isn't a clean text run. The box is stored as percentages of
+  the document so it re-renders at the same spot on any screen, and clicking a
+  box ↔ its comment scrolls/flashes both ways. Anchors use the `element_rect`
+  type (a `rect` field was added to the feedback schema). Verified end-to-end
+  with Playwright: drawn box persists and re-renders at the exact coordinates.
+
 ## [1.3.2] — 2026-05-24
 
 ### Fixed
@@ -202,6 +215,7 @@ Initial CLI: publish HTML files as shareable links via Surge.sh.
 - `htmldrop delete <file>` — remove a file and redeploy.
 - `htmldrop open <file>` — open a published file in the browser.
 
+[1.4.0]: https://github.com/ooiyeefei/htmldrop/releases/tag/v1.4.0
 [1.3.2]: https://github.com/ooiyeefei/htmldrop/releases/tag/v1.3.2
 [1.3.1]: https://github.com/ooiyeefei/htmldrop/releases/tag/v1.3.1
 [1.3.0]: https://github.com/ooiyeefei/htmldrop/releases/tag/v1.3.0

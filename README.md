@@ -110,7 +110,7 @@ That single URL is for everyone — reviewers and you.
 
 **C2. Reviewers comment (in the browser)**
 
-Share the Feedback URL. A reviewer opens it, selects text, clicks the **“+ Comment”** tooltip, and leaves a comment anchored to that text — no account, no login. They can also leave page-level comments and reply to others. New comments appear via the panel’s refresh button.
+Share the Feedback URL. A reviewer opens it, selects text, clicks the **“+ Comment”** tooltip, and leaves a comment anchored to that text — no account, no login. They can also: **drag a box over an area** (the **▢** toggle in the panel) to comment on a region — images, layouts, anything that isn't a clean text run; leave page-level comments; and reply to others. New comments appear via the panel’s refresh button.
 
 **C3. Read the feedback from the CLI**
 

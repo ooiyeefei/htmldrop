@@ -5,14 +5,32 @@
   if (!configEl) return;
   const config = JSON.parse(configEl.textContent);
 
-  // Inject highlight styles into document head (light DOM)
+  // Inject highlight + area-box styles into document head (light DOM)
   const docStyle = document.createElement('style');
   docStyle.textContent = `
     mark.hd-hl { background: #e0e7ff; border-bottom: 2px solid #6366f1; border-radius: 2px; padding: 0 1px; cursor: pointer; transition: background 0.2s, box-shadow 0.2s; }
     mark.hd-hl:hover { background: #c7d2fe; }
     mark.hd-hl.flash { background: #a5b4fc; box-shadow: 0 0 0 3px rgba(99,102,241,0.25); }
+    body.hd-area-mode { cursor: crosshair; }
+    body.hd-area-mode, body.hd-area-mode * { user-select: none !important; }
+    .hd-area-overlay { position: absolute; top: 0; left: 0; pointer-events: none; z-index: 999970; }
+    .hd-area-box { position: absolute; border: 2px solid #6366f1; background: rgba(99,102,241,0.10); border-radius: 4px; pointer-events: auto; cursor: pointer; transition: box-shadow 0.2s, background 0.2s; }
+    .hd-area-box:hover { background: rgba(99,102,241,0.18); }
+    .hd-area-box.flash { box-shadow: 0 0 0 3px rgba(99,102,241,0.35); background: rgba(99,102,241,0.22); }
+    .hd-area-draw { position: absolute; border: 2px dashed #6366f1; background: rgba(99,102,241,0.08); border-radius: 4px; pointer-events: none; z-index: 999971; }
   `;
   document.head.appendChild(docStyle);
+
+  // Light-DOM overlay that holds area-annotation boxes, sized to the full document.
+  const areaOverlay = document.createElement('div');
+  areaOverlay.className = 'hd-area-overlay';
+  document.body.appendChild(areaOverlay);
+  function sizeAreaOverlay() {
+    const d = document.documentElement;
+    areaOverlay.style.width = d.scrollWidth + 'px';
+    areaOverlay.style.height = d.scrollHeight + 'px';
+  }
+  window.addEventListener('resize', () => { sizeAreaOverlay(); renderAreaBoxes(); });
 
   // Widget host (Shadow DOM for panel isolation)
   const host = document.createElement('div');
@@ -47,6 +65,9 @@
       cursor: pointer; color: #9ca3af; font-size: 16px; transition: all 0.15s;
     }
     .hd-close:hover { background: #f3f4f6; color: #374151; }
+    .hd-close.hd-toggle-on { background: #6366f1; color: #fff; }
+    .hd-close.hd-toggle-on:hover { background: #4f46e5; color: #fff; }
+    .hd-area-tag { display: inline-block; margin-top: 6px; margin-left: 34px; padding: 2px 8px; background: #eef2ff; color: #4f46e5; border-radius: 4px; font-size: 11px; font-weight: 500; }
     .hd-list { flex: 1; overflow-y: auto; padding: 12px 0; }
     .hd-comment {
       padding: 14px 20px; cursor: pointer;
@@ -234,6 +255,7 @@
   let panelOpen = true;
   let activePopover = null;
   let tooltip = null;
+  let areaMode = false;
   let userName = localStorage.getItem('htmldrop_reviewer_name') || '';
 
   // Detect mobile (panel layout changes)
@@ -304,6 +326,7 @@
 
   // Desktop: mouseup
   document.addEventListener('mouseup', (e) => {
+    if (areaMode) return;
     if (e.target && (host.contains(e.target) || shadow.contains(e.target))) return;
     removeTooltip();
     tryShowTooltip();
@@ -321,20 +344,24 @@
   });
 
   document.addEventListener('mousedown', (e) => {
+    if (areaMode) return;
     if (e.target && (host.contains(e.target) || shadow.contains(e.target))) return;
     removeTooltip();
     removePopover();
   });
 
+  let areaToggleBtn = null;
   function removeTooltip() { if (tooltip) { tooltip.remove(); tooltip = null; } }
   function removePopover() { if (activePopover) { activePopover.remove(); activePopover = null; } }
 
-  function showPopover(anchorRect, selectedText, selector) {
+  // Shared comment popover. `left`/`top` are page coordinates; `onSubmit(text)`
+  // runs when the user clicks Comment.
+  function openPopover(left, top, onSubmit) {
     removePopover();
     const popover = document.createElement('div');
     popover.className = 'hd-popover';
-    popover.style.left = Math.min(anchorRect.left, window.innerWidth - 340) + 'px';
-    popover.style.top = (anchorRect.bottom + window.scrollY + 12) + 'px';
+    popover.style.left = Math.min(left, window.innerWidth - 340) + 'px';
+    popover.style.top = top + 'px';
 
     const body = document.createElement('div');
     body.className = 'hd-popover-body';
@@ -357,7 +384,7 @@
       if (!text) return;
       submitBtn.disabled = true;
       submitBtn.textContent = '...';
-      await submitComment(selectedText, selector, text);
+      await onSubmit(text);
       removePopover();
     });
     actions.append(cancelBtn, submitBtn);
@@ -366,6 +393,16 @@
     shadow.appendChild(popover);
     activePopover = popover;
     setTimeout(() => textarea.focus(), 50);
+  }
+
+  function showPopover(anchorRect, selectedText, selector) {
+    openPopover(anchorRect.left, anchorRect.bottom + window.scrollY + 12,
+      (text) => submitComment(selectedText, selector, text));
+  }
+
+  // Area popover anchored just below the drawn box (page coords).
+  function showAreaPopover(pageLeft, pageTop, pageH, rect) {
+    openPopover(pageLeft, pageTop + pageH + 12, (text) => submitAreaComment(rect, text));
   }
 
   async function submitComment(selectedText, selector, text) {
@@ -385,6 +422,72 @@
       await loadComments();
     } catch(e) { /* silent fail */ }
   }
+
+  async function submitAreaComment(rect, text) {
+    const name = userName || 'Anonymous';
+    const body = {
+      anchor: { type: 'element_rect', rect },
+      content: { type: 'text', text },
+      author: { displayName: name },
+      parentId: null,
+    };
+    try {
+      await fetch((config.workerUrl || '') + '/api/feedback/' + config.docId, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      await loadComments();
+    } catch(e) { /* silent fail */ }
+  }
+
+  // ---- Area annotation: drag a rectangle over the document ----
+  function setAreaMode(on) {
+    areaMode = on;
+    document.body.classList.toggle('hd-area-mode', on);
+    if (areaToggleBtn) areaToggleBtn.classList.toggle('hd-toggle-on', on);
+  }
+
+  let areaDrawing = false, areaStartX = 0, areaStartY = 0, areaDrawBox = null;
+  document.addEventListener('mousedown', (e) => {
+    if (!areaMode) return;
+    if (e.target && (host.contains(e.target) || shadow.contains(e.target))) return;
+    if (e.target && e.target.closest && e.target.closest('.hd-area-box')) return;
+    e.preventDefault();
+    areaDrawing = true;
+    areaStartX = e.pageX; areaStartY = e.pageY;
+    areaDrawBox = document.createElement('div');
+    areaDrawBox.className = 'hd-area-draw';
+    areaDrawBox.style.left = areaStartX + 'px';
+    areaDrawBox.style.top = areaStartY + 'px';
+    document.body.appendChild(areaDrawBox);
+  });
+  document.addEventListener('mousemove', (e) => {
+    if (!areaDrawing || !areaDrawBox) return;
+    const x = Math.min(e.pageX, areaStartX), y = Math.min(e.pageY, areaStartY);
+    const w = Math.abs(e.pageX - areaStartX), h = Math.abs(e.pageY - areaStartY);
+    areaDrawBox.style.left = x + 'px'; areaDrawBox.style.top = y + 'px';
+    areaDrawBox.style.width = w + 'px'; areaDrawBox.style.height = h + 'px';
+  });
+  document.addEventListener('mouseup', (e) => {
+    if (!areaDrawing) return;
+    areaDrawing = false;
+    const box = areaDrawBox; areaDrawBox = null;
+    if (!box) return;
+    const left = parseFloat(box.style.left) || 0, top = parseFloat(box.style.top) || 0;
+    const w = parseFloat(box.style.width) || 0, h = parseFloat(box.style.height) || 0;
+    box.remove();
+    if (w < 12 || h < 12) { setAreaMode(false); return; } // ignore stray clicks
+    const d = document.documentElement;
+    const rect = {
+      x: +(left / d.scrollWidth * 100).toFixed(3),
+      y: +(top / d.scrollHeight * 100).toFixed(3),
+      w: +(w / d.scrollWidth * 100).toFixed(3),
+      h: +(h / d.scrollHeight * 100).toFixed(3),
+    };
+    setAreaMode(false); // one box per activation
+    showAreaPopover(left, top, h, rect);
+  });
 
   async function submitReply(parentItem, replyText) {
     const name = userName || 'Anonymous';
@@ -427,7 +530,35 @@
       comments = data.items || [];
       renderPanel();
       highlightAnchors();
+      renderAreaBoxes();
     } catch(e) { comments = []; renderPanel(); }
+  }
+
+  // Re-draw saved area-annotation boxes over the document (light-DOM overlay).
+  function renderAreaBoxes() {
+    sizeAreaOverlay();
+    areaOverlay.replaceChildren();
+    const d = document.documentElement;
+    comments.filter(c => !c.parentId && c.anchor && c.anchor.type === 'element_rect' && c.anchor.rect).forEach(item => {
+      const r = item.anchor.rect;
+      const box = document.createElement('div');
+      box.className = 'hd-area-box';
+      box.style.left = (r.x / 100 * d.scrollWidth) + 'px';
+      box.style.top = (r.y / 100 * d.scrollHeight) + 'px';
+      box.style.width = (r.w / 100 * d.scrollWidth) + 'px';
+      box.style.height = (r.h / 100 * d.scrollHeight) + 'px';
+      box.dataset.commentId = item.id;
+      box.title = (item.author && item.author.displayName || 'Anonymous') + ': ' + (item.content && item.content.text || '').slice(0, 80);
+      box.addEventListener('click', () => {
+        const cel = panel.querySelector('.hd-comment[data-comment-id="' + item.id + '"]');
+        if (cel) {
+          panel.querySelectorAll('.hd-comment').forEach(c => c.classList.remove('active'));
+          cel.classList.add('active');
+          cel.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+      });
+      areaOverlay.appendChild(box);
+    });
   }
 
   async function loadInsights() {
@@ -455,6 +586,12 @@
     titleWrap.append(title, count);
     const headerBtns = document.createElement('div');
     headerBtns.style.cssText = 'display:flex;gap:4px;';
+    // Area-annotation toggle: when on, drag a rectangle on the page to comment on a region.
+    areaToggleBtn = document.createElement('button');
+    areaToggleBtn.className = 'hd-close' + (areaMode ? ' hd-toggle-on' : '');
+    areaToggleBtn.textContent = '▢';
+    areaToggleBtn.title = 'Comment on an area — click, then drag a box on the page';
+    areaToggleBtn.addEventListener('click', () => setAreaMode(!areaMode));
     const refreshBtn = document.createElement('button');
     refreshBtn.className = 'hd-close';
     refreshBtn.textContent = '↻';
@@ -464,7 +601,7 @@
     closeBtn.className = 'hd-close';
     closeBtn.textContent = '×';
     closeBtn.addEventListener('click', togglePanel);
-    headerBtns.append(refreshBtn, closeBtn);
+    headerBtns.append(areaToggleBtn, refreshBtn, closeBtn);
     header.append(titleWrap, headerBtns);
     panel.appendChild(header);
 
@@ -475,7 +612,7 @@
     if (topLevel.length === 0) {
       const empty = document.createElement('div');
       empty.className = 'hd-empty';
-      empty.textContent = 'No comments yet. Select text to leave feedback.';
+      empty.textContent = 'No comments yet. Select text — or use ▢ to drag a box over an area — to leave feedback.';
       list.appendChild(empty);
     }
 
@@ -521,11 +658,13 @@
   function renderComment(item, replyMap) {
     const el = document.createElement('div');
     el.className = 'hd-comment';
+    el.dataset.commentId = item.id;
 
-    // Click → scroll to highlight
+    // Click → scroll to the anchored text highlight, or to the area box.
     el.addEventListener('click', (e) => {
       if (e.target.tagName === 'BUTTON' || e.target.tagName === 'INPUT') return;
-      scrollToHighlight(item);
+      if (item.anchor && item.anchor.type === 'element_rect') scrollToAreaBox(item);
+      else scrollToHighlight(item);
       panel.querySelectorAll('.hd-comment').forEach(c => c.classList.remove('active'));
       el.classList.add('active');
     });
@@ -554,6 +693,11 @@
       anchor.className = 'hd-anchor';
       anchor.textContent = '"' + item.anchor.selectedText.slice(0, 50) + '"';
       el.appendChild(anchor);
+    } else if (item.anchor?.type === 'element_rect') {
+      const tag = document.createElement('span');
+      tag.className = 'hd-area-tag';
+      tag.textContent = '▢ area';
+      el.appendChild(tag);
     }
 
     // Reply button
@@ -629,6 +773,14 @@
     marks[0].scrollIntoView({ behavior: 'smooth', block: 'center' });
     marks.forEach(m => m.classList.add('flash'));
     setTimeout(() => marks.forEach(m => m.classList.remove('flash')), 2000);
+  }
+
+  function scrollToAreaBox(item) {
+    const box = areaOverlay.querySelector('.hd-area-box[data-comment-id="' + item.id + '"]');
+    if (!box) return;
+    box.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    box.classList.add('flash');
+    setTimeout(() => box.classList.remove('flash'), 2000);
   }
 
   function highlightAnchors() {

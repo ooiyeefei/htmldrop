@@ -6,6 +6,14 @@ export const AnchorSchema = z.object({
   startOffset: z.number().optional(),
   endOffset: z.number().optional(),
   selectedText: z.string().max(2000).optional(),
+  // For element_rect anchors: a box as percentages (0–100) of the document's
+  // scroll dimensions, so it re-renders at the same relative spot on any screen.
+  rect: z.object({
+    x: z.number(),
+    y: z.number(),
+    w: z.number(),
+    h: z.number(),
+  }).optional(),
 });
 
 export const ContentSchema = z.object({
