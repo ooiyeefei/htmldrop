@@ -9,7 +9,7 @@ export async function feedbackAdd(file, options = {}) {
     throw new Error('Comment text is required. Use --text "your comment".');
   }
 
-  const workerUrl = options.workerUrl || DEFAULT_WORKER_URL;
+  const workerUrl = options.workerUrl || process.env.HTMLDROP_WORKER_URL || DEFAULT_WORKER_URL;
   const displayName = options.name || 'AI Agent';
 
   // Resolve the target docId: either from an explicit --doc-id (idOrUrl) so a

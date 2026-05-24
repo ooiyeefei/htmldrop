@@ -17,7 +17,7 @@ export async function feedbackClear(file, options = {}) {
     throw new Error(`File "${file}" does not have feedback enabled.`);
   }
 
-  const workerUrl = options.workerUrl || DEFAULT_WORKER_URL;
+  const workerUrl = options.workerUrl || process.env.HTMLDROP_WORKER_URL || DEFAULT_WORKER_URL;
   const authorKey = getAuthorKey();
 
   const res = await fetch(`${workerUrl}/api/feedback/${entry.docId}`, {

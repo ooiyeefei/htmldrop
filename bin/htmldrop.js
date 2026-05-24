@@ -115,6 +115,8 @@ feedback
   .command('pull <file>')
   .description('Retrieve all feedback for a published file')
   .option('--json', 'Output as JSON')
+  .option('--save', 'Write the comments into your repo as <file>.feedback.json (you own + version them)')
+  .option('--out <path>', 'Path for --save output (default: <file>.feedback.json)')
   .action(async (file, options) => {
     try {
       await feedbackPull(file, options);

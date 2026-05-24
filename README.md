@@ -60,7 +60,7 @@ For AI converge you also need an LLM API key in your environment — see [Multi-
 | `htmldrop list` | List published files with their URLs |
 | `htmldrop open <file>` | Open a published file in the browser |
 | `htmldrop delete <file>` | Remove a file and redeploy |
-| `htmldrop feedback pull <file> [--json]` | Retrieve feedback for **your own** published file (uses the local manifest) |
+| `htmldrop feedback pull <file> [--json] [--save]` | Retrieve feedback for **your own** file. `--save` writes it to `<file>.feedback.json` in your repo (owned + versioned) |
 | `htmldrop feedback read <docId\|url> [--json]` | Read feedback for **any** doc by id or link — no ownership, no manifest (for teammates/agents) |
 | `htmldrop feedback list` | List which files have feedback enabled |
 | `htmldrop feedback add [file] --text <t>` | Post a comment. Use `--doc-id <id\|url>` to comment on a doc you didn't publish. `--name <n>`, `--on <anchor>`, `--parent-id <id>` |
@@ -295,20 +295,52 @@ Documents and feedback auto-expire after 90 days of inactivity.
 
 ---
 
-## Self-hosting the feedback backend
+## Where your data lives (and how to own it)
 
-The Worker is in `worker/`. To run your own instead of the default:
+Two pieces: **Surge** hosts your HTML (stores nothing); a **Cloudflare Worker + KV** stores the comments (the only part that needs a server — a static page can't accept writes). You choose *whose* Worker.
 
-```bash
-cd worker
-npx wrangler kv namespace create FEEDBACK
-npx wrangler kv namespace create RATE_LIMITS
-npx wrangler kv namespace create AUTHORS
-# put the namespace IDs into wrangler.toml, then:
-npx wrangler deploy
+### Free tier — our shared Worker
+
+- Zero setup — `htmldrop push --feedback` just works.
+- Comments live in **our** Cloudflare Worker KV. Honestly: we *can* technically read them — but the code is open-source, we never use your data, comments **auto-expire after 90 days**, and you can wipe them anytime with `htmldrop feedback clear`.
+- Not zero-knowledge. For that, self-host ↓.
+
+```
+FREE (shared):
+  you ─push────────► Surge            (your HTML)
+  reviewer ─comment─► OUR Worker + KV  (auto-expires 90d · clearable)
+  you ─feedback pull --save─► comments.json in YOUR repo
 ```
 
-Point the CLI at it with `--worker-url https://your-worker.workers.dev` (or set it per command).
+### Own-your-data tier — self-host the Worker
+
+- Deploy the Worker to **your own free Cloudflare account** → comments never touch our infrastructure. **We genuinely see nothing.**
+- Setup (one time):
+  ```bash
+  cd worker
+  npx wrangler kv namespace create FEEDBACK
+  npx wrangler kv namespace create RATE_LIMITS
+  npx wrangler kv namespace create AUTHORS
+  # paste the printed IDs into wrangler.toml, then:
+  npx wrangler deploy
+  ```
+- Point the CLI at it (set once — applies to push, feedback, converge, studio):
+  ```bash
+  export HTMLDROP_WORKER_URL=https://your-worker.your-subdomain.workers.dev
+  ```
+  Published docs' widgets then talk to *your* Worker.
+
+```
+OWN-YOUR-DATA (self-host):
+  you ─push────────► Surge             (your HTML)
+  reviewer ─comment─► YOUR Worker + KV  (your account — we never see it)
+  you ─feedback pull --save─► comments.json in YOUR repo
+```
+
+### Comments in your repo (either tier)
+
+- `htmldrop feedback pull <file> --save` writes comments to `<file>.feedback.json` in your repo — owned, versioned, private. The Worker is just the live **inbox**; your **repo is the system of record**.
+- Reviewers never need repo access — **you** pull + commit. (A teammate with no push rights still comments fine in the browser; you sync it into the repo.)
 
 ---
 

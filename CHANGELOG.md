@@ -4,6 +4,26 @@ All notable changes to this project are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/), and this project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [1.5.0] — 2026-05-24
+
+### Added
+
+- **`HTMLDROP_WORKER_URL` env var** — point the CLI at a self-hosted Worker
+  (`export HTMLDROP_WORKER_URL=https://your-worker.workers.dev`). Applies to
+  push, feedback, and studio, and published docs' widgets talk to your Worker.
+  This makes the "own-your-data" / self-host path actually usable (previously
+  only the shared default was reachable).
+- **`htmldrop feedback pull <file> --save [--out <path>]`** — writes comments to
+  `<file>.feedback.json` in your repo, so comments become owned, versioned, and
+  private. The Worker is the live inbox; your repo is the system of record.
+
+### Docs
+
+- README rewritten to clearly explain the two tiers — **free shared Worker**
+  (our Cloudflare, 90-day auto-expiry, honest "not zero-knowledge" messaging) vs.
+  **self-hosted Worker** (your Cloudflare, we see nothing) — with simple data-flow
+  diagrams. No Supabase/database is or was used; storage is Cloudflare KV only.
+
 ## [1.4.0] — 2026-05-24
 
 ### Added
@@ -215,6 +235,7 @@ Initial CLI: publish HTML files as shareable links via Surge.sh.
 - `htmldrop delete <file>` — remove a file and redeploy.
 - `htmldrop open <file>` — open a published file in the browser.
 
+[1.5.0]: https://github.com/ooiyeefei/htmldrop/releases/tag/v1.5.0
 [1.4.0]: https://github.com/ooiyeefei/htmldrop/releases/tag/v1.4.0
 [1.3.2]: https://github.com/ooiyeefei/htmldrop/releases/tag/v1.3.2
 [1.3.1]: https://github.com/ooiyeefei/htmldrop/releases/tag/v1.3.1

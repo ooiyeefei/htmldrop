@@ -1,4 +1,5 @@
 import { basename } from 'node:path';
+import { writeFileSync } from 'node:fs';
 import { getAuthorKey } from '../auth.js';
 import { loadManifest } from '../manifest.js';
 
@@ -17,7 +18,8 @@ export async function feedbackPull(file, options = {}) {
     throw new Error(`File "${file}" does not have feedback enabled. Push with --feedback flag.`);
   }
 
-  const workerUrl = options.workerUrl || DEFAULT_WORKER_URL;
+  // Worker URL: explicit flag > HTMLDROP_WORKER_URL env (self-host) > our shared Worker.
+  const workerUrl = options.workerUrl || process.env.HTMLDROP_WORKER_URL || DEFAULT_WORKER_URL;
   const authorKey = getAuthorKey();
 
   const res = await fetch(`${workerUrl}/api/feedback/${entry.docId}`, {
@@ -30,6 +32,21 @@ export async function feedbackPull(file, options = {}) {
   }
 
   const data = await res.json();
+
+  // --save: write comments into the repo as JSON so they're owned + versioned by the user.
+  if (options.save) {
+    const outPath = options.out || `${name.replace(/\.html?$/i, '')}.feedback.json`;
+    const snapshot = {
+      docId: entry.docId,
+      file: name,
+      pulledAt: new Date().toISOString(),
+      count: data.count,
+      comments: data.items,
+    };
+    writeFileSync(outPath, JSON.stringify(snapshot, null, 2) + '\n', 'utf-8');
+    console.log(`Saved ${data.count} comment(s) to ${outPath} (commit it to keep them in your repo).`);
+    if (options.silent || options.json) return data;
+  }
 
   if (options.silent) {
     return data;
@@ -49,7 +66,9 @@ export async function feedbackPull(file, options = {}) {
   for (const item of data.items) {
     const anchor = item.anchor?.selectedText
       ? ` [on: "${item.anchor.selectedText.slice(0, 60)}"]`
-      : '';
+      : item.anchor?.type === 'element_rect'
+        ? ' [on: area]'
+        : '';
     console.log(`  ${item.author?.displayName || 'Anonymous'}${anchor}`);
     console.log(`    ${item.content?.text || '(no text)'}`);
     console.log(`    ${new Date(item.createdAt).toLocaleString()}\n`);

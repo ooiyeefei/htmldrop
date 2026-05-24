@@ -16,7 +16,7 @@ export function extractDocId(docIdOrUrl) {
 
 export async function feedbackRead(docIdOrUrl, options = {}) {
   const docId = extractDocId(docIdOrUrl);
-  const workerUrl = options.workerUrl || DEFAULT_WORKER_URL;
+  const workerUrl = options.workerUrl || process.env.HTMLDROP_WORKER_URL || DEFAULT_WORKER_URL;
 
   // Public read — no auth header, no manifest lookup.
   const res = await fetch(`${workerUrl}/api/feedback/${docId}`);

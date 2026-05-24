@@ -72,7 +72,7 @@ export async function push(file, options = {}) {
   let feedbackCleanContent = null;
   if (options.feedback) {
     feedbackAuthorKey = getAuthorKey();
-    feedbackWorkerUrl = options.workerUrl || DEFAULT_WORKER_URL;
+    feedbackWorkerUrl = options.workerUrl || process.env.HTMLDROP_WORKER_URL || DEFAULT_WORKER_URL;
 
     // Reuse existing docId so the shareable link stays stable across re-pushes.
     // --new-doc forces a fresh doc (clean slate, new URL, drops old comments' anchor).

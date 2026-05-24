@@ -11,7 +11,7 @@ const DASHBOARD_PATH = join(__dirname, '../templates/dashboard.html');
 export async function studio(options = {}) {
   const authorKey = getAuthorKey();
   const port = options.port || 3456;
-  const workerUrl = options.workerUrl || 'https://htmldrop-feedback.htmldrop.workers.dev';
+  const workerUrl = options.workerUrl || process.env.HTMLDROP_WORKER_URL || 'https://htmldrop-feedback.htmldrop.workers.dev';
 
   const dashboardHtml = readFileSync(DASHBOARD_PATH, 'utf-8');
 
