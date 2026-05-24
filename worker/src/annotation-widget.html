@@ -618,16 +618,17 @@
 
   function scrollToHighlight(item) {
     if (!item.anchor?.selectedText) return;
-    const marks = document.querySelectorAll('mark.hd-hl');
-    const searchLower = item.anchor.selectedText.slice(0, 30).toLowerCase();
-    for (const mark of marks) {
-      if (mark.textContent.toLowerCase().includes(searchLower)) {
-        mark.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        mark.classList.add('flash');
-        setTimeout(() => mark.classList.remove('flash'), 2000);
-        return;
-      }
+    const lower = item.anchor.selectedText.toLowerCase();
+    // A single anchor may be split into several <mark> segments — flash them all.
+    let marks = Array.from(document.querySelectorAll('mark.hd-hl')).filter(m => m.dataset.anchor === lower);
+    if (marks.length === 0) {
+      const probe = lower.slice(0, 20);
+      marks = Array.from(document.querySelectorAll('mark.hd-hl')).filter(m => (m.dataset.anchor || '').includes(probe));
     }
+    if (marks.length === 0) return;
+    marks[0].scrollIntoView({ behavior: 'smooth', block: 'center' });
+    marks.forEach(m => m.classList.add('flash'));
+    setTimeout(() => marks.forEach(m => m.classList.remove('flash')), 2000);
   }
 
   function highlightAnchors() {
@@ -645,36 +646,71 @@
     });
   }
 
+  // Highlight the first occurrence of searchText even when it spans multiple text
+  // nodes (e.g. a sentence containing <strong>…</strong>). We flatten the page
+  // text, locate the match, then wrap each overlapping text-node segment in its
+  // own <mark> — surroundContents() only works within a single text node, so a
+  // cross-element selection needs one mark per node it touches.
   function highlightText(searchText) {
-    const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
     const lower = searchText.toLowerCase();
+
+    // Flatten candidate text nodes (skipping the widget's own UI).
+    const nodes = [];
+    let flat = '';
+    const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
     while (walker.nextNode()) {
       const node = walker.currentNode;
       if (node.parentElement && (node.parentElement.id === 'htmldrop-widget-host' || node.parentElement.closest('#htmldrop-widget-host'))) continue;
-      const idx = node.textContent.toLowerCase().indexOf(lower);
-      if (idx === -1) continue;
-      const range = document.createRange();
-      range.setStart(node, idx);
-      range.setEnd(node, idx + searchText.length);
-      const mark = document.createElement('mark');
-      mark.className = 'hd-hl';
-      mark.dataset.anchor = lower;
-      range.surroundContents(mark);
-      // Click highlight → scroll panel to associated comment
-      mark.addEventListener('click', () => {
-        const commentEls = panel.querySelectorAll('.hd-comment');
-        for (const cel of commentEls) {
-          const anchorEl = cel.querySelector('.hd-anchor');
-          if (anchorEl && anchorEl.textContent.toLowerCase().includes(lower.slice(0, 20))) {
-            panel.querySelectorAll('.hd-comment').forEach(c => c.classList.remove('active'));
-            cel.classList.add('active');
-            cel.scrollIntoView({ behavior: 'smooth', block: 'center' });
-            return;
-          }
-        }
-      });
-      break;
+      nodes.push({ node, start: flat.length, len: node.textContent.length });
+      flat += node.textContent;
     }
+
+    const matchStart = flat.toLowerCase().indexOf(lower);
+    if (matchStart === -1) return;
+    const matchEnd = matchStart + lower.length;
+
+    // Resolve every overlapping (node, from, to) slice BEFORE mutating the DOM,
+    // so wrapping one node doesn't invalidate offsets of the others.
+    const segments = [];
+    for (const entry of nodes) {
+      const nodeStart = entry.start;
+      const nodeEnd = entry.start + entry.len;
+      if (nodeEnd <= matchStart || nodeStart >= matchEnd) continue;
+      segments.push({
+        node: entry.node,
+        from: Math.max(matchStart, nodeStart) - nodeStart,
+        to: Math.min(matchEnd, nodeEnd) - nodeStart,
+      });
+    }
+
+    for (const seg of segments) {
+      try {
+        const range = document.createRange();
+        range.setStart(seg.node, seg.from);
+        range.setEnd(seg.node, seg.to);
+        const mark = document.createElement('mark');
+        mark.className = 'hd-hl';
+        mark.dataset.anchor = lower;
+        range.surroundContents(mark); // safe: range is within ONE text node
+        attachHighlightClick(mark, lower);
+      } catch (e) { /* skip a segment that can't be wrapped */ }
+    }
+  }
+
+  // Clicking any highlight segment scrolls the panel to its comment.
+  function attachHighlightClick(mark, lower) {
+    mark.addEventListener('click', () => {
+      const commentEls = panel.querySelectorAll('.hd-comment');
+      for (const cel of commentEls) {
+        const anchorEl = cel.querySelector('.hd-anchor');
+        if (anchorEl && anchorEl.textContent.toLowerCase().includes(lower.slice(0, 20))) {
+          panel.querySelectorAll('.hd-comment').forEach(c => c.classList.remove('active'));
+          cel.classList.add('active');
+          cel.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          return;
+        }
+      }
+    });
   }
 
   function formatTime(iso) {

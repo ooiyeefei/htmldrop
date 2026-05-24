@@ -4,6 +4,19 @@ All notable changes to this project are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/), and this project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [1.3.2] — 2026-05-24
+
+### Fixed
+
+- **Highlights now render on text that spans inline tags.** Commenting on a
+  sentence containing `<strong>`/`<a>`/`<em>` (e.g. “Nobody has done this for
+  **data and documents**.”) saved the comment but drew no highlight, because the
+  re-highlighter only searched within a single text node. It now flattens the
+  page text, locates the match across nodes, and wraps each overlapping text-node
+  segment in its own `<mark>` (verified end-to-end: a 3-segment highlight that
+  reconstructs the full sentence while keeping the bold word bold). Click-to-scroll
+  flashes all segments of an anchor.
+
 ## [1.3.1] — 2026-05-24
 
 ### Changed (security hardening)
@@ -189,6 +202,7 @@ Initial CLI: publish HTML files as shareable links via Surge.sh.
 - `htmldrop delete <file>` — remove a file and redeploy.
 - `htmldrop open <file>` — open a published file in the browser.
 
+[1.3.2]: https://github.com/ooiyeefei/htmldrop/releases/tag/v1.3.2
 [1.3.1]: https://github.com/ooiyeefei/htmldrop/releases/tag/v1.3.1
 [1.3.0]: https://github.com/ooiyeefei/htmldrop/releases/tag/v1.3.0
 [1.2.1]: https://github.com/ooiyeefei/htmldrop/releases/tag/v1.2.1
