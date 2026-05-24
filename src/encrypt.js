@@ -24,6 +24,13 @@ export function encryptHtml(htmlContent, password) {
 export function decryptHtml(encryptedBlob, password) {
   // Mirrors the decrypt logic in templates/password-gate.html:
   // CryptoJS.AES.decrypt(encryptedContent, password).toString(CryptoJS.enc.Utf8)
-  const bytes = CryptoJS.AES.decrypt(encryptedBlob, password);
-  return bytes.toString(CryptoJS.enc.Utf8);
+  // A wrong password yields garbage bytes whose UTF-8 decode throws
+  // "Malformed UTF-8 data" — treat that (and any decode failure) as an empty
+  // result so callers can report a clean "incorrect password" message.
+  try {
+    const bytes = CryptoJS.AES.decrypt(encryptedBlob, password);
+    return bytes.toString(CryptoJS.enc.Utf8);
+  } catch {
+    return '';
+  }
 }

@@ -1,5 +1,6 @@
 import { writeFileSync } from 'node:fs';
 import { decryptHtml } from './encrypt.js';
+import { resolvePassword } from './prompt.js';
 
 // Matches the blob stored by templates/password-gate.html:
 //   var encryptedContent = "....";
@@ -21,12 +22,13 @@ export async function fetchDoc(url, options = {}) {
   let output;
   if (match) {
     // Password-gate page — decrypt the blob.
-    if (!options.password) {
-      throw new Error('This page is password-protected. Provide --password <pw> to decrypt it.');
+    const password = await resolvePassword(options.password);
+    if (!password) {
+      throw new Error('This page is password-protected. Provide --password (with a value, env HTMLDROP_PASSWORD, or be prompted) to decrypt it.');
     }
-    const decrypted = decryptHtml(match[1], options.password);
+    const decrypted = decryptHtml(match[1], password);
     if (!decrypted || decrypted.length === 0) {
-      throw new Error('Decryption failed — wrong password (empty result).');
+      throw new Error('Incorrect password — could not decrypt this page.');
     }
     output = decrypted;
   } else {

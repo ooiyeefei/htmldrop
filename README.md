@@ -281,6 +281,8 @@ Documents and feedback auto-expire after 90 days of inactivity.
 - **Author key** lives only in `~/.htmldrop/config.json` on your machine.
 - **LLM API key (bring-your-own):** in the dashboard it’s held in `sessionStorage` and cleared when you close the browser — never persisted to disk or stored on the server. The Worker uses it for the single request and forgets it.
 - **Password-protected shares** are AES-256 encrypted client-side (StatiCrypt pattern); the password is never sent to a server.
+- **Keep the password out of shell history:** use a bare `--password` flag to read from the `HTMLDROP_PASSWORD` env var, or be prompted with hidden input — instead of `--password <pw>` on the command line. Applies to both `push` and `fetch`.
+- **Caveat — comments are not encrypted.** A password protects the document *content* (on Surge), but *comments* are stored in plaintext on the Worker and readable by anyone who has the docId. For a private doc, comment confidentiality rests on the unguessable link, not the password.
 
 ---
 

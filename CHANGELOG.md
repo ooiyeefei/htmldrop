@@ -4,6 +4,21 @@ All notable changes to this project are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/), and this project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [1.3.1] — 2026-05-24
+
+### Changed (security hardening)
+
+- **Passwords can stay out of shell history.** `--password` now takes an optional
+  value: pass `--password <pw>` (as before), or use a bare `--password` to read
+  from the `HTMLDROP_PASSWORD` env var, or — if neither is set — be prompted with
+  a hidden (non-echoing) input. Applies to both `push` and `fetch`.
+
+### Fixed
+
+- `fetch` with a wrong password now reports **“Incorrect password — could not
+  decrypt this page.”** instead of the cryptic crypto-js `Malformed UTF-8 data`.
+  `decryptHtml()` catches the decode failure and returns empty.
+
 ## [1.3.0] — 2026-05-23
 
 ### Added
@@ -174,6 +189,7 @@ Initial CLI: publish HTML files as shareable links via Surge.sh.
 - `htmldrop delete <file>` — remove a file and redeploy.
 - `htmldrop open <file>` — open a published file in the browser.
 
+[1.3.1]: https://github.com/ooiyeefei/htmldrop/releases/tag/v1.3.1
 [1.3.0]: https://github.com/ooiyeefei/htmldrop/releases/tag/v1.3.0
 [1.2.1]: https://github.com/ooiyeefei/htmldrop/releases/tag/v1.2.1
 [1.2.0]: https://github.com/ooiyeefei/htmldrop/releases/tag/v1.2.0

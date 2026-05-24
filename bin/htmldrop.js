@@ -43,7 +43,7 @@ program
 program
   .command('push <file>')
   .description('Publish an HTML file')
-  .option('-p, --password <password>', 'Password-protect the file with client-side encryption')
+  .option('-p, --password [password]', 'Password-protect the file. Omit the value to use $HTMLDROP_PASSWORD or a hidden prompt (keeps it out of shell history)')
   .option('-n, --noindex', 'Block search engines and AI crawlers from indexing this file')
   .option('-f, --feedback', 'Enable inline feedback annotations for reviewers')
   .option('--new-doc', 'Force a fresh feedback doc/link instead of reusing the existing one')
@@ -96,7 +96,7 @@ program
 program
   .command('fetch <url>')
   .description('Fetch a published doc, decrypting password-protected pages (for agents)')
-  .option('-p, --password <password>', 'Password to decrypt a protected page')
+  .option('-p, --password [password]', 'Password to decrypt a protected page. Omit the value to use $HTMLDROP_PASSWORD or a hidden prompt')
   .option('-o, --out <file>', 'Write output to a file instead of stdout')
   .action(async (url, options) => {
     try {

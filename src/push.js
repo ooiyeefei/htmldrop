@@ -9,6 +9,7 @@ import { generateGallery } from './gallery.js';
 import { loadManifest, saveManifest } from './manifest.js';
 import { injectFeedbackWidget } from './feedback/inject.js';
 import { getAuthorKey } from './auth.js';
+import { resolvePassword } from './prompt.js';
 
 const DEFAULT_WORKER_URL = 'https://htmldrop-feedback.htmldrop.workers.dev';
 
@@ -42,7 +43,9 @@ export async function push(file, options = {}) {
 
   // Read the file content
   let content = readFileSync(filePath, 'utf-8');
-  let isEncrypted = Boolean(options.password);
+  // Resolve the password (string from --password <pw>, env var, or hidden prompt)
+  const password = await resolvePassword(options.password);
+  let isEncrypted = Boolean(password);
 
   // Inject noindex meta tag if requested.
   // Done before encryption (it would be hidden inside the cipher otherwise, and
@@ -92,8 +95,8 @@ export async function push(file, options = {}) {
 
   // Encrypt if password provided. Runs AFTER widget injection so the widget is
   // inside the encrypted payload and survives the client-side decrypt+rerender.
-  if (options.password) {
-    content = encryptHtml(content, options.password);
+  if (password) {
+    content = encryptHtml(content, password);
     console.log(`Encrypting ${filename} with password protection...`);
   }
 
