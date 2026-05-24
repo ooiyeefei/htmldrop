@@ -4,6 +4,31 @@ All notable changes to this project are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/), and this project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [1.3.0] — 2026-05-23
+
+### Added
+
+- **Feedback on password-protected docs.** `push --feedback --password <pw>` now
+  injects the annotation widget *before* encryption, so a private (AES-encrypted)
+  doc shows the widget after the viewer decrypts it. The Worker only ever receives
+  the docId registration — never the plaintext — and the review link is the
+  password-gated Surge URL.
+- **Agent-native teammate commands** (no document ownership required):
+  - `htmldrop feedback read <docId|url> [--json]` — read feedback for any doc by
+    id or link (public; no author key, no local manifest).
+  - `htmldrop feedback add [file] --doc-id <id|url>` — comment on a doc you didn’t
+    publish (the `<file>` argument is now optional when `--doc-id` is given).
+  - `htmldrop fetch <url> [--password <pw>] [--out <file>]` — fetch a published
+    doc and decrypt a password-protected page, so an agent can read/analyze the
+    content. Adds `decryptHtml()` to the encryption module.
+
+### Notes
+
+- These formalize the two-role model: **reviewers** (anyone with the link) read
+  and comment via public endpoints; **owners** (author-key holder) additionally
+  `converge` and `clear`. No Worker change was needed — its endpoints already
+  supported public read/comment.
+
 ## [1.2.1] — 2026-05-23
 
 ### Changed
@@ -149,6 +174,7 @@ Initial CLI: publish HTML files as shareable links via Surge.sh.
 - `htmldrop delete <file>` — remove a file and redeploy.
 - `htmldrop open <file>` — open a published file in the browser.
 
+[1.3.0]: https://github.com/ooiyeefei/htmldrop/releases/tag/v1.3.0
 [1.2.1]: https://github.com/ooiyeefei/htmldrop/releases/tag/v1.2.1
 [1.2.0]: https://github.com/ooiyeefei/htmldrop/releases/tag/v1.2.0
 [1.1.4]: https://github.com/ooiyeefei/htmldrop/releases/tag/v1.1.4

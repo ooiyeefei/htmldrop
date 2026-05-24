@@ -11,7 +11,9 @@ import { deleteFile } from '../src/delete.js';
 import { openFile } from '../src/index.js';
 import { authSetup, authSetupForce } from '../src/auth.js';
 import { feedbackPull } from '../src/feedback/pull.js';
+import { feedbackRead } from '../src/feedback/read.js';
 import { feedbackAdd } from '../src/feedback/add.js';
+import { fetchDoc } from '../src/fetch.js';
 import { feedbackList } from '../src/feedback/list.js';
 import { feedbackClear } from '../src/feedback/clear.js';
 import { converge } from '../src/feedback/converge.js';
@@ -91,6 +93,20 @@ program
     }
   });
 
+program
+  .command('fetch <url>')
+  .description('Fetch a published doc, decrypting password-protected pages (for agents)')
+  .option('-p, --password <password>', 'Password to decrypt a protected page')
+  .option('-o, --out <file>', 'Write output to a file instead of stdout')
+  .action(async (url, options) => {
+    try {
+      await fetchDoc(url, options);
+    } catch (err) {
+      console.error(`Error: ${err.message}`);
+      process.exit(1);
+    }
+  });
+
 const feedback = program
   .command('feedback')
   .description('Manage feedback on published files');
@@ -109,9 +125,23 @@ feedback
   });
 
 feedback
-  .command('add <file>')
+  .command('read <docIdOrUrl>')
+  .description('Read feedback for any doc by docId or URL (public, no auth or manifest needed)')
+  .option('--json', 'Output as JSON')
+  .action(async (docIdOrUrl, options) => {
+    try {
+      await feedbackRead(docIdOrUrl, options);
+    } catch (err) {
+      console.error(`Error: ${err.message}`);
+      process.exit(1);
+    }
+  });
+
+feedback
+  .command('add [file]')
   .description('Add a comment programmatically (for agents/automation)')
   .requiredOption('--text <text>', 'The comment text')
+  .option('--doc-id <idOrUrl>', 'Comment on any doc by docId or URL (skips local manifest lookup)')
   .option('--name <name>', 'Display name for the comment author', 'AI Agent')
   .option('--on <text>', 'Anchor the comment to specific text in the document')
   .option('--parent-id <id>', 'Reply to an existing comment by its ID')

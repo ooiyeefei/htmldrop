@@ -20,3 +20,10 @@ export function encryptHtml(htmlContent, password) {
 
   return result;
 }
+
+export function decryptHtml(encryptedBlob, password) {
+  // Mirrors the decrypt logic in templates/password-gate.html:
+  // CryptoJS.AES.decrypt(encryptedContent, password).toString(CryptoJS.enc.Utf8)
+  const bytes = CryptoJS.AES.decrypt(encryptedBlob, password);
+  return bytes.toString(CryptoJS.enc.Utf8);
+}

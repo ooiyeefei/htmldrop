@@ -56,18 +56,20 @@ For AI converge you also need an LLM API key in your environment — see [Multi-
 | `htmldrop init` | One-time setup: Surge login + subdomain |
 | `htmldrop auth setup [--force]` | Generate the author API key (`--force` regenerates) |
 | `htmldrop push <file>` | Publish a file. Flags: `--password <p>`, `--noindex`, `--open` |
-| `htmldrop push <file> --feedback` | Publish with the annotation widget. `--new-doc` forces a fresh link |
+| `htmldrop push <file> --feedback` | Publish with the annotation widget. `--new-doc` forces a fresh link. Combine with `--password` for a feedback-enabled *private* doc |
 | `htmldrop list` | List published files with their URLs |
 | `htmldrop open <file>` | Open a published file in the browser |
 | `htmldrop delete <file>` | Remove a file and redeploy |
-| `htmldrop feedback pull <file> [--json]` | Retrieve all feedback for a file |
+| `htmldrop feedback pull <file> [--json]` | Retrieve feedback for **your own** published file (uses the local manifest) |
+| `htmldrop feedback read <docId\|url> [--json]` | Read feedback for **any** doc by id or link — no ownership, no manifest (for teammates/agents) |
 | `htmldrop feedback list` | List which files have feedback enabled |
-| `htmldrop feedback add <file> --text <t>` | Post a comment. `--name <n>`, `--on <anchor text>`, `--parent-id <id>` |
-| `htmldrop feedback clear <file>` | Delete all feedback for a file |
-| `htmldrop converge <file>` | Synthesize feedback → improved HTML. `--dry-run`, `--provider`, `--model`, `--api-key` |
+| `htmldrop feedback add [file] --text <t>` | Post a comment. Use `--doc-id <id\|url>` to comment on a doc you didn't publish. `--name <n>`, `--on <anchor>`, `--parent-id <id>` |
+| `htmldrop feedback clear <file>` | Delete all feedback (owner only) |
+| `htmldrop fetch <url> [--password <p>] [--out <f>]` | Fetch a published doc, decrypting password-protected pages — lets an agent read the content |
+| `htmldrop converge <file>` | Synthesize feedback → improved HTML (owner). `--dry-run`, `--provider`, `--model`, `--api-key` |
 | `htmldrop studio` | Open the Converge Studio dashboard locally. `--port <n>`, `--no-browser` |
 
-File arguments accept an absolute path, a relative path, or the bare filename — they all resolve to the same published file.
+File arguments accept an absolute path, a relative path, or the bare filename — they all resolve to the same published file. Commands that act on **your own** doc (`pull`, `clear`, `converge`) use the local manifest + author key; the **teammate-facing** commands (`read`, `add --doc-id`, `fetch`) work from just a link.
 
 ---
 
@@ -175,6 +177,36 @@ Agent: htmldrop push spec.html --feedback →  updates the SAME link, comments i
 ```
 
 Because re-push keeps the same URL, the document can iterate in place while reviewers keep using the link they already have.
+
+---
+
+## Teammates & roles
+
+htmldrop has two implicit roles, enforced by the architecture rather than an account system:
+
+| Role | Who | Can do | How |
+|---|---|---|---|
+| **Reviewer** | anyone with the link (your teammate, or their agent) | read the doc, read comments, add comments & replies | public Worker endpoints — no key needed |
+| **Owner** | whoever holds the author key that registered the doc | everything above **+** `converge`, `feedback clear` | author key in `~/.htmldrop/config.json` |
+
+**A teammate (or their Claude Code / Codex session) reviews without owning anything.** You share the link — and the password if the doc is encrypted. They:
+
+```bash
+# Read the document (decrypts a password-protected page so the agent can analyze it)
+htmldrop fetch https://you.surge.sh/spec.html --password coral-sunset-42
+
+# Read all reviewer comments — by link or docId, no ownership
+htmldrop feedback read https://htmldrop-feedback.htmldrop.workers.dev/doc/<id>
+
+# Add their own comment, optionally anchored to text
+htmldrop feedback add --doc-id <id|url> --text "Consider X here" --on "the exact phrase" --name "Alex"
+```
+
+It’s symmetric: when your teammate publishes *their* doc, they’re the owner and you’re the reviewer.
+
+**Only the owner converges.** `converge` and `clear` require the author key, so synthesizing/rewriting a doc stays with whoever published it — teammates contribute feedback, the owner decides when to converge. This is the role boundary you want today, with no extra setup.
+
+**Where auth.md fits (forward-looking).** The boundary above is keyed to a local author key. When AI agents run in the cloud (not on your machine), the [auth.md](https://workos.com/auth-md) endpoints this Worker already exposes (`/.well-known/oauth-authorization-server`, `/agent/auth`) let an agent provider (Anthropic/OpenAI/…) vouch for a user’s identity via an ID-JAG — so a teammate’s cloud agent could authenticate as a *reviewer* (or be granted *owner*) without anyone sharing a key. That’s the path to real multi-user roles; today the link + password + author-key model covers a trusted team.
 
 ---
 

@@ -42,16 +42,11 @@ export async function push(file, options = {}) {
 
   // Read the file content
   let content = readFileSync(filePath, 'utf-8');
-  let isEncrypted = false;
+  let isEncrypted = Boolean(options.password);
 
-  // Encrypt if password provided
-  if (options.password) {
-    content = encryptHtml(content, options.password);
-    isEncrypted = true;
-    console.log(`Encrypting ${filename} with password protection...`);
-  }
-
-  // Inject noindex meta tag if requested
+  // Inject noindex meta tag if requested.
+  // Done before encryption (it would be hidden inside the cipher otherwise, and
+  // the password-gate template carries its own <head>), so skip when encrypting.
   if (options.noindex && !isEncrypted) {
     const noindexTag = '<meta name="robots" content="noindex, nofollow">';
     if (content.includes('<head>')) {
@@ -64,12 +59,15 @@ export async function push(file, options = {}) {
     console.log(`Added noindex tag to ${filename} (crawlers blocked).`);
   }
 
-  // Inject feedback widget if --feedback flag
+  // Inject feedback widget if --feedback flag.
+  // This must happen BEFORE encryption so the widget ends up inside the
+  // encrypted payload and runs in the viewer's browser after they enter the
+  // password (the gate decrypts and renders the result client-side).
   let docId = null;
   let feedbackAuthorKey = null;
   let feedbackWorkerUrl = null;
   let feedbackCleanContent = null;
-  if (options.feedback && !isEncrypted) {
+  if (options.feedback) {
     feedbackAuthorKey = getAuthorKey();
     feedbackWorkerUrl = options.workerUrl || DEFAULT_WORKER_URL;
 
@@ -84,10 +82,19 @@ export async function push(file, options = {}) {
       console.log(`Feedback enabled for ${filename} (docId: ${docId.slice(0, 8)}...)`);
     }
 
-    // Keep a clean copy (no widget) for the Worker — it injects its own widget
-    // at serve time. Uploading the widget-injected copy would double-inject.
+    // Keep a clean copy (no widget) of the plaintext. For unencrypted docs the
+    // Worker injects its own widget at serve time, so it gets this clean copy
+    // (uploading the widget-injected copy would double-inject). For encrypted
+    // docs we never upload plaintext to the Worker at all.
     feedbackCleanContent = content;
     content = injectFeedbackWidget(content, { docId, workerUrl: feedbackWorkerUrl });
+  }
+
+  // Encrypt if password provided. Runs AFTER widget injection so the widget is
+  // inside the encrypted payload and survives the client-side decrypt+rerender.
+  if (options.password) {
+    content = encryptHtml(content, options.password);
+    console.log(`Encrypting ${filename} with password protection...`);
   }
 
   // Write to site directory
@@ -144,10 +151,19 @@ export async function push(file, options = {}) {
   const url = getFileUrl(config, filename);
   console.log(`\nPublished: ${url}`);
   if (docId) {
-    console.log(`Feedback URL: ${feedbackWorkerUrl}/doc/${docId}`);
+    // For encrypted docs the reviewable page is the password-gated Surge URL
+    // (the Worker never holds the plaintext, so it cannot serve /doc/:docId).
+    // For unencrypted docs the Worker serves a single feedback URL.
+    if (isEncrypted) {
+      console.log(`Feedback URL: ${url}`);
+      console.log('(Reviewers also need the password to view and comment.)');
+    } else {
+      console.log(`Feedback URL: ${feedbackWorkerUrl}/doc/${docId}`);
+    }
   }
 
-  // Register doc with the feedback worker (after deploy so URL is live)
+  // Register doc with the feedback worker (after deploy so URL is live).
+  // Done for BOTH encrypted and unencrypted feedback docs so comments can be stored.
   if (docId && feedbackAuthorKey && feedbackWorkerUrl) {
     try {
       const res = await fetch(`${feedbackWorkerUrl}/api/register/${docId}`, {
@@ -165,19 +181,23 @@ export async function push(file, options = {}) {
       console.warn('Warning: feedback worker unreachable. Comments may not work until worker is deployed.');
     }
 
-    // Upload HTML content to Worker for single-URL serving
-    try {
-      await fetch(`${feedbackWorkerUrl}/api/doc/${docId}/content`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${feedbackAuthorKey}`,
-          'Content-Type': 'text/html',
-        },
-        body: feedbackCleanContent || content,
-      });
-      console.log(`Document available at: ${feedbackWorkerUrl}/doc/${docId}`);
-    } catch {
-      console.warn('Warning: could not upload document content to worker.');
+    // Upload HTML content to the Worker for single-URL serving — ONLY for
+    // unencrypted docs. For encrypted docs we must never hand the plaintext to
+    // the Worker; the password-gated copy is served from Surge instead.
+    if (!isEncrypted) {
+      try {
+        await fetch(`${feedbackWorkerUrl}/api/doc/${docId}/content`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${feedbackAuthorKey}`,
+            'Content-Type': 'text/html',
+          },
+          body: feedbackCleanContent || content,
+        });
+        console.log(`Document available at: ${feedbackWorkerUrl}/doc/${docId}`);
+      } catch {
+        console.warn('Warning: could not upload document content to worker.');
+      }
     }
   }
 
