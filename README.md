@@ -206,7 +206,16 @@ It’s symmetric: when your teammate publishes *their* doc, they’re the owner 
 
 **Only the owner converges.** `converge` and `clear` require the author key, so synthesizing/rewriting a doc stays with whoever published it — teammates contribute feedback, the owner decides when to converge. This is the role boundary you want today, with no extra setup.
 
-**Where auth.md fits (forward-looking).** The boundary above is keyed to a local author key. When AI agents run in the cloud (not on your machine), the [auth.md](https://workos.com/auth-md) endpoints this Worker already exposes (`/.well-known/oauth-authorization-server`, `/agent/auth`) let an agent provider (Anthropic/OpenAI/…) vouch for a user’s identity via an ID-JAG — so a teammate’s cloud agent could authenticate as a *reviewer* (or be granted *owner*) without anyone sharing a key. That’s the path to real multi-user roles; today the link + password + author-key model covers a trusted team.
+### Do you need auth.md for a teammate's agent to access a doc?
+
+**No — and it isn't needed today.** A teammate's Claude/Codex session already accesses a doc with just the link (and the password, for private docs): `fetch --password` decrypts the content, `feedback read` / `feedback add --doc-id` handle comments. The password *is* the access mechanism; no login/identity standard is required.
+
+**What auth.md is — and is NOT.** auth.md is a standard a *service* adopts (like "Sign in with Google" / OIDC), so both sides must speak it. It is **not** a password manager, a form-filler, or a way to log into arbitrary existing username/password websites. Our own password gate (client-side AES) is unrelated to auth.md. The spec defines two flows:
+
+- **Agent-verified (ID-JAG)** — an agent provider (Anthropic/OpenAI/…) signs an assertion vouching "my agent acts for verified-user Jane." *LLM/agent-specific.* We expose the service side (`/.well-known/oauth-authorization-server`, `/agent/auth`), but **no provider mints ID-JAGs for arbitrary services yet**, so it isn't usable end-to-end.
+- **User-claimed (OTP)** — a human proves identity via a one-time email/SMS code. *Passwordless login for humans;* htmldrop does **not** implement this today.
+
+**When you'd actually adopt more of auth.md:** only when you want **identity-based** access (allowlist `jane@example.com`, revoke per person, audit who opened it) *instead of* a shared password — i.e., real multi-user roles. For a trusted team sharing a link + password out-of-band, the current model is sufficient and requires no auth.md adoption. Identity-based content access also implies the server can decrypt your doc (see the Security model note) — a deliberate trade-off, not a free upgrade.
 
 ---
 
