@@ -1,4 +1,37 @@
+import { deriveAccessToken } from '../encrypt.js';
+import { resolvePassword } from '../prompt.js';
+
 const DEFAULT_WORKER_URL = 'https://htmldrop-feedback.htmldrop.workers.dev';
+
+// Probe whether a doc is password-gated and, if so, derive the feedback access
+// token from the password (+ the doc's public salt) so the Worker authorizes
+// the read/post. Returns request headers: `{ 'X-HTMLDrop-Access': token }` for a
+// gated doc, or `{}` for an open doc / an old worker without /api/access.
+//
+// The salt is not secret (it's also in the public envelope); storing it on the
+// Worker lets the CLI derive the token without fetching the Surge gate page.
+export async function resolveAccessHeaders(workerUrl, docId, options = {}) {
+  let access;
+  try {
+    const res = await fetch(`${workerUrl}/api/access/${encodeURIComponent(docId)}`);
+    if (res.status === 404) return {}; // old worker / unknown doc -> behave as today
+    if (!res.ok) return {};
+    access = await res.json();
+  } catch {
+    return {}; // network/parse issue -> fall through to public behavior
+  }
+
+  if (!access || access.scheme !== 'v2-capability' || !access.salt) {
+    return {}; // open doc (or unrecognized) -> no token
+  }
+
+  const password = await resolvePassword(options.password);
+  if (!password) {
+    throw new Error('This doc is password-protected — pass --password (or set $HTMLDROP_PASSWORD).');
+  }
+  const token = deriveAccessToken(password, access.salt);
+  return { 'X-HTMLDrop-Access': token };
+}
 
 // Extract a docId from a bare id or a full URL like
 // https://.../doc/<uuid> or https://.../api/feedback/<uuid>
@@ -18,8 +51,10 @@ export async function feedbackRead(docIdOrUrl, options = {}) {
   const docId = extractDocId(docIdOrUrl);
   const workerUrl = options.workerUrl || process.env.HTMLDROP_WORKER_URL || DEFAULT_WORKER_URL;
 
-  // Public read — no auth header, no manifest lookup.
-  const res = await fetch(`${workerUrl}/api/feedback/${encodeURIComponent(docId)}`);
+  // Gated doc -> derive the access token from --password; open doc -> no header
+  // (unchanged public behavior).
+  const accessHeaders = await resolveAccessHeaders(workerUrl, docId, options);
+  const res = await fetch(`${workerUrl}/api/feedback/${encodeURIComponent(docId)}`, { headers: accessHeaders });
 
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));

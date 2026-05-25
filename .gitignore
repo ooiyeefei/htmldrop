@@ -8,8 +8,11 @@ node_modules/
 .serena/
 .playwright-mcp/
 .specify/
+.wrangler/
 
 # UAT / test scratch — but keep the crypto regression test under version control
 test-fixtures/*
 !test-fixtures/crypto-roundtrip.test.mjs
+!test-fixtures/access-token.test.mjs
+!test-fixtures/worker-access.integration.mjs
 uat-private-feedback-decrypted.png

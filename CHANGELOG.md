@@ -4,6 +4,49 @@ All notable changes to this project are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/), and this project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [1.6.0] — 2026-05-25
+
+Changes the **feedback access contract** for private docs and the client/Worker
+protocol. Requires a Worker redeploy + a one-time owner migration (see Upgrade).
+
+### Security / Features
+
+- **The password is now the access capability for private docs.** For a
+  password-protected (`--feedback --password`) doc, the Worker now requires
+  proof-of-password to **read, post, and list** comments — not just to decrypt the
+  page. The CLI derives a token from the password (an independent second half of
+  the existing PBKDF2 output — the AES key is byte-unchanged) and registers only
+  its `SHA-256` hash + the (public) salt; the browser gate and the teammate CLI
+  send the token in an `X-HTMLDrop-Access` header. The Worker never sees the
+  password or the AES key. Public docs stay openly commentable. Closes the
+  "anyone with the link can comment on a private doc" gap.
+- **Set-once document ownership.** Registering a docId binds it to the first
+  author key (`owner:<docId> = SHA-256(key)`); a different key gets `409`. Owner
+  actions (converge / clear / content / segments / insights) authorize against
+  that record, so knowing a public docId can no longer seize ownership. A guarded
+  one-time `POST /admin/migrate-owners` backfills ownership for pre-existing docs.
+- **Shared-origin isolation.** Uploaded public docs are served at `/doc/*` with
+  `Content-Security-Policy: sandbox allow-scripts`, so a malicious doc can't run
+  as same-origin script and read dashboard state. The dashboard author key moved
+  from `localStorage` to `sessionStorage`.
+- **No server-funded AI.** The `env.ANTHROPIC_API_KEY` fallback in insights/
+  converge is removed — AI is strictly bring-your-own-key.
+- **Pinned surge fallback.** `npx surge` → `npx --yes surge@0.27.4`.
+- New teammate flags: `htmldrop feedback read/add --password` derive the access
+  token to read/comment on a private doc from the terminal.
+
+### Upgrade
+
+- **Redeploy the Worker** for the access gate, set-once ownership, CSP, and BYOK
+  changes to take effect. Then set `ADMIN_SECRET` (`npx wrangler secret put
+  ADMIN_SECRET`) and call `POST /admin/migrate-owners` once **before sharing new
+  links**.
+- Backward compatible: v1.5.2 encrypted docs still decrypt (AES key unchanged);
+  pre-existing public docs are unaffected; older docs become owner-locked via the
+  migration or on next re-push.
+- Verified end-to-end against a local Worker: private no-token → 401, password
+  token → 2xx, owner key → 200, public open, set-once → 409, CSP present.
+
 ## [1.5.2] — 2026-05-25
 
 ### Security
@@ -284,6 +327,7 @@ Initial CLI: publish HTML files as shareable links via Surge.sh.
 - `htmldrop delete <file>` — remove a file and redeploy.
 - `htmldrop open <file>` — open a published file in the browser.
 
+[1.6.0]: https://github.com/ooiyeefei/htmldrop/releases/tag/v1.6.0
 [1.5.2]: https://github.com/ooiyeefei/htmldrop/releases/tag/v1.5.2
 [1.5.1]: https://github.com/ooiyeefei/htmldrop/releases/tag/v1.5.1
 [1.5.0]: https://github.com/ooiyeefei/htmldrop/releases/tag/v1.5.0

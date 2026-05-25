@@ -20,7 +20,7 @@ function getSurgeCommand() {
     execSync('which surge', { stdio: 'ignore' });
     return 'surge';
   } catch {
-    return 'npx surge';
+    return 'npx --yes surge@0.27.4';
   }
 }
 

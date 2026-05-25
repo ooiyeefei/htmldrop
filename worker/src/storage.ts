@@ -6,6 +6,39 @@ export interface Env {
   RATE_LIMITS: KVNamespace;
   AUTHORS: KVNamespace;
   ANTHROPIC_API_KEY?: string;
+  // Optional shared secret guarding POST /admin/migrate-owners. When unset, the
+  // migration endpoint always returns 403.
+  ADMIN_SECRET?: string;
+}
+
+// --- Ownership + access-capability records (v1.6.0 password-as-capability) ---
+// Stored in the AUTHORS namespace alongside the rawKey->{docIds} records, using
+// distinct key prefixes so KV.list can tell them apart during migration.
+
+export interface AccessRecord {
+  scheme: 'v2-capability';
+  salt: string; // base64 PBKDF2 salt (also in the public v2: envelope; not secret)
+  tokenHash: string; // lowercase hex SHA-256 of the base64 access token
+}
+
+// owner:<docId> -> lowercase hex SHA-256(authorKey). Set-once at registration.
+export async function getOwner(env: Env, docId: string): Promise<string | null> {
+  return env.AUTHORS.get(`owner:${docId}`);
+}
+
+export async function setOwner(env: Env, docId: string, keyHash: string): Promise<void> {
+  await env.AUTHORS.put(`owner:${docId}`, keyHash);
+}
+
+// access:<docId> -> AccessRecord (present only for private/password-gated docs).
+export async function getAccessRecord(env: Env, docId: string): Promise<AccessRecord | null> {
+  const raw = await env.AUTHORS.get(`access:${docId}`);
+  if (!raw) return null;
+  return JSON.parse(raw) as AccessRecord;
+}
+
+export async function setAccessRecord(env: Env, docId: string, record: AccessRecord): Promise<void> {
+  await env.AUTHORS.put(`access:${docId}`, JSON.stringify(record));
 }
 
 const NINETY_DAYS_SECONDS = 90 * 24 * 60 * 60;

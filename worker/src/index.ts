@@ -1,7 +1,7 @@
 import { FeedbackItemSchema, type FeedbackStored } from './schema';
-import { type Env, getFeedback, addFeedback, deleteFeedback, storeDocUrl, getDocUrl, storeDocContent, getDocContent, storeInsight, getInsights, type StoredInsight } from './storage';
+import { type Env, getFeedback, addFeedback, deleteFeedback, storeDocUrl, getDocUrl, storeDocContent, getDocContent, storeInsight, getInsights, type StoredInsight, getAccessRecord } from './storage';
 import { checkRateLimit, incrementRateLimit } from './rate-limit';
-import { isAuthorOfDoc, registerAuthorKey, getAuthorDocs } from './auth';
+import { registerAuthorKey, getAuthorDocs, authorizeOwner, sha256Hex, timingSafeEqualHex, migrateOwners } from './auth';
 import { getProtectedResourceMetadata, getAuthServerMetadata, handleAgentAuth, handleAgentRevoke } from './agent-auth';
 import { callLLM } from './llm';
 import DASHBOARD_HTML from './dashboard.html';
@@ -19,7 +19,9 @@ export default {
     const corsHeaders = {
       'Access-Control-Allow-Origin': '*',
       'Access-Control-Allow-Methods': 'GET, POST, DELETE, OPTIONS',
-      'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+      // X-HTMLDrop-Access lets the sandboxed (opaque-origin) widget send its
+      // capability token; the preflight must advertise it. No credentials used.
+      'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-HTMLDrop-Access',
     };
 
     if (request.method === 'OPTIONS') {
@@ -58,6 +60,12 @@ export default {
         return handleAgentRevoke(request, env);
       }
 
+      // POST /admin/migrate-owners — one-time idempotent backfill of owner: records
+      // for legacy docs. Guarded by a constant-time check of env.ADMIN_SECRET.
+      if (path === '/admin/migrate-owners' && request.method === 'POST') {
+        return handleMigrateOwners(request, env, corsHeaders);
+      }
+
       // Serve dashboard at root
       if (path === '/' && request.method === 'GET') {
         return new Response(DASHBOARD_HTML, {
@@ -88,7 +96,13 @@ export default {
           served = html + '\n' + injection;
         }
         return new Response(served, {
-          headers: { 'Content-Type': 'text/html; charset=utf-8' },
+          headers: {
+            'Content-Type': 'text/html; charset=utf-8',
+            // F1: sandbox the served public-doc HTML into an opaque origin so it
+            // cannot read workers.dev localStorage / steal author keys. Scoped to
+            // this route ONLY — never the dashboard or any API/JSON response.
+            'Content-Security-Policy': 'sandbox allow-scripts',
+          },
         });
       }
 
@@ -97,8 +111,8 @@ export default {
       if (docContentMatch && request.method === 'POST') {
         const docId = docContentMatch[1];
         const authHeader = request.headers.get('Authorization');
-        const isAuthor = await isAuthorOfDoc(env, authHeader, docId);
-        if (!isAuthor) {
+        const isOwner = await authorizeOwner(env, authHeader, docId);
+        if (!isOwner) {
           return json({ error: 'Unauthorized — only the document author can upload content' }, 403, corsHeaders);
         }
         const html = await request.text();
@@ -125,6 +139,13 @@ export default {
       const docUrlMatch = path.match(/^\/api\/doc\/([a-zA-Z0-9_-]+)\/url$/);
       if (docUrlMatch && request.method === 'GET') {
         return handleGetDocUrl(env, docUrlMatch[1], corsHeaders);
+      }
+
+      // GET /api/access/:docId — public: report whether a doc is password-gated
+      // and (if so) its salt, so a CLI client can derive a token. Never the hash.
+      const accessMatch = path.match(/^\/api\/access\/([a-zA-Z0-9_-]+)$/);
+      if (accessMatch && request.method === 'GET') {
+        return handleGetAccess(env, accessMatch[1], corsHeaders);
       }
 
       const segmentsMatch = path.match(/^\/api\/segments\/([a-zA-Z0-9_-]+)$/);
@@ -180,7 +201,36 @@ export default {
   },
 } satisfies ExportedHandler<Env>;
 
+// Access gate for feedback read/post/reply. For PRIVATE docs (access:<docId>
+// present) require EITHER a valid capability token (X-HTMLDrop-Access whose
+// SHA-256 == tokenHash) OR a valid owner key. For PUBLIC docs (no record) returns
+// null (open — unchanged behavior). On denial returns a ready-to-send 401 carrying
+// {scheme, salt} so a CLI client can derive the token and retry.
+async function checkFeedbackAccess(
+  request: Request,
+  env: Env,
+  docId: string,
+  headers: Record<string, string>
+): Promise<Response | null> {
+  const access = await getAccessRecord(env, docId);
+  if (!access) return null; // public doc — open
+
+  const headerToken = request.headers.get('X-HTMLDrop-Access');
+  if (headerToken) {
+    const presented = await sha256Hex(headerToken);
+    if (timingSafeEqualHex(presented, access.tokenHash)) return null;
+  }
+
+  // Owner key bypass.
+  if (await authorizeOwner(env, request.headers.get('Authorization'), docId)) return null;
+
+  return json({ error: 'Password required', scheme: access.scheme, salt: access.salt }, 401, headers);
+}
+
 async function handleGet(request: Request, env: Env, docId: string, headers: Record<string, string>): Promise<Response> {
+  const denied = await checkFeedbackAccess(request, env, docId, headers);
+  if (denied) return denied;
+
   const url = new URL(request.url);
   const since = url.searchParams.get('since');
 
@@ -198,6 +248,9 @@ async function handleGet(request: Request, env: Env, docId: string, headers: Rec
 }
 
 async function handlePost(request: Request, env: Env, docId: string, headers: Record<string, string>): Promise<Response> {
+  const denied = await checkFeedbackAccess(request, env, docId, headers);
+  if (denied) return denied;
+
   const ip = request.headers.get('CF-Connecting-IP') || 'unknown';
 
   const rateCheck = await checkRateLimit(env, ip, docId);
@@ -231,9 +284,9 @@ async function handlePost(request: Request, env: Env, docId: string, headers: Re
 
 async function handleDelete(request: Request, env: Env, docId: string, headers: Record<string, string>): Promise<Response> {
   const authHeader = request.headers.get('Authorization');
-  const isAuthor = await isAuthorOfDoc(env, authHeader, docId);
+  const isOwner = await authorizeOwner(env, authHeader, docId);
 
-  if (!isAuthor) {
+  if (!isOwner) {
     return json({ error: 'Unauthorized — only the document author can delete feedback' }, 403, headers);
   }
 
@@ -248,10 +301,18 @@ async function handleRegister(request: Request, env: Env, docId: string, headers
   }
 
   const key = authHeader.slice(7);
-  await registerAuthorKey(env, key, docId);
+  const body = await request.json().catch(() => null) as { url?: string; accessHash?: string; salt?: string } | null;
+
+  const result = await registerAuthorKey(env, key, docId, {
+    accessHash: body?.accessHash,
+    salt: body?.salt,
+  });
+  if (!result.ok) {
+    // Set-once owner: a different key already owns this docId. Nothing was written.
+    return json({ error: 'Document already owned by a different key' }, 409, headers);
+  }
 
   // Store optional published URL
-  const body = await request.json().catch(() => null) as { url?: string } | null;
   if (body?.url) {
     await storeDocUrl(env, docId, body.url);
   }
@@ -273,8 +334,8 @@ async function handleAuthorFiles(request: Request, env: Env, headers: Record<str
 
 async function handleSegments(request: Request, env: Env, docId: string, headers: Record<string, string>): Promise<Response> {
   const authHeader = request.headers.get('Authorization');
-  const isAuthor = await isAuthorOfDoc(env, authHeader, docId);
-  if (!isAuthor) return json({ error: 'Unauthorized' }, 403, headers);
+  const isOwner = await authorizeOwner(env, authHeader, docId);
+  if (!isOwner) return json({ error: 'Unauthorized' }, 403, headers);
 
   const body = await request.json().catch(() => null) as { items?: FeedbackStored[] } | null;
   if (!body?.items) return json({ error: 'Items required' }, 400, headers);
@@ -285,8 +346,8 @@ async function handleSegments(request: Request, env: Env, docId: string, headers
 
 async function handleInsights(request: Request, env: Env, docId: string, headers: Record<string, string>): Promise<Response> {
   const authHeader = request.headers.get('Authorization');
-  const isAuthor = await isAuthorOfDoc(env, authHeader, docId);
-  if (!isAuthor) return json({ error: 'Unauthorized' }, 403, headers);
+  const isOwner = await authorizeOwner(env, authHeader, docId);
+  if (!isOwner) return json({ error: 'Unauthorized' }, 403, headers);
 
   const body = await request.json().catch(() => null) as {
     segment?: { title: string; items: FeedbackStored[] };
@@ -299,9 +360,10 @@ async function handleInsights(request: Request, env: Env, docId: string, headers
   } | null;
   if (!body?.segment) return json({ error: 'Segment required' }, 400, headers);
 
-  const apiKey = body.apiKey || body.anthropicKey || env.ANTHROPIC_API_KEY;
+  // F3: bring-your-own-key only. No server-side ANTHROPIC_API_KEY fallback.
+  const apiKey = body.apiKey || body.anthropicKey;
   if (!apiKey) {
-    return json({ error: 'API key required. Add an LLM API key in Settings.' }, 400, headers);
+    return json({ error: 'API key required (bring-your-own-key).' }, 400, headers);
   }
 
   const points = await generateInsights(apiKey, body.provider, body.model, body.segment, body.references || []);
@@ -330,7 +392,36 @@ async function handleGetDocUrl(env: Env, docId: string, headers: Record<string, 
   return json({ docId, url }, 200, headers);
 }
 
+// GET /api/access/:docId — public. Reports the access scheme so a CLI can derive
+// a capability token from the (non-secret) salt. Never returns the tokenHash.
+async function handleGetAccess(env: Env, docId: string, headers: Record<string, string>): Promise<Response> {
+  const access = await getAccessRecord(env, docId);
+  if (access) {
+    return json({ scheme: access.scheme, salt: access.salt }, 200, headers);
+  }
+  return json({ scheme: 'open' }, 200, headers);
+}
+
+// POST /admin/migrate-owners?secret=... (or X-Admin-Secret header). Constant-time
+// compares against env.ADMIN_SECRET; 403 if unset or mismatched. On success runs
+// the idempotent owner backfill.
+async function handleMigrateOwners(request: Request, env: Env, headers: Record<string, string>): Promise<Response> {
+  const provided = new URL(request.url).searchParams.get('secret') || request.headers.get('X-Admin-Secret') || '';
+  if (!env.ADMIN_SECRET) {
+    return json({ error: 'Forbidden' }, 403, headers);
+  }
+  const ok = timingSafeEqualHex(await sha256Hex(provided), await sha256Hex(env.ADMIN_SECRET));
+  if (!ok) {
+    return json({ error: 'Forbidden' }, 403, headers);
+  }
+  const result = await migrateOwners(env);
+  return json(result, 200, headers);
+}
+
 async function handleReply(request: Request, env: Env, docId: string, commentId: string, headers: Record<string, string>): Promise<Response> {
+  const denied = await checkFeedbackAccess(request, env, docId, headers);
+  if (denied) return denied;
+
   const ip = request.headers.get('CF-Connecting-IP') || 'unknown';
 
   const rateCheck = await checkRateLimit(env, ip, docId);
@@ -372,8 +463,8 @@ async function handleReply(request: Request, env: Env, docId: string, commentId:
 
 async function handleConverge(request: Request, env: Env, docId: string, headers: Record<string, string>): Promise<Response> {
   const authHeader = request.headers.get('Authorization');
-  const isAuthor = await isAuthorOfDoc(env, authHeader, docId);
-  if (!isAuthor) return json({ error: 'Unauthorized' }, 403, headers);
+  const isOwner = await authorizeOwner(env, authHeader, docId);
+  if (!isOwner) return json({ error: 'Unauthorized' }, 403, headers);
 
   const body = await request.json().catch(() => null) as {
     segment?: { title: string; items: FeedbackStored[] };
@@ -386,9 +477,10 @@ async function handleConverge(request: Request, env: Env, docId: string, headers
   } | null;
   if (!body?.segment) return json({ error: 'Segment required' }, 400, headers);
 
-  const apiKey = body.apiKey || body.anthropicKey || env.ANTHROPIC_API_KEY;
+  // F3: bring-your-own-key only. No server-side ANTHROPIC_API_KEY fallback.
+  const apiKey = body.apiKey || body.anthropicKey;
   if (!apiKey) {
-    return json({ error: 'API key required. Add an LLM API key in Settings.' }, 400, headers);
+    return json({ error: 'API key required (bring-your-own-key).' }, 400, headers);
   }
 
   const suggestion = await generateConvergence(apiKey, body.provider, body.model, body.segment, body.insight, body.references || []);

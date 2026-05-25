@@ -304,9 +304,12 @@
       if (params.get('worker')) state.workerUrl = params.get('worker');
       if (params.get('doc')) state.currentDocId = params.get('doc');
 
-      const savedAuthorKey = localStorage.getItem('htmldrop_author_key');
+      // Author key is a credential: keep it in sessionStorage so it does NOT
+      // persist on the shared workers.dev origin across sessions. Seed it from
+      // the #fragment (above) or a paste — never auto-persist long-term.
+      const savedAuthorKey = sessionStorage.getItem('htmldrop_author_key');
       if (savedAuthorKey && !state.authorKey) state.authorKey = savedAuthorKey;
-      if (state.authorKey) localStorage.setItem('htmldrop_author_key', state.authorKey);
+      if (state.authorKey) sessionStorage.setItem('htmldrop_author_key', state.authorKey);
 
       const savedAnthropicKey = sessionStorage.getItem('htmldrop_anthropic_key');
       if (savedAnthropicKey) state.anthropicKey = savedAnthropicKey;
@@ -470,7 +473,7 @@
         logoutBtn.className = 'btn-icon btn-danger';
         logoutBtn.textContent = 'Logout';
         logoutBtn.addEventListener('click', function() {
-          localStorage.removeItem('htmldrop_author_key');
+          sessionStorage.removeItem('htmldrop_author_key');
           sessionStorage.removeItem('htmldrop_anthropic_key');
           state.authorKey = '';
           state.anthropicKey = '';

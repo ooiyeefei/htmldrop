@@ -5,6 +5,11 @@
   if (!configEl) return;
   const config = JSON.parse(configEl.textContent);
 
+  // Feedback access token (private/gated docs only). The password gate derives it
+  // and hands it off via sessionStorage; public docs have none, so the header is
+  // simply omitted (unchanged behavior). Read once on load.
+  var HD_ACCESS = (function(){ try { return sessionStorage.getItem('htmldrop_access'); } catch(e){ return null; } })();
+
   // Inject highlight + area-box styles into document head (light DOM)
   const docStyle = document.createElement('style');
   docStyle.textContent = `
@@ -413,10 +418,12 @@
       author: { displayName: name },
       parentId: null,
     };
+    var headers = { 'Content-Type': 'application/json' };
+    if (HD_ACCESS) headers['X-HTMLDrop-Access'] = HD_ACCESS;
     try {
       await fetch((config.workerUrl || '') + '/api/feedback/' + config.docId, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: headers,
         body: JSON.stringify(body),
       });
       await loadComments();
@@ -431,10 +438,12 @@
       author: { displayName: name },
       parentId: null,
     };
+    var headers = { 'Content-Type': 'application/json' };
+    if (HD_ACCESS) headers['X-HTMLDrop-Access'] = HD_ACCESS;
     try {
       await fetch((config.workerUrl || '') + '/api/feedback/' + config.docId, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: headers,
         body: JSON.stringify(body),
       });
       await loadComments();
@@ -497,10 +506,12 @@
       author: { displayName: name },
       parentId: parentItem.id,
     };
+    var headers = { 'Content-Type': 'application/json' };
+    if (HD_ACCESS) headers['X-HTMLDrop-Access'] = HD_ACCESS;
     try {
       await fetch((config.workerUrl || '') + '/api/feedback/' + config.docId + '/' + parentItem.id + '/reply', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: headers,
         body: JSON.stringify(body),
       });
       await loadComments();
@@ -524,8 +535,10 @@
   }
 
   async function loadComments() {
+    var headers = {};
+    if (HD_ACCESS) headers['X-HTMLDrop-Access'] = HD_ACCESS;
     try {
-      const res = await fetch((config.workerUrl || '') + '/api/feedback/' + config.docId);
+      const res = await fetch((config.workerUrl || '') + '/api/feedback/' + config.docId, { headers: headers });
       const data = await res.json();
       comments = data.items || [];
       renderPanel();
@@ -562,8 +575,10 @@
   }
 
   async function loadInsights() {
+    var headers = {};
+    if (HD_ACCESS) headers['X-HTMLDrop-Access'] = HD_ACCESS;
     try {
-      const res = await fetch((config.workerUrl || '') + '/api/insights/' + config.docId);
+      const res = await fetch((config.workerUrl || '') + '/api/insights/' + config.docId, { headers: headers });
       const data = await res.json();
       insights = data.insights || {};
     } catch(e) { insights = {}; }
