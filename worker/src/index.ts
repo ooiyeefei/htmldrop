@@ -1,5 +1,5 @@
 import { FeedbackItemSchema, type FeedbackStored } from './schema';
-import { type Env, getFeedback, addFeedback, deleteFeedback, storeDocUrl, getDocUrl, storeDocContent, getDocContent, storeInsight, getInsights, type StoredInsight, getAccessRecord } from './storage';
+import { type Env, getFeedback, addFeedback, deleteFeedback, storeDocUrl, getDocUrl, storeDocContent, getDocContent, storeInsight, getInsights, type StoredInsight, getAccessRecord, setOwner, deleteOwnerConflict } from './storage';
 import { checkRateLimit, incrementRateLimit } from './rate-limit';
 import { registerAuthorKey, getAuthorDocs, authorizeOwner, sha256Hex, timingSafeEqualHex, migrateOwners } from './auth';
 import { getProtectedResourceMetadata, getAuthServerMetadata, handleAgentAuth, handleAgentRevoke } from './agent-auth';
@@ -64,6 +64,12 @@ export default {
       // for legacy docs. Guarded by a constant-time check of env.ADMIN_SECRET.
       if (path === '/admin/migrate-owners' && request.method === 'POST') {
         return handleMigrateOwners(request, env, corsHeaders);
+      }
+
+      // POST /admin/resolve-owner — repair a migration ownership conflict (assign
+      // an owner key and/or clear the conflict so the true owner can re-claim).
+      if (path === '/admin/resolve-owner' && request.method === 'POST') {
+        return handleResolveOwner(request, env, corsHeaders);
       }
 
       // Serve dashboard at root
@@ -406,21 +412,43 @@ async function handleGetAccess(env: Env, docId: string, headers: Record<string, 
   return json({ scheme: 'open' }, 200, headers);
 }
 
-// POST /admin/migrate-owners with an X-Admin-Secret header. Constant-time
-// compares against env.ADMIN_SECRET; 403 if unset or mismatched. On success runs
-// the idempotent owner backfill. The secret is header-only (never a query string,
-// which would leak via logs/history/referrers).
-async function handleMigrateOwners(request: Request, env: Env, headers: Record<string, string>): Promise<Response> {
+// Admin endpoints authenticate with a header-only X-Admin-Secret (never a query
+// string — those leak via logs/history/referrers), constant-time compared against
+// env.ADMIN_SECRET. Denies when ADMIN_SECRET is unset.
+async function adminAuthorized(request: Request, env: Env): Promise<boolean> {
+  if (!env.ADMIN_SECRET) return false;
   const provided = request.headers.get('X-Admin-Secret') || '';
-  if (!env.ADMIN_SECRET) {
-    return json({ error: 'Forbidden' }, 403, headers);
-  }
-  const ok = timingSafeEqualHex(await sha256Hex(provided), await sha256Hex(env.ADMIN_SECRET));
-  if (!ok) {
+  return timingSafeEqualHex(await sha256Hex(provided), await sha256Hex(env.ADMIN_SECRET));
+}
+
+// POST /admin/migrate-owners — idempotent backfill of owner: records for legacy
+// docs; a docId claimed by >1 key gets an owner-conflict: sentinel (which blocks
+// any claim) and is returned in collisions[].
+async function handleMigrateOwners(request: Request, env: Env, headers: Record<string, string>): Promise<Response> {
+  if (!(await adminAuthorized(request, env))) {
     return json({ error: 'Forbidden' }, 403, headers);
   }
   const result = await migrateOwners(env);
   return json(result, 200, headers);
+}
+
+// POST /admin/resolve-owner — repair a migration ownership conflict. Body
+// { docId, ownerKey? }: with ownerKey, lock the doc to SHA-256(ownerKey) and clear
+// the conflict; without, just clear the conflict so the true owner can re-claim by
+// re-pushing. Header-only X-Admin-Secret.
+async function handleResolveOwner(request: Request, env: Env, headers: Record<string, string>): Promise<Response> {
+  if (!(await adminAuthorized(request, env))) {
+    return json({ error: 'Forbidden' }, 403, headers);
+  }
+  const body = await request.json().catch(() => null) as { docId?: string; ownerKey?: string } | null;
+  if (!body?.docId) {
+    return json({ error: 'docId required' }, 400, headers);
+  }
+  if (body.ownerKey) {
+    await setOwner(env, body.docId, await sha256Hex(body.ownerKey));
+  }
+  await deleteOwnerConflict(env, body.docId);
+  return json({ resolved: true, docId: body.docId, assigned: Boolean(body.ownerKey) }, 200, headers);
 }
 
 async function handleReply(request: Request, env: Env, docId: string, commentId: string, headers: Record<string, string>): Promise<Response> {

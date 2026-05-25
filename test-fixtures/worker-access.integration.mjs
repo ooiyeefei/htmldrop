@@ -79,5 +79,10 @@ ok('migrate via ?secret= query -> 403 (query rejected)', (await fetch(`${BASE}/a
 const mig = await req('POST', '/admin/migrate-owners', { adminSecret: SECRET });
 ok('migrate via X-Admin-Secret header -> 200 + collisions[]', mig.status === 200 && Array.isArray(mig.json?.collisions));
 
+// Admin resolve-owner repair path (clears a migration conflict). Guarded.
+ok('resolve-owner no secret -> 403', (await req('POST', '/admin/resolve-owner', { body: { docId: PUBLIC_DOC } })).status === 403);
+const resolve = await req('POST', '/admin/resolve-owner', { adminSecret: SECRET, body: { docId: 'noconflict-' + randomUUID() } });
+ok('resolve-owner with secret -> 200 resolved:true', resolve.status === 200 && resolve.json?.resolved === true);
+
 console.log(`\n${fail === 0 ? 'ALL PASS' : 'FAILED'}: ${pass} passed, ${fail} failed`);
 process.exit(fail === 0 ? 0 : 1);

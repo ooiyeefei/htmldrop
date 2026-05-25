@@ -1,5 +1,5 @@
 import type { Env, AccessRecord } from './storage';
-import { getOwner, setOwner, setAccessRecord } from './storage';
+import { getOwner, setOwner, setAccessRecord, getOwnerConflict, setOwnerConflict } from './storage';
 
 // --- Workers-runtime crypto helpers (WebCrypto only; no node:crypto) ---
 
@@ -53,6 +53,13 @@ export async function registerAuthorKey(
   opts?: { accessHash?: string; salt?: string }
 ): Promise<RegisterResult> {
   const keyHash = await sha256Hex(key);
+
+  // A migration-flagged ownership conflict hard-blocks any new claim until an
+  // admin resolves it (otherwise a collided legacy doc could still be grabbed).
+  if (await getOwnerConflict(env, docId) !== null) {
+    return { ok: false, conflict: true };
+  }
+
   const owner = await getOwner(env, docId);
 
   if (owner !== null) {
@@ -127,6 +134,9 @@ export async function authorizeOwner(env: Env, authHeader: string | null, docId:
     return timingSafeEqualHex(keyHash, owner);
   }
 
+  // A migration-flagged conflict must NOT be lazily claimed — require admin repair.
+  if (await getOwnerConflict(env, docId) !== null) return false;
+
   // Legacy fallback: no owner record yet. Trust the AUTHORS list, then lock it.
   if (await isAuthorOfDoc(env, authHeader, docId)) {
     await setOwner(env, docId, await sha256Hex(key));
@@ -150,7 +160,7 @@ export async function migrateOwners(env: Env): Promise<{ migrated: number; scann
     const list = await env.AUTHORS.list({ cursor });
     for (const entry of list.keys) {
       const name = entry.name;
-      if (name.startsWith('owner:') || name.startsWith('access:')) continue;
+      if (name.startsWith('owner:') || name.startsWith('access:') || name.startsWith('owner-conflict:')) continue;
       const raw = await env.AUTHORS.get(name);
       if (!raw) continue;
       let data: { docIds?: string[] };
@@ -175,7 +185,10 @@ export async function migrateOwners(env: Env): Promise<{ migrated: number; scann
   const collisions: string[] = [];
   for (const [docId, keyHashes] of claims) {
     if (keyHashes.size > 1) {
-      collisions.push(docId); // ambiguous ownership — skip; surface for manual repair
+      // Ambiguous ownership — persist a sentinel that HARD-BLOCKS register/owner
+      // claims (not just advisory), and surface it for admin repair.
+      await setOwnerConflict(env, docId, JSON.stringify({ candidates: [...keyHashes], at: new Date().toISOString() }));
+      collisions.push(docId);
       continue;
     }
     const existing = await getOwner(env, docId);

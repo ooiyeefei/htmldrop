@@ -30,6 +30,22 @@ export async function setOwner(env: Env, docId: string, keyHash: string): Promis
   await env.AUTHORS.put(`owner:${docId}`, keyHash);
 }
 
+// owner-conflict:<docId> -> JSON { candidates: string[]; at: string }. Written by
+// migrateOwners when a docId is claimed by >1 distinct legacy key. Its presence
+// HARD-BLOCKS register + owner-action claims until an admin resolves it, so an
+// ambiguous doc cannot be silently land-grabbed after migration.
+export async function getOwnerConflict(env: Env, docId: string): Promise<string | null> {
+  return env.AUTHORS.get(`owner-conflict:${docId}`);
+}
+
+export async function setOwnerConflict(env: Env, docId: string, value: string): Promise<void> {
+  await env.AUTHORS.put(`owner-conflict:${docId}`, value);
+}
+
+export async function deleteOwnerConflict(env: Env, docId: string): Promise<void> {
+  await env.AUTHORS.delete(`owner-conflict:${docId}`);
+}
+
 // access:<docId> -> AccessRecord (present only for private/password-gated docs).
 export async function getAccessRecord(env: Env, docId: string): Promise<AccessRecord | null> {
   const raw = await env.AUTHORS.get(`access:${docId}`);
