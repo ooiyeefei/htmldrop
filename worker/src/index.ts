@@ -1,4 +1,4 @@
-import { FeedbackItemSchema, type FeedbackStored } from './schema';
+import { FeedbackItemSchema, ReplySchema, type FeedbackStored } from './schema';
 import { type Env, getFeedback, addFeedback, deleteFeedback, storeDocUrl, getDocUrl, storeDocContent, getDocContent, storeInsight, getInsights, type StoredInsight, getAccessRecord, setOwner, deleteOwnerConflict } from './storage';
 import { checkRateLimit, incrementRateLimit } from './rate-limit';
 import { registerAuthorKey, getAuthorDocs, authorizeOwner, sha256Hex, timingSafeEqualHex, migrateOwners } from './auth';
@@ -467,7 +467,7 @@ async function handleReply(request: Request, env: Env, docId: string, commentId:
     return json({ error: 'Invalid JSON body' }, 400, headers);
   }
 
-  const parsed = FeedbackItemSchema.safeParse(body);
+  const parsed = ReplySchema.safeParse(body);
   if (!parsed.success) {
     return json({ error: 'Validation failed', details: parsed.error.issues }, 400, headers);
   }
@@ -479,8 +479,12 @@ async function handleReply(request: Request, env: Env, docId: string, commentId:
     return json({ error: 'Parent comment not found' }, 404, headers);
   }
 
+  // Replies thread under the parent (no anchor of their own); store a page_level
+  // anchor so the item is a valid FeedbackStored.
   const item: FeedbackStored = {
-    ...parsed.data,
+    anchor: { type: 'page_level' },
+    content: parsed.data.content,
+    author: parsed.data.author,
     id: crypto.randomUUID(),
     docId,
     parentId: commentId,

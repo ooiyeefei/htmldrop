@@ -57,6 +57,10 @@ ok('private GET owner-key bypass -> 200', (await req('GET', `/api/feedback/${PRI
 ok('public POST open -> 2xx', [200, 201].includes((await req('POST', `/api/feedback/${PUBLIC_DOC}`, { body: item })).status));
 ok('public GET open -> 200', (await req('GET', `/api/feedback/${PUBLIC_DOC}`)).status === 200);
 
+// Reply threading (regression: replies carry NO anchor and must not 400)
+const replyParent = await req('POST', `/api/feedback/${PUBLIC_DOC}`, { body: item });
+ok('reply to a comment -> 2xx (no anchor required)', Boolean(replyParent.json?.id) && [200, 201].includes((await req('POST', `/api/feedback/${PUBLIC_DOC}/${replyParent.json.id}/reply`, { body: { content: { type: 'text', text: 'a threaded reply' }, author: { displayName: 'R2' } } })).status));
+
 // Set-once ownership (F2)
 ok('attacker re-register private -> 409', (await req('POST', `/api/register/${PRIVATE_DOC}`, { key: ATTACKER, body: { url: 'https://evil/' } })).status === 409);
 ok('attacker clear private -> 403', (await req('DELETE', `/api/feedback/${PRIVATE_DOC}`, { key: ATTACKER })).status === 403);
