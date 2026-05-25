@@ -16,10 +16,11 @@ const enc = encryptToEnvelope('<p>secret</p>', PASSWORD);
 const token = deriveAccessToken(PASSWORD, enc.salt); // what a reviewer derives from the password
 const item = { anchor: { type: 'page_level' }, content: { type: 'text', text: 'hi' }, author: { displayName: 'R' } };
 
-async function req(method, path, { key, token, body, ct } = {}) {
+async function req(method, path, { key, token, adminSecret, body, ct } = {}) {
   const headers = {};
   if (key) headers['Authorization'] = 'Bearer ' + key;
   if (token) headers['X-HTMLDrop-Access'] = token;
+  if (adminSecret) headers['X-Admin-Secret'] = adminSecret;
   if (body !== undefined) headers['Content-Type'] = ct || 'application/json';
   const res = await fetch(BASE + path, {
     method,
@@ -62,6 +63,19 @@ ok('attacker clear private -> 403', (await req('DELETE', `/api/feedback/${PRIVAT
 await req('POST', `/api/doc/${PUBLIC_DOC}/content`, { key: OWNER, body: '<h1>pub</h1>', ct: 'text/html' });
 const docRes = await fetch(`${BASE}/doc/${PUBLIC_DOC}`);
 ok('CSP sandbox header on /doc/*', (docRes.headers.get('content-security-policy') || '').includes('sandbox'));
+
+// Insights inherit the private-doc gate (H1 — was publicly readable)
+ok('private GET insights no token -> 401', (await req('GET', `/api/insights/${PRIVATE_DOC}`)).status === 401);
+ok('private GET insights token -> 200', (await req('GET', `/api/insights/${PRIVATE_DOC}`, { token })).status === 200);
+ok('private GET insights owner-key -> 200', (await req('GET', `/api/insights/${PRIVATE_DOC}`, { key: OWNER })).status === 200);
+ok('public GET insights open -> 200', (await req('GET', `/api/insights/${PUBLIC_DOC}`)).status === 200);
+
+// Admin migration: header-only secret (M2) + collision report (M1)
+const SECRET = process.env.ADMIN_SECRET || 'testsecret123';
+ok('migrate no secret -> 403', (await req('POST', '/admin/migrate-owners')).status === 403);
+ok('migrate via ?secret= query -> 403 (query rejected)', (await fetch(`${BASE}/admin/migrate-owners?secret=${SECRET}`, { method: 'POST' })).status === 403);
+const mig = await req('POST', '/admin/migrate-owners', { adminSecret: SECRET });
+ok('migrate via X-Admin-Secret header -> 200 + collisions[]', mig.status === 200 && Array.isArray(mig.json?.collisions));
 
 console.log(`\n${fail === 0 ? 'ALL PASS' : 'FAILED'}: ${pass} passed, ${fail} failed`);
 process.exit(fail === 0 ? 0 : 1);

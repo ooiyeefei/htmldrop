@@ -136,13 +136,14 @@ export async function authorizeOwner(env: Env, authHeader: string | null, docId:
 }
 
 // One-time, idempotent backfill of owner:<docId> records from the legacy AUTHORS
-// rawKey -> {docIds, createdAt} records. Skips owner:/access: keys. On collision
-// (a docId under multiple keys) the earliest createdAt wins. Only sets when absent.
-export async function migrateOwners(env: Env): Promise<{ migrated: number; scanned: number }> {
+// rawKey -> {docIds} records. Skips owner:/access: keys. A docId claimed by more
+// than one DISTINCT key (possible if the pre-set-once land-grab bug created
+// duplicate author records) is AMBIGUOUS: it is NOT auto-assigned — it is
+// reported in `collisions` for manual repair (e.g. the true owner clears +
+// re-pushes). Only sets owner when currently absent.
+export async function migrateOwners(env: Env): Promise<{ migrated: number; scanned: number; collisions: string[] }> {
   let scanned = 0;
-  // Resolve the chosen owner key per docId first (earliest createdAt wins), then
-  // write — so order of KV.list iteration doesn't affect the outcome.
-  const chosen = new Map<string, { keyHash: string; createdAt: string }>();
+  const claims = new Map<string, Set<string>>(); // docId -> distinct owner-key hashes
 
   let cursor: string | undefined;
   do {
@@ -152,34 +153,37 @@ export async function migrateOwners(env: Env): Promise<{ migrated: number; scann
       if (name.startsWith('owner:') || name.startsWith('access:')) continue;
       const raw = await env.AUTHORS.get(name);
       if (!raw) continue;
-      let data: { docIds?: string[]; createdAt?: string };
+      let data: { docIds?: string[] };
       try {
-        data = JSON.parse(raw) as { docIds?: string[]; createdAt?: string };
+        data = JSON.parse(raw) as { docIds?: string[] };
       } catch {
         continue; // not a JSON author record
       }
       if (!Array.isArray(data.docIds)) continue;
       scanned++;
-      const createdAt = data.createdAt || new Date().toISOString();
       const keyHash = await sha256Hex(name);
       for (const docId of data.docIds) {
-        const prev = chosen.get(docId);
-        if (!prev || createdAt < prev.createdAt) {
-          chosen.set(docId, { keyHash, createdAt });
-        }
+        let set = claims.get(docId);
+        if (!set) { set = new Set<string>(); claims.set(docId, set); }
+        set.add(keyHash);
       }
     }
     cursor = list.list_complete ? undefined : list.cursor;
   } while (cursor);
 
   let migrated = 0;
-  for (const [docId, { keyHash }] of chosen) {
+  const collisions: string[] = [];
+  for (const [docId, keyHashes] of claims) {
+    if (keyHashes.size > 1) {
+      collisions.push(docId); // ambiguous ownership — skip; surface for manual repair
+      continue;
+    }
     const existing = await getOwner(env, docId);
     if (existing === null) {
-      await setOwner(env, docId, keyHash);
+      await setOwner(env, docId, [...keyHashes][0]);
       migrated++;
     }
   }
 
-  return { migrated, scanned };
+  return { migrated, scanned, collisions };
 }

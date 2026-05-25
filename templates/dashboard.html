@@ -338,12 +338,21 @@
       }
     }
 
+    // Owner-authenticated headers: the dashboard holds the author key, which the
+    // Worker accepts as an owner bypass for private docs (and ignores for public).
+    // Without this, private-doc feedback/insight reads from the dashboard 401.
+    function authH(extra) {
+      var h = Object.assign({}, extra || {});
+      if (state.authorKey) h['Authorization'] = 'Bearer ' + state.authorKey;
+      return h;
+    }
+
     async function pollNewFeedback() {
       if (!state.currentDocId) return;
       var since = state.lastTimestamp || new Date(0).toISOString();
       try {
         var url = state.workerUrl + '/api/feedback/' + state.currentDocId + '?since=' + encodeURIComponent(since);
-        var res = await fetch(url);
+        var res = await fetch(url, { headers: authH() });
         if (!res.ok) return;
         var data = await res.json();
         var newItems = data.items || [];
@@ -386,7 +395,7 @@
     // --- Insights fetching ---
     async function fetchInsights(docId) {
       try {
-        var res = await fetch(state.workerUrl + '/api/insights/' + docId);
+        var res = await fetch(state.workerUrl + '/api/insights/' + docId, { headers: authH() });
         if (res.ok) {
           var data = await res.json();
           if (data.insights) {
@@ -640,7 +649,7 @@
     async function loadFeedback(docId) {
       renderLoading('Loading feedback...');
       try {
-        var res = await fetch(state.workerUrl + '/api/feedback/' + docId);
+        var res = await fetch(state.workerUrl + '/api/feedback/' + docId, { headers: authH() });
         var data = await res.json();
         state.feedback = data.items || [];
         state.currentDocId = docId;
@@ -821,7 +830,7 @@
         try {
           await fetch(state.workerUrl + '/api/feedback/' + (state.currentDocId || state.selectedFile?.docId), {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: authH({ 'Content-Type': 'application/json' }),
             body: JSON.stringify({
               anchor: { type: 'page_level' },
               content: { type: 'text', text: text },
@@ -1028,7 +1037,7 @@
           try {
             await fetch(state.workerUrl + '/api/feedback/' + state.currentDocId + '/' + commentItem.id + '/reply', {
               method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
+              headers: authH({ 'Content-Type': 'application/json' }),
               body: JSON.stringify({
                 content: { type: 'text', text: replyText },
                 author: { displayName: userName },

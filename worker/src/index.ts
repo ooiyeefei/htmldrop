@@ -380,6 +380,10 @@ async function handleInsights(request: Request, env: Env, docId: string, headers
 }
 
 async function handleGetInsights(request: Request, env: Env, docId: string, headers: Record<string, string>): Promise<Response> {
+  // Insights summarize the doc's comments, so a private doc's insights must be
+  // gated exactly like reading its feedback (token-or-owner), not public.
+  const denied = await checkFeedbackAccess(request, env, docId, headers);
+  if (denied) return denied;
   const insights = await getInsights(env, docId);
   return json({ docId, insights }, 200, headers);
 }
@@ -402,11 +406,12 @@ async function handleGetAccess(env: Env, docId: string, headers: Record<string, 
   return json({ scheme: 'open' }, 200, headers);
 }
 
-// POST /admin/migrate-owners?secret=... (or X-Admin-Secret header). Constant-time
+// POST /admin/migrate-owners with an X-Admin-Secret header. Constant-time
 // compares against env.ADMIN_SECRET; 403 if unset or mismatched. On success runs
-// the idempotent owner backfill.
+// the idempotent owner backfill. The secret is header-only (never a query string,
+// which would leak via logs/history/referrers).
 async function handleMigrateOwners(request: Request, env: Env, headers: Record<string, string>): Promise<Response> {
-  const provided = new URL(request.url).searchParams.get('secret') || request.headers.get('X-Admin-Secret') || '';
+  const provided = request.headers.get('X-Admin-Secret') || '';
   if (!env.ADMIN_SECRET) {
     return json({ error: 'Forbidden' }, 403, headers);
   }
