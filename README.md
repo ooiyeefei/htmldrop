@@ -17,6 +17,7 @@ npm install -g @yeefeiooi/htmldrop
 
 ## Table of contents
 
+- [No account needed](#no-account-needed)
 - [Setup](#setup)
 - [Command reference](#command-reference)
 - [Example walkthroughs](#example-walkthroughs)
@@ -26,6 +27,23 @@ npm install -g @yeefeiooi/htmldrop
 - [Security model](#security-model)
 - [Self-hosting the feedback backend](#self-hosting-the-feedback-backend)
 - [Config](#config)
+
+---
+
+## No account needed
+
+There's no htmldrop signup, login, or hosted dashboard — **the CLI is the whole product**. Going from zero to a shareable link is only:
+
+1. `npm install -g @yeefeiooi/htmldrop`
+2. `htmldrop init` — logs into **Surge** (a free third-party static host; the only account involved, and it isn't ours) and picks your subdomain.
+3. `htmldrop auth setup` — generates a **local** random author key on your machine (no email, no verification, no server call). Only needed for the feedback/converge features.
+
+Then `htmldrop push file.html --feedback` and share the link. By default, comments are stored on our free shared Worker (auto-expiring after 90 days). If you'd rather they live on infrastructure you control, [self-host the Worker](#where-your-data-lives-and-how-to-own-it) — still no signup, just one env var (`HTMLDROP_WORKER_URL`).
+
+Two more things are optional and bring-your-own — htmldrop stores **neither**:
+
+- **AI key** — only for `converge` / AI insights; billed by your own provider, used for a single request. See [Multi-provider AI](#multi-provider-ai).
+- **Doc password** — only for private shares; used to encrypt in memory, then discarded. See [Security model](#security-model).
 
 ---
 
@@ -93,7 +111,7 @@ htmldrop push private-spec.html --password coral-sunset-42
 # → Published (AES-256 encrypted). Share BOTH the URL and the password.
 ```
 
-The content is encrypted client-side; viewers must enter the password to decrypt it.
+The content is encrypted client-side; viewers must enter the password to decrypt it. htmldrop stores the password **nowhere** — save it yourself, because a forgotten password can't be recovered (just re-push with a new one). See [Security model](#security-model).
 
 ### Example C — Collaborative review, end to end
 
@@ -289,7 +307,8 @@ Documents and feedback auto-expire after 90 days of inactivity.
 - **No reviewer accounts.** Reviewers comment anonymously; abuse is bounded by per-IP and per-doc rate limits.
 - **Author key** lives only in `~/.htmldrop/config.json` on your machine.
 - **LLM API key (bring-your-own):** in the dashboard it’s held in `sessionStorage` and cleared when you close the browser — never persisted to disk or stored on the server. The Worker uses it for the single request and forgets it.
-- **Password-protected shares** are AES-256 encrypted client-side (StatiCrypt pattern); the password is never sent to a server.
+- **Password-protected shares** are AES-256 encrypted client-side (StatiCrypt pattern) — only the encrypted blob is uploaded (to Surge), so the plaintext never reaches Surge *or* the Worker.
+- **Your password is stored nowhere.** It's held in memory just long enough to encrypt the file at push time, then discarded — never written to `~/.htmldrop/config.json` (which holds only `subdomain`, `email`, `authorKey`), never uploaded, never sent to any server. Two consequences: (1) no breach of our infrastructure can expose a private doc, and (2) **a forgotten password can't be recovered** — there's nothing to recover it from; just re-push with a new one. You (or your agent) choose the password and are responsible for saving it (a password manager is ideal).
 - **Keep the password out of shell history:** use a bare `--password` flag to read from the `HTMLDROP_PASSWORD` env var, or be prompted with hidden input — instead of `--password <pw>` on the command line. Applies to both `push` and `fetch`.
 - **Caveat — comments are not encrypted.** A password protects the document *content* (on Surge), but *comments* are stored in plaintext on the Worker and readable by anyone who has the docId. For a private doc, comment confidentiality rests on the unguessable link, not the password.
 

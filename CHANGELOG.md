@@ -4,6 +4,19 @@ All notable changes to this project are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/), and this project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [1.5.1] — 2026-05-25
+
+### Docs
+
+- Added a **"No account needed"** section to the README (no signup/login/dashboard —
+  just install + `init` + `auth setup`; the only external account is Surge, and the
+  local author key has no email/verification/server). Clarified that the optional AI
+  key and doc password are bring-your-own and stored by neither.
+- Explicit **password-storage** clarification: the doc password is held in memory only
+  to encrypt at push time, then discarded — written nowhere (`config.json` holds just
+  `subdomain`/`email`/`authorKey`), uploaded nowhere, so it can't be recovered if lost
+  (just re-push). Mirrored the note into the skill (ccc) README.
+
 ## [1.5.0] — 2026-05-24
 
 ### Added
@@ -235,6 +248,7 @@ Initial CLI: publish HTML files as shareable links via Surge.sh.
 - `htmldrop delete <file>` — remove a file and redeploy.
 - `htmldrop open <file>` — open a published file in the browser.
 
+[1.5.1]: https://github.com/ooiyeefei/htmldrop/releases/tag/v1.5.1
 [1.5.0]: https://github.com/ooiyeefei/htmldrop/releases/tag/v1.5.0
 [1.4.0]: https://github.com/ooiyeefei/htmldrop/releases/tag/v1.4.0
 [1.3.2]: https://github.com/ooiyeefei/htmldrop/releases/tag/v1.3.2
