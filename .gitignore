@@ -1,3 +1,15 @@
 node_modules/
 .DS_Store
 *.log
+
+# Claude Code & dev tooling (local, not shared)
+.claude/
+.agents/
+.serena/
+.playwright-mcp/
+.specify/
+
+# UAT / test scratch — but keep the crypto regression test under version control
+test-fixtures/*
+!test-fixtures/crypto-roundtrip.test.mjs
+uat-private-feedback-decrypted.png
