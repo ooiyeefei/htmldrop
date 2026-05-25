@@ -130,6 +130,7 @@ feedback
   .command('read <docIdOrUrl>')
   .description('Read feedback for any doc by docId or URL (public, no auth or manifest needed)')
   .option('--json', 'Output as JSON')
+  .option('-p, --password [password]', 'Password for a protected doc (its feedback is gated). Omit the value to use $HTMLDROP_PASSWORD or a hidden prompt')
   .action(async (docIdOrUrl, options) => {
     try {
       await feedbackRead(docIdOrUrl, options);
@@ -147,6 +148,7 @@ feedback
   .option('--name <name>', 'Display name for the comment author', 'AI Agent')
   .option('--on <text>', 'Anchor the comment to specific text in the document')
   .option('--parent-id <id>', 'Reply to an existing comment by its ID')
+  .option('-p, --password [password]', 'Password for a protected doc (its feedback is gated). Omit the value to use $HTMLDROP_PASSWORD or a hidden prompt')
   .action(async (file, options) => {
     try {
       await feedbackAdd(file, options);

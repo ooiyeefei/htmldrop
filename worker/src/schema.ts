@@ -32,6 +32,16 @@ export const FeedbackItemSchema = z.object({
   parentId: z.string().uuid().nullable().optional(),
 });
 
+// Replies are threaded under a parent comment (the parent id comes from the URL),
+// so they carry NO anchor of their own — validate them without one. (Validating
+// replies against FeedbackItemSchema, which requires an anchor, 400'd every reply.)
+export const ReplySchema = z.object({
+  content: ContentSchema,
+  author: z.object({
+    displayName: z.string().max(100),
+  }),
+});
+
 export const FeedbackStoredSchema = FeedbackItemSchema.extend({
   id: z.string().uuid(),
   docId: z.string(),

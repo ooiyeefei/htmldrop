@@ -1,6 +1,6 @@
 import { basename } from 'node:path';
 import { loadManifest } from '../manifest.js';
-import { extractDocId } from './read.js';
+import { extractDocId, resolveAccessHeaders } from './read.js';
 
 const DEFAULT_WORKER_URL = 'https://htmldrop-feedback.htmldrop.workers.dev';
 
@@ -51,9 +51,13 @@ export async function feedbackAdd(file, options = {}) {
     parentId: options.parentId || null,
   };
 
+  // Gated doc -> derive the access token from --password; open doc -> no token
+  // header (unchanged public behavior).
+  const accessHeaders = await resolveAccessHeaders(workerUrl, docId, options);
+
   const res = await fetch(`${workerUrl}/api/feedback/${encodeURIComponent(docId)}`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...accessHeaders },
     body: JSON.stringify(body),
   });
 

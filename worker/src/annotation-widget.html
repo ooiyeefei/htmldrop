@@ -5,6 +5,18 @@
   if (!configEl) return;
   const config = JSON.parse(configEl.textContent);
 
+  // Feedback access token (private/gated docs only). The password gate derives it
+  // and hands it off via sessionStorage; public docs have none, so the header is
+  // simply omitted (unchanged behavior). Read once on load.
+  var HD_ACCESS = (function(){ try { return sessionStorage.getItem('htmldrop_access'); } catch(e){ return null; } })();
+
+  // Storage throws in a sandboxed (opaque-origin) context — public docs are served
+  // with CSP `sandbox allow-scripts`. Guard every access with an in-memory fallback
+  // so the widget still loads (an unguarded localStorage read used to abort it).
+  var HD_MEM = {};
+  function hdGet(k){ try { return localStorage.getItem(k); } catch(e){ return HD_MEM[k] != null ? HD_MEM[k] : null; } }
+  function hdSet(k, v){ HD_MEM[k] = v; try { localStorage.setItem(k, v); } catch(e){} }
+
   // Inject highlight + area-box styles into document head (light DOM)
   const docStyle = document.createElement('style');
   docStyle.textContent = `
@@ -256,7 +268,7 @@
   let activePopover = null;
   let tooltip = null;
   let areaMode = false;
-  let userName = localStorage.getItem('htmldrop_reviewer_name') || '';
+  let userName = hdGet('htmldrop_reviewer_name') || '';
 
   // Detect mobile (panel layout changes)
   const isMobile = window.matchMedia('(max-width: 768px)').matches;
@@ -413,10 +425,12 @@
       author: { displayName: name },
       parentId: null,
     };
+    var headers = { 'Content-Type': 'application/json' };
+    if (HD_ACCESS) headers['X-HTMLDrop-Access'] = HD_ACCESS;
     try {
       await fetch((config.workerUrl || '') + '/api/feedback/' + config.docId, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: headers,
         body: JSON.stringify(body),
       });
       await loadComments();
@@ -431,10 +445,12 @@
       author: { displayName: name },
       parentId: null,
     };
+    var headers = { 'Content-Type': 'application/json' };
+    if (HD_ACCESS) headers['X-HTMLDrop-Access'] = HD_ACCESS;
     try {
       await fetch((config.workerUrl || '') + '/api/feedback/' + config.docId, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: headers,
         body: JSON.stringify(body),
       });
       await loadComments();
@@ -497,10 +513,12 @@
       author: { displayName: name },
       parentId: parentItem.id,
     };
+    var headers = { 'Content-Type': 'application/json' };
+    if (HD_ACCESS) headers['X-HTMLDrop-Access'] = HD_ACCESS;
     try {
       await fetch((config.workerUrl || '') + '/api/feedback/' + config.docId + '/' + parentItem.id + '/reply', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: headers,
         body: JSON.stringify(body),
       });
       await loadComments();
@@ -524,8 +542,10 @@
   }
 
   async function loadComments() {
+    var headers = {};
+    if (HD_ACCESS) headers['X-HTMLDrop-Access'] = HD_ACCESS;
     try {
-      const res = await fetch((config.workerUrl || '') + '/api/feedback/' + config.docId);
+      const res = await fetch((config.workerUrl || '') + '/api/feedback/' + config.docId, { headers: headers });
       const data = await res.json();
       comments = data.items || [];
       renderPanel();
@@ -562,8 +582,10 @@
   }
 
   async function loadInsights() {
+    var headers = {};
+    if (HD_ACCESS) headers['X-HTMLDrop-Access'] = HD_ACCESS;
     try {
-      const res = await fetch((config.workerUrl || '') + '/api/insights/' + config.docId);
+      const res = await fetch((config.workerUrl || '') + '/api/insights/' + config.docId, { headers: headers });
       const data = await res.json();
       insights = data.insights || {};
     } catch(e) { insights = {}; }
@@ -638,7 +660,7 @@
     nameInput.className = 'hd-compose-name';
     nameInput.placeholder = 'Display name';
     nameInput.value = userName;
-    nameInput.addEventListener('change', () => { userName = nameInput.value.trim(); localStorage.setItem('htmldrop_reviewer_name', userName); });
+    nameInput.addEventListener('change', () => { userName = nameInput.value.trim(); hdSet('htmldrop_reviewer_name', userName); });
     const submitBtn = document.createElement('button');
     submitBtn.className = 'hd-compose-submit';
     submitBtn.textContent = 'Comment';

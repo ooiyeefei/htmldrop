@@ -4,7 +4,7 @@ import { execSync, execFileSync } from 'node:child_process';
 import { basename, resolve, join } from 'node:path';
 import open from 'open';
 import { requireConfig, getSiteDir, ensureSiteDir, getFileUrl } from './config.js';
-import { encryptHtml } from './encrypt.js';
+import { encryptToEnvelope, buildGatePage } from './encrypt.js';
 import { generateGallery } from './gallery.js';
 import { loadManifest, saveManifest } from './manifest.js';
 import { injectFeedbackWidget } from './feedback/inject.js';
@@ -18,7 +18,9 @@ function getSurgeCommand() {
     execSync('which surge', { stdio: 'ignore' });
     return 'surge';
   } catch {
-    return 'npx surge';
+    // Pinned npx fallback (--yes skips the install prompt; pinning avoids
+    // silently fetching whatever 'latest' resolves to at deploy time).
+    return 'npx --yes surge@0.27.4';
   }
 }
 
@@ -95,8 +97,17 @@ export async function push(file, options = {}) {
 
   // Encrypt if password provided. Runs AFTER widget injection so the widget is
   // inside the encrypted payload and survives the client-side decrypt+rerender.
+  // For an encrypted feedback doc we also derive the access capability (a
+  // password-derived token) and register only its HASH + the (public) salt with
+  // the Worker, so the Worker can gate comments on password-knowledge without
+  // ever seeing the password or the AES key.
+  let accessHash = null;
+  let accessSalt = null;
   if (password) {
-    content = encryptHtml(content, password);
+    const enc = encryptToEnvelope(content, password);
+    content = buildGatePage(enc.envelope);
+    accessHash = enc.accessHash;
+    accessSalt = enc.salt;
     console.log(`Encrypting ${filename} with password protection...`);
   }
 
@@ -176,7 +187,7 @@ export async function push(file, options = {}) {
           'Authorization': `Bearer ${feedbackAuthorKey}`,
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ url }),
+        body: JSON.stringify(isEncrypted && accessHash ? { url, accessHash, salt: accessSalt } : { url }),
       });
       if (!res.ok) {
         console.warn('Warning: could not register doc with feedback worker.');
