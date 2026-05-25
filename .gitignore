@@ -15,4 +15,5 @@ test-fixtures/*
 !test-fixtures/crypto-roundtrip.test.mjs
 !test-fixtures/access-token.test.mjs
 !test-fixtures/worker-access.integration.mjs
+!test-fixtures/build-private-gate.mjs
 uat-private-feedback-decrypted.png
