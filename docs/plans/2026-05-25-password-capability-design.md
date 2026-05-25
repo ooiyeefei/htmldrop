@@ -68,11 +68,14 @@ XOR-accumulate loop over the 32 bytes. Never compare variable-length strings dir
 - if `accessHash`/`salt` given (private) -> write `access:<docId>`.
 
 **Migration (close the land-grab window):** one-time idempotent `migrateOwners(env)` — `KV.list`
-over `AUTHORS`, and for each `(key, docId)` set `owner:<docId> = SHA-256(key)` when absent
-(earliest `createdAt` wins on collision). Exposed as guarded `POST /admin/migrate-owners`
-(constant-time check of `env.ADMIN_SECRET`). **Run once right after deploy, before sharing new
-links.** Without it, a legacy doc has no owner record and the first authenticated `register`
-would claim it; a re-push by the true owner also establishes ownership. Document both paths.
+over `AUTHORS`, and for each `(key, docId)` set `owner:<docId> = SHA-256(key)` when absent. A
+docId claimed by **more than one distinct key** (possible from the pre-set-once land-grab bug)
+is **ambiguous: it is skipped, not auto-assigned**, and returned in a `collisions[]` list for
+manual repair (the true owner clears + re-pushes). Exposed as guarded `POST /admin/migrate-owners`
+with an **`X-Admin-Secret` header** (no query string — constant-time check of `env.ADMIN_SECRET`).
+**Run once right after deploy, before sharing new links.** Without it, a legacy doc has no owner
+record and the first authenticated `register` would claim it; a re-push by the true owner also
+establishes ownership.
 
 ## F1 — CSP sandbox (scope carefully, refinement #3)
 

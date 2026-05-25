@@ -10,6 +10,13 @@
   // simply omitted (unchanged behavior). Read once on load.
   var HD_ACCESS = (function(){ try { return sessionStorage.getItem('htmldrop_access'); } catch(e){ return null; } })();
 
+  // Storage throws in a sandboxed (opaque-origin) context — public docs are served
+  // with CSP `sandbox allow-scripts`. Guard every access with an in-memory fallback
+  // so the widget still loads (an unguarded localStorage read used to abort it).
+  var HD_MEM = {};
+  function hdGet(k){ try { return localStorage.getItem(k); } catch(e){ return HD_MEM[k] != null ? HD_MEM[k] : null; } }
+  function hdSet(k, v){ HD_MEM[k] = v; try { localStorage.setItem(k, v); } catch(e){} }
+
   // Inject highlight + area-box styles into document head (light DOM)
   const docStyle = document.createElement('style');
   docStyle.textContent = `
@@ -261,7 +268,7 @@
   let activePopover = null;
   let tooltip = null;
   let areaMode = false;
-  let userName = localStorage.getItem('htmldrop_reviewer_name') || '';
+  let userName = hdGet('htmldrop_reviewer_name') || '';
 
   // Detect mobile (panel layout changes)
   const isMobile = window.matchMedia('(max-width: 768px)').matches;
@@ -653,7 +660,7 @@
     nameInput.className = 'hd-compose-name';
     nameInput.placeholder = 'Display name';
     nameInput.value = userName;
-    nameInput.addEventListener('change', () => { userName = nameInput.value.trim(); localStorage.setItem('htmldrop_reviewer_name', userName); });
+    nameInput.addEventListener('change', () => { userName = nameInput.value.trim(); hdSet('htmldrop_reviewer_name', userName); });
     const submitBtn = document.createElement('button');
     submitBtn.className = 'hd-compose-submit';
     submitBtn.textContent = 'Comment';

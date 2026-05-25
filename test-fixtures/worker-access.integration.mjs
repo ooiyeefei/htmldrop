@@ -1,5 +1,7 @@
 // End-to-end check of the v1.6.0 password-capability access model against a
-// live local Worker (`wrangler dev`). Run after the dev server is up:
+// live local Worker. Start it with ADMIN_SECRET set (the migration success case
+// needs it), then run the test:
+//   (cd worker && npx wrangler dev --local --port 8787 --var ADMIN_SECRET:testsecret123)
 //   node test-fixtures/worker-access.integration.mjs
 import { encryptToEnvelope, deriveAccessToken } from '../src/encrypt.js';
 import { randomUUID } from 'node:crypto';

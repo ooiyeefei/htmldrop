@@ -301,7 +301,10 @@
       const hash = window.location.hash.slice(1);
       const params = new URLSearchParams(hash);
       if (params.get('key')) state.authorKey = params.get('key');
-      if (params.get('worker')) state.workerUrl = params.get('worker');
+      // Only honor a fragment worker URL when a key is ALSO in the same fragment
+      // (as `htmldrop studio` always emits). Otherwise a crafted #worker= link could
+      // redirect a stored author key to an attacker's origin.
+      if (params.get('worker') && params.get('key')) state.workerUrl = params.get('worker');
       if (params.get('doc')) state.currentDocId = params.get('doc');
 
       // Author key is a credential: keep it in sessionStorage so it does NOT
