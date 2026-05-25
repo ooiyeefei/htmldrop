@@ -1,5 +1,5 @@
 import { existsSync, unlinkSync, writeFileSync } from 'node:fs';
-import { execSync } from 'node:child_process';
+import { execSync, execFileSync } from 'node:child_process';
 import { join } from 'node:path';
 import { requireConfig, getSiteDir } from './config.js';
 import { loadManifest, saveManifest } from './manifest.js';
@@ -51,7 +51,8 @@ export async function deleteFile(filename) {
   console.log(`Removing ${filename} and redeploying...`);
 
   try {
-    execSync(`${surgeCmd} ${siteDir} --domain ${domain}`, { stdio: 'inherit' });
+    const [cmd, ...pre] = surgeCmd.split(' ');
+    execFileSync(cmd, [...pre, siteDir, '--domain', domain], { stdio: 'inherit' });
   } catch {
     throw new Error('Surge deploy failed. The file was removed locally but may still be live.');
   }

@@ -7,6 +7,10 @@ import { callLLM } from './llm';
 import DASHBOARD_HTML from './dashboard.html';
 import WIDGET_HTML from './annotation-widget.html';
 
+// Cap uploaded doc HTML to avoid KV bloat / abuse. 2 MB is well above any
+// reasonable single-page document.
+const MAX_DOC_HTML_BYTES = 2_000_000;
+
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
@@ -100,6 +104,9 @@ export default {
         const html = await request.text();
         if (!html) {
           return json({ error: 'HTML body required' }, 400, corsHeaders);
+        }
+        if (html.length > MAX_DOC_HTML_BYTES) {
+          return json({ error: 'Document too large' }, 413, corsHeaders);
         }
         await storeDocContent(env, docId, html);
         return json({ stored: true, docId }, 200, corsHeaders);

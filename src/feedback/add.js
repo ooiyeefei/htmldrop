@@ -51,7 +51,7 @@ export async function feedbackAdd(file, options = {}) {
     parentId: options.parentId || null,
   };
 
-  const res = await fetch(`${workerUrl}/api/feedback/${docId}`, {
+  const res = await fetch(`${workerUrl}/api/feedback/${encodeURIComponent(docId)}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),

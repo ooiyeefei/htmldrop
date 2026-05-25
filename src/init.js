@@ -1,4 +1,4 @@
-import { execSync } from 'node:child_process';
+import { execSync, execFileSync } from 'node:child_process';
 import { createInterface } from 'node:readline';
 import { writeConfig, ensureSiteDir, getSiteDir, readConfig } from './config.js';
 
@@ -81,10 +81,12 @@ export async function init() {
   const surgeCmd = getSurgeCommand();
   const domain = `${subdomain}.surge.sh`;
 
+  const [cmd, ...pre] = surgeCmd.split(' ');
+
   try {
     // This triggers interactive email/password prompt on first run
     // After login, token is saved to ~/.netrc for future deploys
-    execSync(`${surgeCmd} ${siteDir} --domain ${domain}`, { stdio: 'inherit' });
+    execFileSync(cmd, [...pre, siteDir, '--domain', domain], { stdio: 'inherit' });
   } catch {
     throw new Error(
       'Surge deploy failed. Make sure you have internet connectivity and try again.'
@@ -93,7 +95,7 @@ export async function init() {
 
   // Try to get email from surge whoami (after successful login)
   try {
-    const email = execSync(`${surgeCmd} whoami`, { encoding: 'utf-8' }).trim();
+    const email = execFileSync(cmd, [...pre, 'whoami'], { encoding: 'utf-8' }).trim();
     config.email = email;
     writeConfig(config);
   } catch {

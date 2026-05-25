@@ -108,7 +108,7 @@ Add `--noindex` to block search engines/AI crawlers, or `--open` to open it afte
 
 ```bash
 htmldrop push private-spec.html --password coral-sunset-42
-# → Published (AES-256 encrypted). Share BOTH the URL and the password.
+# → Published (AES-256-GCM encrypted). Share BOTH the URL and the password.
 ```
 
 The content is encrypted client-side; viewers must enter the password to decrypt it. htmldrop stores the password **nowhere** — save it yourself, because a forgotten password can't be recovered (just re-push with a new one). See [Security model](#security-model).
@@ -307,7 +307,7 @@ Documents and feedback auto-expire after 90 days of inactivity.
 - **No reviewer accounts.** Reviewers comment anonymously; abuse is bounded by per-IP and per-doc rate limits.
 - **Author key** lives only in `~/.htmldrop/config.json` on your machine.
 - **LLM API key (bring-your-own):** in the dashboard it’s held in `sessionStorage` and cleared when you close the browser — never persisted to disk or stored on the server. The Worker uses it for the single request and forgets it.
-- **Password-protected shares** are AES-256 encrypted client-side (StatiCrypt pattern) — only the encrypted blob is uploaded (to Surge), so the plaintext never reaches Surge *or* the Worker.
+- **Password-protected shares** use **AES-256-GCM**, with the key derived from your password via **PBKDF2 (SHA-256, 600k iterations)** and a random salt/IV — authenticated encryption, computed client-side (the browser decrypts with built-in WebCrypto; the password is never sent to a server). Only the encrypted blob is uploaded (to Surge), so the plaintext never reaches Surge *or* the Worker.
 - **Your password is stored nowhere.** It's held in memory just long enough to encrypt the file at push time, then discarded — never written to `~/.htmldrop/config.json` (which holds only `subdomain`, `email`, `authorKey`), never uploaded, never sent to any server. Two consequences: (1) no breach of our infrastructure can expose a private doc, and (2) **a forgotten password can't be recovered** — there's nothing to recover it from; just re-push with a new one. You (or your agent) choose the password and are responsible for saving it (a password manager is ideal).
 - **Keep the password out of shell history:** use a bare `--password` flag to read from the `HTMLDROP_PASSWORD` env var, or be prompted with hidden input — instead of `--password <pw>` on the command line. Applies to both `push` and `fetch`.
 - **Caveat — comments are not encrypted.** A password protects the document *content* (on Surge), but *comments* are stored in plaintext on the Worker and readable by anyone who has the docId. For a private doc, comment confidentiality rests on the unguessable link, not the password.

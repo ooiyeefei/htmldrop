@@ -1,4 +1,4 @@
-import { basename } from 'node:path';
+import { basename, resolve, sep } from 'node:path';
 import { writeFileSync } from 'node:fs';
 import { getAuthorKey } from '../auth.js';
 import { loadManifest } from '../manifest.js';
@@ -22,7 +22,7 @@ export async function feedbackPull(file, options = {}) {
   const workerUrl = options.workerUrl || process.env.HTMLDROP_WORKER_URL || DEFAULT_WORKER_URL;
   const authorKey = getAuthorKey();
 
-  const res = await fetch(`${workerUrl}/api/feedback/${entry.docId}`, {
+  const res = await fetch(`${workerUrl}/api/feedback/${encodeURIComponent(entry.docId)}`, {
     headers: { 'Authorization': `Bearer ${authorKey}` },
   });
 
@@ -36,6 +36,11 @@ export async function feedbackPull(file, options = {}) {
   // --save: write comments into the repo as JSON so they're owned + versioned by the user.
   if (options.save) {
     const outPath = options.out || `${name.replace(/\.html?$/i, '')}.feedback.json`;
+    // Confine the output to the current working directory (the --out value is user-supplied).
+    const resolved = resolve(process.cwd(), outPath);
+    if (resolved !== resolve(process.cwd()) && !resolved.startsWith(resolve(process.cwd()) + sep)) {
+      throw new Error('Refusing to write outside the current directory');
+    }
     const snapshot = {
       docId: entry.docId,
       file: name,
@@ -43,7 +48,7 @@ export async function feedbackPull(file, options = {}) {
       count: data.count,
       comments: data.items,
     };
-    writeFileSync(outPath, JSON.stringify(snapshot, null, 2) + '\n', 'utf-8');
+    writeFileSync(resolved, JSON.stringify(snapshot, null, 2) + '\n', 'utf-8');
     console.log(`Saved ${data.count} comment(s) to ${outPath} (commit it to keep them in your repo).`);
     if (options.silent || options.json) return data;
   }

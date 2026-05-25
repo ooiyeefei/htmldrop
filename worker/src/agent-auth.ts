@@ -153,8 +153,24 @@ export async function handleAgentRevoke(
     return agentAuthError('invalid_request', 'Malformed logout token', 400);
   }
 
+  const headerStr = atob(parts[0].replace(/-/g, '+').replace(/_/g, '/'));
+  const header = JSON.parse(headerStr) as { alg?: string; kid?: string };
+
   const payloadStr = atob(parts[1].replace(/-/g, '+').replace(/_/g, '/'));
   const payload = JSON.parse(payloadStr) as { sub?: string; iss?: string };
+
+  // SECURITY: verify the logout token's signature and trusted issuer BEFORE acting
+  // on its payload. Without this, anyone could forge an unsigned token to force-logout
+  // a victim (a targeted DoS that also orphans the victim's docs). Fail closed.
+  const provider = TRUSTED_PROVIDERS.find(p => p.iss === payload.iss);
+  if (!provider) {
+    return agentAuthError('invalid_issuer', `Issuer ${payload.iss} is not in the trusted providers list`, 401);
+  }
+
+  const verified = await verifyJwtSignature(token, provider.jwks_uri, header.alg || 'ES256', header.kid);
+  if (!verified) {
+    return agentAuthError('invalid_signature', 'Logout token signature verification failed', 401);
+  }
 
   if (payload.sub) {
     const userKey = `user:${payload.iss}:${payload.sub}`;

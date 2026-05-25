@@ -4,6 +4,42 @@ All notable changes to this project are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/), and this project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [1.5.2] — 2026-05-25
+
+### Security
+
+- **Stronger password encryption.** Password-protected docs now use **AES-256-GCM**
+  with the key derived via **PBKDF2 (SHA-256, 600,000 iterations)** plus a random
+  salt + IV, computed with built-in WebCrypto (browser gate) / Node `crypto` (CLI).
+  This replaces crypto-js passphrase mode (OpenSSL `EVP_BytesToKey` = MD5, a single
+  iteration), whose weak KDF made the *public* ciphertext cheap to brute-force for
+  memorable passwords. New docs use a self-describing `v2:` envelope; `fetch` still
+  decrypts older docs (crypto-js fallback retained). The browser password-gate no
+  longer loads crypto-js from a CDN, removing a missing-SRI third-party dependency.
+- **Gallery filename XSS** — the public index page now HTML-escapes file names and
+  URL-encodes hrefs, so a crafted filename can't inject markup into your Surge origin.
+- **Worker — unauthenticated logout fixed.** `/agent/auth/revoke` now verifies the
+  logout token's issuer **and signature** before deleting any credential; previously
+  an unsigned token could force-logout / orphan another user's docs.
+- **Worker — per-doc comment counter** now carries the 90-day TTL and resets on
+  `feedback clear`, so a doc is no longer permanently frozen at the lifetime cap.
+- **Worker — 2 MB cap** on uploaded document HTML (KV-bloat guard).
+- **Hardening.** Author-key config written `0600` (dir `0700`); Surge invoked via
+  `execFileSync` (array args, no shell); `docId` URL-encoded and `--save`/`--out`
+  paths confined to the working directory; injected widget config escapes `</script>`;
+  `converge --api-key` help notes it's visible in shell history / process list
+  (prefer the env var).
+
+### Docs
+
+- Security model + Example B updated to describe AES-256-GCM + PBKDF2. The skill's
+  teammate example now uses the bare `--password` form (keeps secrets out of history).
+
+### Note
+
+The **Worker** fixes take effect only after a redeploy (`wrangler deploy`); the CLI,
+template, and docs fixes ship with this npm release.
+
 ## [1.5.1] — 2026-05-25
 
 ### Docs
@@ -248,6 +284,7 @@ Initial CLI: publish HTML files as shareable links via Surge.sh.
 - `htmldrop delete <file>` — remove a file and redeploy.
 - `htmldrop open <file>` — open a published file in the browser.
 
+[1.5.2]: https://github.com/ooiyeefei/htmldrop/releases/tag/v1.5.2
 [1.5.1]: https://github.com/ooiyeefei/htmldrop/releases/tag/v1.5.1
 [1.5.0]: https://github.com/ooiyeefei/htmldrop/releases/tag/v1.5.0
 [1.4.0]: https://github.com/ooiyeefei/htmldrop/releases/tag/v1.4.0

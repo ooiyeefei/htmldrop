@@ -1,4 +1,5 @@
 import { writeFileSync } from 'node:fs';
+import { resolve, sep } from 'node:path';
 import { decryptHtml } from './encrypt.js';
 import { resolvePassword } from './prompt.js';
 
@@ -37,7 +38,14 @@ export async function fetchDoc(url, options = {}) {
   }
 
   if (options.out) {
-    writeFileSync(options.out, output, 'utf-8');
+    // Confine writes to the current working directory — a malicious --out
+    // (e.g. ../../etc/something or an absolute path) must not escape the cwd.
+    const cwd = resolve(process.cwd());
+    const outPath = resolve(cwd, options.out);
+    if (outPath !== cwd && !outPath.startsWith(cwd + sep)) {
+      throw new Error('Refusing to write outside the current directory');
+    }
+    writeFileSync(outPath, output, 'utf-8');
     console.log(`Wrote ${output.length} bytes to ${options.out}`);
   } else {
     process.stdout.write(output);

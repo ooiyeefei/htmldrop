@@ -1,6 +1,6 @@
 import { existsSync, readFileSync, writeFileSync, statSync } from 'node:fs';
 import { randomUUID } from 'node:crypto';
-import { execSync } from 'node:child_process';
+import { execSync, execFileSync } from 'node:child_process';
 import { basename, resolve, join } from 'node:path';
 import open from 'open';
 import { requireConfig, getSiteDir, ensureSiteDir, getFileUrl } from './config.js';
@@ -144,7 +144,8 @@ export async function push(file, options = {}) {
   console.log(`\nDeploying to ${domain}...`);
 
   try {
-    execSync(`${surgeCmd} ${siteDir} --domain ${domain}`, { stdio: 'inherit' });
+    const [cmd, ...pre] = surgeCmd.split(' ');
+    execFileSync(cmd, [...pre, siteDir, '--domain', domain], { stdio: 'inherit' });
   } catch {
     throw new Error(
       'Surge deploy failed. Make sure you are logged in (run `htmldrop init`).'

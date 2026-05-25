@@ -1,4 +1,5 @@
 import type { FeedbackStored } from './schema';
+import { docTotalKey } from './rate-limit';
 
 export interface Env {
   FEEDBACK: KVNamespace;
@@ -29,6 +30,10 @@ export async function addFeedback(env: Env, docId: string, item: FeedbackStored)
 
 export async function deleteFeedback(env: Env, docId: string): Promise<void> {
   await env.FEEDBACK.delete(feedbackKey(docId));
+  // Also reset the lifetime comment counter so clearing feedback un-freezes a doc
+  // that had hit the per-doc total cap. The counter lives in the RATE_LIMITS
+  // namespace; reuse the key-builder from rate-limit.ts to keep the format in sync.
+  await env.RATE_LIMITS.delete(docTotalKey(docId));
 }
 
 export async function getDocCount(env: Env, docId: string): Promise<number> {

@@ -5,6 +5,9 @@ import { fileURLToPath } from 'node:url';
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const TEMPLATE_PATH = join(__dirname, '..', 'templates', 'gallery.html');
 
+const escHtml = (s) =>
+  String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
 function formatFileSize(bytes) {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
@@ -31,9 +34,9 @@ function generateFileCards(files) {
       const date = formatDate(file.date);
 
       return `
-      <a href="${file.name}" class="card">
+      <a href="${encodeURIComponent(file.name)}" class="card">
         <div class="card-header">
-          <span class="card-title">${file.name}</span>
+          <span class="card-title">${escHtml(file.name)}</span>
           ${badge}
         </div>
         <div class="card-meta">
@@ -62,7 +65,7 @@ export function generateGallery(files, config) {
   const emptyDisplay = fileCount === 0 ? 'block' : 'none';
 
   return template
-    .replaceAll('{{SUBDOMAIN}}', config.subdomain)
+    .replaceAll('{{SUBDOMAIN}}', escHtml(config.subdomain))
     .replaceAll('{{FILE_CARDS}}', cards)
     .replaceAll('{{FILE_COUNT}}', String(fileCount))
     .replaceAll('{{LAST_UPDATED}}', lastUpdated)

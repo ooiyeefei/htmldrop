@@ -20,7 +20,7 @@ export async function feedbackClear(file, options = {}) {
   const workerUrl = options.workerUrl || process.env.HTMLDROP_WORKER_URL || DEFAULT_WORKER_URL;
   const authorKey = getAuthorKey();
 
-  const res = await fetch(`${workerUrl}/api/feedback/${entry.docId}`, {
+  const res = await fetch(`${workerUrl}/api/feedback/${encodeURIComponent(entry.docId)}`, {
     method: 'DELETE',
     headers: { 'Authorization': `Bearer ${authorKey}` },
   });

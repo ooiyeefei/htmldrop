@@ -186,7 +186,7 @@ program
   .option('--dry-run', 'Show the prompt without calling the LLM')
   .option('--provider <provider>', 'LLM provider: anthropic | openai | gemini (auto-detected from key if omitted)')
   .option('--model <model>', 'Model id (defaults to a sensible model for the provider)')
-  .option('--api-key <key>', 'API key (otherwise read from LLM_API_KEY / ANTHROPIC_API_KEY / OPENAI_API_KEY / GEMINI_API_KEY)')
+  .option('--api-key <key>', 'API key (read from LLM_API_KEY / ANTHROPIC_API_KEY / OPENAI_API_KEY / GEMINI_API_KEY if omitted; prefer the env var — a key passed here is visible in your shell history and process list)')
   .action(async (file, options) => {
     try {
       await converge(file, options);
