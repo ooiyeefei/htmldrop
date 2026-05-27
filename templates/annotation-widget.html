@@ -23,6 +23,11 @@
     mark.hd-hl { background: #e0e7ff; border-bottom: 2px solid #6366f1; border-radius: 2px; padding: 0 1px; cursor: pointer; transition: background 0.2s, box-shadow 0.2s; }
     mark.hd-hl:hover { background: #c7d2fe; }
     mark.hd-hl.flash { background: #a5b4fc; box-shadow: 0 0 0 3px rgba(99,102,241,0.25); }
+    /* Orphaned text-range comment: the original text is gone, so we tint the block
+       it lived in instead of highlighting a phrase. Tint + inset shadow only — must
+       NOT shift layout (no border/margin/padding). */
+    .hd-stale-block { background: rgba(99,102,241,0.06); box-shadow: inset 3px 0 0 #c7d2fe; transition: background 0.2s, box-shadow 0.2s; }
+    .hd-stale-block.flash { background: rgba(99,102,241,0.16); box-shadow: inset 3px 0 0 #6366f1, 0 0 0 3px rgba(99,102,241,0.2); }
     body.hd-area-mode { cursor: crosshair; }
     body.hd-area-mode, body.hd-area-mode * { user-select: none !important; }
     .hd-area-overlay { position: absolute; top: 0; left: 0; pointer-events: none; z-index: 999970; }
@@ -102,6 +107,18 @@
       padding: 2px 8px; background: #eef2ff; color: #4f46e5;
       border-radius: 4px; font-size: 11px; font-weight: 500;
     }
+    /* Orphaned anchor: the quoted text no longer exists in the doc. Replaces the
+       .hd-anchor chip with a muted "text updated" badge + a before/after diff. */
+    .hd-stale-badge {
+      display: inline-block; margin-top: 6px; margin-left: 32px;
+      padding: 2px 8px; background: #f3f4f6; color: #6b7280;
+      border-radius: 4px; font-size: 11px; font-weight: 500;
+    }
+    .hd-stale-diff { margin-top: 4px; margin-left: 32px; font-size: 11px; line-height: 1.5; }
+    .hd-stale-diff .hd-stale-row { color: #9ca3af; }
+    .hd-stale-diff .hd-stale-row .hd-stale-label { color: #9ca3af; font-weight: 500; }
+    .hd-stale-diff .hd-stale-row.hd-stale-now { color: #4f46e5; }
+    .hd-stale-diff .hd-stale-row.hd-stale-now .hd-stale-label { color: #6366f1; }
     .hd-reply-section {
       margin-left: 32px; margin-top: 8px;
       padding-left: 12px; border-left: 2px solid #e5e7eb;
@@ -541,6 +558,47 @@
     return parts.join(' > ');
   }
 
+  // Flatten the document's visible text (excluding the widget's own UI) into one
+  // lowercased string. SHARED by computeAnchorStatus (orphan detection) and the
+  // match in highlightText, so the two can never disagree about whether a phrase
+  // is present.
+  function bodyTextLower() {
+    let flat = '';
+    const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+    while (walker.nextNode()) {
+      const node = walker.currentNode;
+      if (node.parentElement && (node.parentElement.id === 'htmldrop-widget-host' || node.parentElement.closest('#htmldrop-widget-host'))) continue;
+      flat += node.textContent;
+    }
+    return flat.toLowerCase();
+  }
+
+  // Decide, for every top-level text_range comment, whether its anchored text still
+  // exists in the doc. Runs BEFORE renderPanel so the panel can render the orphan
+  // badge. Orphan = selectedText not found in the body text. For orphans we also
+  // capture what the anchored element now says (_currentText), tolerating a stored
+  // selector that is missing or syntactically invalid.
+  function computeAnchorStatus() {
+    const flatLower = bodyTextLower();
+    comments.forEach(item => {
+      if (item.parentId) return;
+      if (!item.anchor || item.anchor.type !== 'text_range' || !item.anchor.selectedText) {
+        item._orphaned = false;
+        item._currentText = undefined;
+        return;
+      }
+      const found = flatLower.indexOf(item.anchor.selectedText.toLowerCase()) !== -1;
+      item._orphaned = !found;
+      item._currentText = undefined;
+      if (!found && item.anchor.selector) {
+        try {
+          const el = document.querySelector(item.anchor.selector);
+          if (el) item._currentText = (el.textContent || '').trim();
+        } catch (e) { /* invalid selector — leave _currentText undefined */ }
+      }
+    });
+  }
+
   async function loadComments() {
     var headers = {};
     if (HD_ACCESS) headers['X-HTMLDrop-Access'] = HD_ACCESS;
@@ -548,6 +606,7 @@
       const res = await fetch((config.workerUrl || '') + '/api/feedback/' + config.docId, { headers: headers });
       const data = await res.json();
       comments = data.items || [];
+      computeAnchorStatus();
       renderPanel();
       highlightAnchors();
       renderAreaBoxes();
@@ -710,7 +769,34 @@
 
     el.append(header, text);
 
-    if (item.anchor?.selectedText) {
+    if (item.anchor?.selectedText && item._orphaned) {
+      // Orphaned text anchor: original quote is gone. Show a muted "updated" badge
+      // plus a before/after so the reviewer can see what the text became.
+      const badge = document.createElement('span');
+      badge.className = 'hd-stale-badge';
+      badge.textContent = '✎ text updated since this comment';
+      el.appendChild(badge);
+
+      const diff = document.createElement('div');
+      diff.className = 'hd-stale-diff';
+      const wasRow = document.createElement('div');
+      wasRow.className = 'hd-stale-row';
+      const wasLabel = document.createElement('span');
+      wasLabel.className = 'hd-stale-label';
+      wasLabel.textContent = 'was: ';
+      wasRow.append(wasLabel, document.createTextNode('"' + item.anchor.selectedText.slice(0, 60) + '"'));
+      diff.appendChild(wasRow);
+      if (item._currentText) {
+        const nowRow = document.createElement('div');
+        nowRow.className = 'hd-stale-row hd-stale-now';
+        const nowLabel = document.createElement('span');
+        nowLabel.className = 'hd-stale-label';
+        nowLabel.textContent = 'now: ';
+        nowRow.append(nowLabel, document.createTextNode('"' + item._currentText.slice(0, 80) + '"'));
+        diff.appendChild(nowRow);
+      }
+      el.appendChild(diff);
+    } else if (item.anchor?.selectedText) {
       const anchor = document.createElement('span');
       anchor.className = 'hd-anchor';
       anchor.textContent = '"' + item.anchor.selectedText.slice(0, 50) + '"';
@@ -791,7 +877,21 @@
       const probe = lower.slice(0, 20);
       marks = Array.from(document.querySelectorAll('mark.hd-hl')).filter(m => (m.dataset.anchor || '').includes(probe));
     }
-    if (marks.length === 0) return;
+    if (marks.length === 0) {
+      // Orphaned anchor: no highlight exists. Fall back to scrolling/flashing the
+      // block the comment was anchored in, mirroring the mark .flash pattern.
+      if (item.anchor.selector) {
+        try {
+          const block = document.querySelector(item.anchor.selector);
+          if (block) {
+            block.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            block.classList.add('flash');
+            setTimeout(() => block.classList.remove('flash'), 2000);
+          }
+        } catch (e) { /* invalid selector — do nothing */ }
+      }
+      return;
+    }
     marks[0].scrollIntoView({ behavior: 'smooth', block: 'center' });
     marks.forEach(m => m.classList.add('flash'));
     setTimeout(() => marks.forEach(m => m.classList.remove('flash')), 2000);
@@ -811,9 +911,23 @@
       parent.replaceChild(document.createTextNode(el.textContent), el);
       parent.normalize();
     });
+    // Clear stale-block tints from a previous run so refreshes stay clean.
+    document.querySelectorAll('.hd-stale-block').forEach(el => el.classList.remove('hd-stale-block'));
     const seen = new Set();
     comments.forEach(item => {
       if (item.anchor?.type === 'text_range' && item.anchor?.selectedText) {
+        if (item._orphaned === true) {
+          // Original text is gone — can't highlight a phrase. Tint the block the
+          // comment was anchored in (if the selector still resolves) so the user
+          // can see which region it was about.
+          if (item.anchor.selector) {
+            try {
+              const el = document.querySelector(item.anchor.selector);
+              if (el) el.classList.add('hd-stale-block');
+            } catch (e) { /* invalid selector — skip */ }
+          }
+          return;
+        }
         const key = item.anchor.selectedText.toLowerCase();
         if (!seen.has(key)) { seen.add(key); highlightText(item.anchor.selectedText); }
       }
@@ -840,7 +954,7 @@
     }
 
     const matchStart = flat.toLowerCase().indexOf(lower);
-    if (matchStart === -1) return;
+    if (matchStart === -1) return false;
     const matchEnd = matchStart + lower.length;
 
     // Resolve every overlapping (node, from, to) slice BEFORE mutating the DOM,
@@ -857,6 +971,7 @@
       });
     }
 
+    let wrapped = false;
     for (const seg of segments) {
       try {
         const range = document.createRange();
@@ -867,8 +982,10 @@
         mark.dataset.anchor = lower;
         range.surroundContents(mark); // safe: range is within ONE text node
         attachHighlightClick(mark, lower);
+        wrapped = true;
       } catch (e) { /* skip a segment that can't be wrapped */ }
     }
+    return wrapped;
   }
 
   // Clicking any highlight segment scrolls the panel to its comment.
