@@ -34,6 +34,7 @@
     .hd-area-box { position: absolute; border: 2px solid #6366f1; background: rgba(99,102,241,0.10); border-radius: 4px; pointer-events: auto; cursor: pointer; transition: box-shadow 0.2s, background 0.2s; }
     .hd-area-box:hover { background: rgba(99,102,241,0.18); }
     .hd-area-box.flash { box-shadow: 0 0 0 3px rgba(99,102,241,0.35); background: rgba(99,102,241,0.22); }
+    .hd-area-box-approx { border-style: dashed; }
     .hd-area-draw { position: absolute; border: 2px dashed #6366f1; background: rgba(99,102,241,0.08); border-radius: 4px; pointer-events: none; z-index: 999971; }
   `;
   document.head.appendChild(docStyle);
@@ -683,10 +684,49 @@
       const r = item.anchor.rect;
       const box = document.createElement('div');
       box.className = 'hd-area-box';
-      box.style.left = (r.x / 100 * d.scrollWidth) + 'px';
-      box.style.top = (r.y / 100 * d.scrollHeight) + 'px';
-      box.style.width = (r.w / 100 * d.scrollWidth) + 'px';
-      box.style.height = (r.h / 100 * d.scrollHeight) + 'px';
+
+      // Re-anchor: if the box stored the selector of the element it was drawn over,
+      // follow that element's CURRENT position (read-only) so it survives reflow
+      // (e.g. an AI "converge" adds a section and the page gets taller). Only fall
+      // back to the stored percentage geometry when no selector resolves to a
+      // usably-sized element — and mark those boxes as approximate (dashed).
+      let geom = null;
+      const sel = item.anchor.selector;
+      if (typeof sel === 'string' && sel) {
+        try {
+          const el = document.querySelector(sel);
+          if (el) {
+            const b = el.getBoundingClientRect();
+            if (b && b.width > 1 && b.height > 1) {
+              const sx = window.scrollX || window.pageXOffset || 0;
+              const sy = window.scrollY || window.pageYOffset || 0;
+              const pad = 4;
+              geom = {
+                left: b.left + sx - pad,
+                top: b.top + sy - pad,
+                width: b.width + 2 * pad,
+                height: b.height + 2 * pad,
+              };
+            }
+          }
+        } catch (e) { /* bad selector — fall through to the percentage fallback */ }
+      }
+
+      if (geom) {
+        // Re-anchored path: box hugs the live element wherever it now sits.
+        box.style.left = geom.left + 'px';
+        box.style.top = geom.top + 'px';
+        box.style.width = geom.width + 'px';
+        box.style.height = geom.height + 'px';
+      } else {
+        // Fallback path (older boxes, or selector no longer resolves): stale
+        // percentage geometry that may have drifted. Flag it as approximate.
+        box.classList.add('hd-area-box-approx');
+        box.style.left = (r.x / 100 * d.scrollWidth) + 'px';
+        box.style.top = (r.y / 100 * d.scrollHeight) + 'px';
+        box.style.width = (r.w / 100 * d.scrollWidth) + 'px';
+        box.style.height = (r.h / 100 * d.scrollHeight) + 'px';
+      }
       box.dataset.commentId = item.id;
       box.title = (item.author && item.author.displayName || 'Anonymous') + ': ' + (item.content && item.content.text || '').slice(0, 80);
       box.addEventListener('click', () => {
