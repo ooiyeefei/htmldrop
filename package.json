@@ -1,6 +1,6 @@
 {
   "name": "@yeefeiooi/htmldrop",
-  "version": "1.6.2",
+  "version": "1.6.3",
   "description": "Publish HTML files and get shareable links via Surge.sh",
   "type": "module",
   "publishConfig": {
