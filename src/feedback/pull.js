@@ -72,7 +72,11 @@ export async function feedbackPull(file, options = {}) {
     const anchor = item.anchor?.selectedText
       ? ` [on: "${item.anchor.selectedText.slice(0, 60)}"]`
       : item.anchor?.type === 'element_rect'
-        ? ' [on: area]'
+        ? item.anchor.capturedText
+          ? ` [on: area — "${item.anchor.capturedText.slice(0, 60)}"]`
+          : item.anchor.selector
+            ? ` [on: area → ${item.anchor.selector}]`
+            : ' [on: area]'
         : '';
     console.log(`  ${item.author?.displayName || 'Anonymous'}${anchor}`);
     console.log(`    ${item.content?.text || '(no text)'}`);

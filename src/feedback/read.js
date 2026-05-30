@@ -81,7 +81,13 @@ export async function feedbackRead(docIdOrUrl, options = {}) {
   for (const item of data.items) {
     const anchor = item.anchor?.selectedText
       ? ` [on: "${item.anchor.selectedText.slice(0, 60)}"]`
-      : '';
+      : item.anchor?.type === 'element_rect'
+        ? item.anchor.capturedText
+          ? ` [on: area — "${item.anchor.capturedText.slice(0, 60)}"]`
+          : item.anchor.selector
+            ? ` [on: area → ${item.anchor.selector}]`
+            : ' [on: area]'
+        : '';
     console.log(`  ${item.author?.displayName || 'Anonymous'}${anchor}`);
     console.log(`    ${item.content?.text || '(no text)'}`);
     console.log(`    ${new Date(item.createdAt).toLocaleString()}\n`);

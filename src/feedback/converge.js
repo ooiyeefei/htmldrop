@@ -35,7 +35,11 @@ export async function converge(file, options = {}) {
       ? `Refers to: "${item.anchor.selectedText}"`
       : item.anchor?.type === 'page_level'
         ? 'Page-level feedback'
-        : `Element: ${item.anchor?.selector || 'unknown'}`;
+        : item.anchor?.capturedText
+          ? `Area selection over: "${item.anchor.capturedText.slice(0, 500)}"${item.anchor.selector ? ' (element ' + item.anchor.selector + ')' : ''}`
+          : item.anchor?.selector
+            ? `Area selection on element: ${item.anchor.selector}`
+            : 'Area selection (no captured text — infer the target from the comment wording)';
     return `[${i + 1}] ${item.author?.displayName || 'Anonymous'}: ${item.content?.text || ''}\n   ${anchor}`;
   }).join('\n\n');
 

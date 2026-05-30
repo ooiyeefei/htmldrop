@@ -85,6 +85,7 @@
     .hd-close.hd-toggle-on { background: #6366f1; color: #fff; }
     .hd-close.hd-toggle-on:hover { background: #4f46e5; color: #fff; }
     .hd-area-tag { display: inline-block; margin-top: 6px; margin-left: 34px; padding: 2px 8px; background: #eef2ff; color: #4f46e5; border-radius: 4px; font-size: 11px; font-weight: 500; }
+    .hd-area-snippet { display: block; margin-top: 4px; margin-left: 34px; font-size: 11px; line-height: 1.5; color: #9ca3af; }
     .hd-list { flex: 1; overflow-y: auto; padding: 12px 0; }
     .hd-comment {
       padding: 14px 20px; cursor: pointer;
@@ -430,8 +431,8 @@
   }
 
   // Area popover anchored just below the drawn box (page coords).
-  function showAreaPopover(pageLeft, pageTop, pageH, rect) {
-    openPopover(pageLeft, pageTop + pageH + 12, (text) => submitAreaComment(rect, text));
+  function showAreaPopover(pageLeft, pageTop, pageH, rect, captured) {
+    openPopover(pageLeft, pageTop + pageH + 12, (text) => submitAreaComment(rect, text, captured));
   }
 
   async function submitComment(selectedText, selector, text) {
@@ -454,10 +455,15 @@
     } catch(e) { /* silent fail */ }
   }
 
-  async function submitAreaComment(rect, text) {
+  async function submitAreaComment(rect, text, captured) {
     const name = userName || 'Anonymous';
     const body = {
-      anchor: { type: 'element_rect', rect },
+      anchor: {
+        type: 'element_rect',
+        rect,
+        selector: (captured && captured.selector) || undefined,
+        capturedText: (captured && captured.capturedText) || undefined,
+      },
       content: { type: 'text', text },
       author: { displayName: name },
       parentId: null,
@@ -511,6 +517,8 @@
     const w = parseFloat(box.style.width) || 0, h = parseFloat(box.style.height) || 0;
     box.remove();
     if (w < 12 || h < 12) { setAreaMode(false); return; } // ignore stray clicks
+    // Capture WHAT'S under the box (text + selector) before building the % rect.
+    const captured = captureUnderBox(left, top, w, h);
     const d = document.documentElement;
     const rect = {
       x: +(left / d.scrollWidth * 100).toFixed(3),
@@ -519,7 +527,7 @@
       h: +(h / d.scrollHeight * 100).toFixed(3),
     };
     setAreaMode(false); // one box per activation
-    showAreaPopover(left, top, h, rect);
+    showAreaPopover(left, top, h, rect, captured);
   });
 
   async function submitReply(parentItem, replyText) {
@@ -556,6 +564,59 @@
       node = parent;
     }
     return parts.join(' > ');
+  }
+
+  // Read-only: given an area box in PAGE coordinates (pageLeft/pageTop + w/h),
+  // figure out what content sits under it. Returns { selector, capturedText } so an
+  // area comment carries WHAT it was drawn over, not just a rectangle. Never mutates
+  // the DOM. Both fields may be '' when nothing resolves under the box.
+  function captureUnderBox(pageLeft, pageTop, w, h) {
+    const boxL = pageLeft, boxT = pageTop, boxR = pageLeft + w, boxB = pageTop + h;
+    const sx = window.scrollX || window.pageXOffset || 0;
+    const sy = window.scrollY || window.pageYOffset || 0;
+    // Element is "under the box" if its page-space rect intersects the box rect.
+    function intersects(el) {
+      try {
+        const r = el.getBoundingClientRect();
+        const elL = r.left + sx, elT = r.top + sy, elR = r.right + sx, elB = r.bottom + sy;
+        return elR > boxL && elL < boxR && elB > boxT && elT < boxB;
+      } catch (e) { return false; }
+    }
+
+    const texts = [];               // trimmed text fragments under the box
+    const contributors = [];        // { el, len } parallel to texts, for selector choice
+    try {
+      const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+      while (walker.nextNode()) {
+        const node = walker.currentNode;
+        const parent = node.parentElement;
+        if (!parent) continue;
+        // Skip the widget's own UI.
+        if (parent.id === 'htmldrop-widget-host' || (parent.closest && parent.closest('#htmldrop-widget-host'))) continue;
+        const t = (node.textContent || '').trim();
+        if (!t) continue;
+        if (!intersects(parent)) continue;
+        texts.push(t);
+        contributors.push({ el: parent, len: t.length });
+      }
+    } catch (e) { /* a weird node blew up the walk — fall through with what we have */ }
+
+    const capturedText = texts.join(' ').replace(/\s+/g, ' ').trim().slice(0, 2000);
+
+    // Selector: prefer the first contributor with an id; else the one that
+    // contributed the most text; else ''.
+    let best = null;
+    for (const c of contributors) {
+      try { if (c.el.id) { best = c.el; break; } } catch (e) { /* skip */ }
+    }
+    if (!best && contributors.length) {
+      let max = -1;
+      for (const c of contributors) { if (c.len > max) { max = c.len; best = c.el; } }
+    }
+    let selector = '';
+    if (best) { try { selector = buildSelector(best); } catch (e) { selector = ''; } }
+
+    return { selector: selector, capturedText: capturedText };
   }
 
   // Flatten the document's visible text (excluding the widget's own UI) into one
@@ -806,6 +867,14 @@
       tag.className = 'hd-area-tag';
       tag.textContent = '▢ area';
       el.appendChild(tag);
+      // If we captured what the box was drawn over, show a muted snippet of it.
+      // Old area comments without capturedText still render with just the tag.
+      if (item.anchor.capturedText) {
+        const snippet = document.createElement('span');
+        snippet.className = 'hd-area-snippet';
+        snippet.textContent = '▢ area · "' + item.anchor.capturedText.slice(0, 50) + '"';
+        el.appendChild(snippet);
+      }
     }
 
     // Reply button

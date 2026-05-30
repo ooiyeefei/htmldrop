@@ -6,6 +6,9 @@ export const AnchorSchema = z.object({
   startOffset: z.number().optional(),
   endOffset: z.number().optional(),
   selectedText: z.string().max(2000).optional(),
+  // The text under an element_rect box, captured at draw time so the AI converge
+  // step can pinpoint what the box covers.
+  capturedText: z.string().max(2000).optional(),
   // For element_rect anchors: a box as percentages (0–100) of the document's
   // scroll dimensions, so it re-renders at the same relative spot on any screen.
   rect: z.object({
