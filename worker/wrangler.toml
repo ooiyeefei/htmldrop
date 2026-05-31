@@ -2,6 +2,12 @@ name = "htmldrop-feedback"
 main = "src/index.ts"
 compatibility_date = "2024-06-20"
 
+# Predeploy guard: re-sync the bundled widget from the CLI's source of truth
+# (templates/annotation-widget.html) before every deploy, so the two copies
+# can't drift. Runs automatically on `wrangler deploy`.
+[build]
+command = "node sync-widget.mjs"
+
 [vars]
 ENVIRONMENT = "production"
 # Set ANTHROPIC_API_KEY via: npx wrangler secret put ANTHROPIC_API_KEY
