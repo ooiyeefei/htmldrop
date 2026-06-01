@@ -604,18 +604,48 @@
 
     const capturedText = texts.join(' ').replace(/\s+/g, ' ').trim().slice(0, 2000);
 
-    // Selector: prefer the first contributor with an id; else the one that
-    // contributed the most text; else ''.
-    let best = null;
-    for (const c of contributors) {
-      try { if (c.el.id) { best = c.el; break; } } catch (e) { /* skip */ }
+    // Selector: anchor the box to the SMALLEST element that encloses everything
+    // it sits over, so the box re-anchors to that element through reflow. For a
+    // region that spans several elements (e.g. a 3-step diagram) that's their
+    // common ancestor (the container) — NOT one child, which would make the box
+    // snap to a single step. We only count elements whose CENTRE is inside the box
+    // (so a 2px edge clip of a neighbour can't broaden the anchor); capturedText
+    // keeps the looser set above for richer agent context.
+    function centreInBox(el) {
+      try {
+        const r = el.getBoundingClientRect();
+        const cx = (r.left + r.right) / 2 + sx, cy = (r.top + r.bottom) / 2 + sy;
+        return cx >= boxL && cx <= boxR && cy >= boxT && cy <= boxB;
+      } catch (e) { return false; }
     }
-    if (!best && contributors.length) {
-      let max = -1;
-      for (const c of contributors) { if (c.len > max) { max = c.len; best = c.el; } }
+    function lowestCommonAncestor(els) {
+      if (els.length === 1) return els[0];
+      let chain = [];
+      for (let n = els[0]; n; n = n.parentElement) chain.push(n);
+      for (let i = 1; i < els.length; i++) {
+        const anc = new Set();
+        for (let n = els[i]; n; n = n.parentElement) anc.add(n);
+        const idx = chain.findIndex(a => anc.has(a));
+        if (idx === -1) return document.body; // disjoint subtrees
+        chain = chain.slice(idx);
+      }
+      return chain[0];
     }
+    const distinct = [], seenEl = new Set();
+    for (const c of contributors) { if (!seenEl.has(c.el)) { seenEl.add(c.el); distinct.push(c.el); } }
+    const covered = distinct.filter(centreInBox);
+    let anchor = null;
+    if (covered.length >= 2) anchor = lowestCommonAncestor(covered);
+    else if (covered.length === 1) anchor = covered[0];
+    else {
+      // Tiny/edge box with nothing centred inside — fall back to id-first / most text.
+      for (const c of contributors) { try { if (c.el.id) { anchor = c.el; break; } } catch (e) { /* skip */ } }
+      if (!anchor && contributors.length) { let max = -1; for (const c of contributors) { if (c.len > max) { max = c.len; anchor = c.el; } } }
+    }
+    // Never anchor to the whole page — the rect fallback (dashed) is more honest.
+    if (anchor === document.body || anchor === document.documentElement) anchor = null;
     let selector = '';
-    if (best) { try { selector = buildSelector(best); } catch (e) { selector = ''; } }
+    if (anchor) { try { selector = buildSelector(anchor); } catch (e) { selector = ''; } }
 
     return { selector: selector, capturedText: capturedText };
   }
