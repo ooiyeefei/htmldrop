@@ -33,6 +33,18 @@ export const FeedbackItemSchema = z.object({
     displayName: z.string().max(100),
   }),
   parentId: z.string().uuid().nullable().optional(),
+  // Commenter-held secret enabling delete/edit-own-comment. Stored only as a
+  // SHA-256 hash (editTokenHash) — the raw token never persists or returns.
+  editToken: z.string().min(16).max(128).optional(),
+  // Fingerprint of the doc's normalized visible text, computed by the widget at
+  // load. Pins the comment to the exact doc state it was made against, so "has
+  // the text changed since?" is a hash comparison, not a substring guess.
+  docHash: z.string().max(64).optional(),
+});
+
+// PATCH body for editing an existing comment's content in place.
+export const EditSchema = z.object({
+  content: ContentSchema,
 });
 
 // Replies are threaded under a parent comment (the parent id comes from the URL),
@@ -43,13 +55,17 @@ export const ReplySchema = z.object({
   author: z.object({
     displayName: z.string().max(100),
   }),
+  editToken: z.string().min(16).max(128).optional(),
 });
 
-export const FeedbackStoredSchema = FeedbackItemSchema.extend({
+export const FeedbackStoredSchema = FeedbackItemSchema.omit({ editToken: true }).extend({
   id: z.string().uuid(),
   docId: z.string(),
   createdAt: z.string(),
   resolved: z.boolean(),
+  editTokenHash: z.string().optional(),
+  // Set when the comment text was edited in place (rendered as "· edited").
+  editedAt: z.string().optional(),
 });
 
 export type FeedbackItem = z.infer<typeof FeedbackItemSchema>;

@@ -77,12 +77,51 @@ export async function addFeedback(env: Env, docId: string, item: FeedbackStored)
   });
 }
 
+// Overwrite a doc's feedback list (used by single-comment delete). Deliberately
+// does NOT touch the lifetime comment counter: deleting your own comment must not
+// free up quota for spam create/delete cycles.
+export async function replaceFeedback(env: Env, docId: string, items: FeedbackStored[]): Promise<void> {
+  if (items.length === 0) {
+    await env.FEEDBACK.delete(feedbackKey(docId));
+    return;
+  }
+  await env.FEEDBACK.put(feedbackKey(docId), JSON.stringify(items), {
+    expirationTtl: NINETY_DAYS_SECONDS,
+  });
+}
+
 export async function deleteFeedback(env: Env, docId: string): Promise<void> {
   await env.FEEDBACK.delete(feedbackKey(docId));
   // Also reset the lifetime comment counter so clearing feedback un-freezes a doc
   // that had hit the per-doc total cap. The counter lives in the RATE_LIMITS
   // namespace; reuse the key-builder from rate-limit.ts to keep the format in sync.
   await env.RATE_LIMITS.delete(docTotalKey(docId));
+}
+
+// --- Doc revision trail (audit) ---
+// Append-only list of distinct doc-content fingerprints, in the order commenters
+// observed them. Built lazily from the docHash each comment carries, so it works
+// for Surge-hosted docs the Worker never stores. Capped to bound KV growth.
+
+export interface RevisionEntry {
+  hash: string;
+  firstSeen: string; // ISO timestamp of the first comment posted against this state
+}
+
+export async function getRevisions(env: Env, docId: string): Promise<RevisionEntry[]> {
+  const raw = await env.FEEDBACK.get(`revisions:${docId}`);
+  if (!raw) return [];
+  return JSON.parse(raw) as RevisionEntry[];
+}
+
+export async function recordRevision(env: Env, docId: string, hash: string): Promise<void> {
+  const list = await getRevisions(env, docId);
+  // Only append on state CHANGE (A->B->A records three entries: that's the trail).
+  if (list.length > 0 && list[list.length - 1].hash === hash) return;
+  list.push({ hash, firstSeen: new Date().toISOString() });
+  await env.FEEDBACK.put(`revisions:${docId}`, JSON.stringify(list.slice(-50)), {
+    expirationTtl: NINETY_DAYS_SECONDS,
+  });
 }
 
 export async function getDocCount(env: Env, docId: string): Promise<number> {

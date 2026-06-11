@@ -1,5 +1,5 @@
-import { FeedbackItemSchema, ReplySchema, type FeedbackStored } from './schema';
-import { type Env, getFeedback, addFeedback, deleteFeedback, storeDocUrl, getDocUrl, storeDocContent, getDocContent, storeInsight, getInsights, type StoredInsight, getAccessRecord, setOwner, deleteOwnerConflict } from './storage';
+import { FeedbackItemSchema, ReplySchema, EditSchema, type FeedbackStored } from './schema';
+import { type Env, getFeedback, addFeedback, deleteFeedback, replaceFeedback, getRevisions, recordRevision, storeDocUrl, getDocUrl, storeDocContent, getDocContent, storeInsight, getInsights, type StoredInsight, getAccessRecord, setOwner, deleteOwnerConflict } from './storage';
 import { checkRateLimit, incrementRateLimit } from './rate-limit';
 import { registerAuthorKey, getAuthorDocs, authorizeOwner, sha256Hex, timingSafeEqualHex, migrateOwners } from './auth';
 import { getProtectedResourceMetadata, getAuthServerMetadata, handleAgentAuth, handleAgentRevoke } from './agent-auth';
@@ -18,10 +18,11 @@ export default {
 
     const corsHeaders = {
       'Access-Control-Allow-Origin': '*',
-      'Access-Control-Allow-Methods': 'GET, POST, DELETE, OPTIONS',
+      'Access-Control-Allow-Methods': 'GET, POST, PATCH, DELETE, OPTIONS',
       // X-HTMLDrop-Access lets the sandboxed (opaque-origin) widget send its
-      // capability token; the preflight must advertise it. No credentials used.
-      'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-HTMLDrop-Access',
+      // capability token; X-HTMLDrop-Edit-Token proves delete-own-comment. The
+      // preflight must advertise both. No credentials used.
+      'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-HTMLDrop-Access, X-HTMLDrop-Edit-Token',
     };
 
     if (request.method === 'OPTIONS') {
@@ -180,6 +181,26 @@ export default {
         return handleReply(request, env, replyMatch[1], replyMatch[2], corsHeaders);
       }
 
+      // DELETE/PATCH /api/feedback/:docId/:commentId — a commenter deletes or
+      // edits their own comment (proven by X-HTMLDrop-Edit-Token), or the author.
+      const itemMatch = path.match(/^\/api\/feedback\/([a-zA-Z0-9_-]+)\/([a-zA-Z0-9_-]+)$/);
+      if (itemMatch && request.method === 'DELETE') {
+        return handleDeleteItem(request, env, itemMatch[1], itemMatch[2], corsHeaders);
+      }
+      if (itemMatch && request.method === 'PATCH') {
+        return handleEditItem(request, env, itemMatch[1], itemMatch[2], corsHeaders);
+      }
+
+      // GET /api/revisions/:docId — audit trail of doc-content fingerprints, in
+      // the order commenters observed them. Gated exactly like reading feedback.
+      const revisionsMatch = path.match(/^\/api\/revisions\/([a-zA-Z0-9_-]+)$/);
+      if (revisionsMatch && request.method === 'GET') {
+        const denied = await checkFeedbackAccess(request, env, revisionsMatch[1], corsHeaders);
+        if (denied) return denied;
+        const revisions = await getRevisions(env, revisionsMatch[1]);
+        return json({ docId: revisionsMatch[1], revisions }, 200, corsHeaders);
+      }
+
       const feedbackMatch = path.match(/^\/api\/feedback\/([a-zA-Z0-9_-]+)$/);
       if (!feedbackMatch) {
         return json({ error: 'Not found' }, 404, corsHeaders);
@@ -250,7 +271,10 @@ async function handleGet(request: Request, env: Env, docId: string, headers: Rec
     items = items.filter((item) => new Date(item.createdAt) > sinceDate);
   }
 
-  return json({ docId, items, count: items.length }, 200, headers);
+  // Never expose editTokenHash — it only exists to verify delete-own requests.
+  const publicItems = items.map(({ editTokenHash, ...rest }) => rest);
+
+  return json({ docId, items: publicItems, count: publicItems.length }, 200, headers);
 }
 
 async function handlePost(request: Request, env: Env, docId: string, headers: Record<string, string>): Promise<Response> {
@@ -274,18 +298,90 @@ async function handlePost(request: Request, env: Env, docId: string, headers: Re
     return json({ error: 'Validation failed', details: parsed.error.issues }, 400, headers);
   }
 
+  // Swap the raw edit token for its hash — the secret itself must never persist.
+  const { editToken, ...data } = parsed.data;
   const item: FeedbackStored = {
-    ...parsed.data,
+    ...data,
     id: crypto.randomUUID(),
     docId,
     createdAt: new Date().toISOString(),
     resolved: false,
+    ...(editToken ? { editTokenHash: await sha256Hex(editToken) } : {}),
   };
 
   await addFeedback(env, docId, item);
   await incrementRateLimit(env, ip, docId);
 
+  // Audit trail: remember which doc state this comment was made against.
+  if (item.docHash) {
+    await recordRevision(env, docId, item.docHash);
+  }
+
   return json({ id: item.id, createdAt: item.createdAt }, 201, headers);
+}
+
+// Owner-or-commenter authorization for acting on ONE comment: the document owner
+// may act on any comment; a commenter must present the edit token whose SHA-256
+// matches the hash stored with that comment.
+async function authorizeCommentAction(request: Request, env: Env, docId: string, target: FeedbackStored): Promise<boolean> {
+  if (await authorizeOwner(env, request.headers.get('Authorization'), docId)) return true;
+  const token = request.headers.get('X-HTMLDrop-Edit-Token');
+  if (token && target.editTokenHash) {
+    return timingSafeEqualHex(await sha256Hex(token), target.editTokenHash);
+  }
+  return false;
+}
+
+// DELETE /api/feedback/:docId/:commentId — single-comment delete. A deleted
+// top-level comment takes its reply thread along.
+async function handleDeleteItem(request: Request, env: Env, docId: string, commentId: string, headers: Record<string, string>): Promise<Response> {
+  const denied = await checkFeedbackAccess(request, env, docId, headers);
+  if (denied) return denied;
+
+  const items = await getFeedback(env, docId);
+  const target = items.find((i) => i.id === commentId);
+  if (!target) {
+    return json({ error: 'Comment not found' }, 404, headers);
+  }
+
+  if (!(await authorizeCommentAction(request, env, docId, target))) {
+    return json({ error: 'Unauthorized — only the comment author or document owner can delete this comment' }, 403, headers);
+  }
+
+  const remaining = items.filter((i) => i.id !== commentId && i.parentId !== commentId);
+  await replaceFeedback(env, docId, remaining);
+  return json({ deleted: true, id: commentId, removed: items.length - remaining.length }, 200, headers);
+}
+
+// PATCH /api/feedback/:docId/:commentId — edit a comment's content in place.
+// Same authorization as delete; stamps editedAt so the UI can show "· edited".
+async function handleEditItem(request: Request, env: Env, docId: string, commentId: string, headers: Record<string, string>): Promise<Response> {
+  const denied = await checkFeedbackAccess(request, env, docId, headers);
+  if (denied) return denied;
+
+  const body = await request.json().catch(() => null);
+  if (!body) {
+    return json({ error: 'Invalid JSON body' }, 400, headers);
+  }
+  const parsed = EditSchema.safeParse(body);
+  if (!parsed.success) {
+    return json({ error: 'Validation failed', details: parsed.error.issues }, 400, headers);
+  }
+
+  const items = await getFeedback(env, docId);
+  const target = items.find((i) => i.id === commentId);
+  if (!target) {
+    return json({ error: 'Comment not found' }, 404, headers);
+  }
+
+  if (!(await authorizeCommentAction(request, env, docId, target))) {
+    return json({ error: 'Unauthorized — only the comment author or document owner can edit this comment' }, 403, headers);
+  }
+
+  const editedAt = new Date().toISOString();
+  const updated = items.map((i) => (i.id === commentId ? { ...i, content: parsed.data.content, editedAt } : i));
+  await replaceFeedback(env, docId, updated);
+  return json({ edited: true, id: commentId, editedAt }, 200, headers);
 }
 
 async function handleDelete(request: Request, env: Env, docId: string, headers: Record<string, string>): Promise<Response> {
@@ -490,6 +586,7 @@ async function handleReply(request: Request, env: Env, docId: string, commentId:
     parentId: commentId,
     createdAt: new Date().toISOString(),
     resolved: false,
+    ...(parsed.data.editToken ? { editTokenHash: await sha256Hex(parsed.data.editToken) } : {}),
   };
 
   await addFeedback(env, docId, item);

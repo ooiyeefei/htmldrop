@@ -17,6 +17,39 @@
   function hdGet(k){ try { return localStorage.getItem(k); } catch(e){ return HD_MEM[k] != null ? HD_MEM[k] : null; } }
   function hdSet(k, v){ HD_MEM[k] = v; try { localStorage.setItem(k, v); } catch(e){} }
 
+  // Per-browser secret that proves "I posted this comment" so a commenter can
+  // delete their own comment (e.g. posted under the wrong name). Sent with every
+  // POST; the worker stores only its SHA-256 hash. In a sandboxed (opaque-origin)
+  // doc localStorage doesn't persist, so delete-own works within the session only.
+  var HD_EDIT_TOKEN = (function(){
+    var t = hdGet('htmldrop_reviewer_token');
+    if (t) return t;
+    // randomUUID needs a secure context; getRandomValues exists wherever
+    // window.crypto does. NEVER fall back to Math.random/Date.now — this token
+    // gates server-side delete authorization, so a guessable token would let
+    // strangers delete comments. With no CSPRNG at all, post without a token:
+    // delete-own is simply unavailable rather than weakly protected.
+    if (window.crypto && crypto.randomUUID) {
+      t = crypto.randomUUID();
+    } else if (window.crypto && crypto.getRandomValues) {
+      var buf = new Uint8Array(16);
+      crypto.getRandomValues(buf);
+      t = Array.prototype.map.call(buf, function(b){ return ('0' + b.toString(16)).slice(-2); }).join('');
+    }
+    if (t) hdSet('htmldrop_reviewer_token', t);
+    return t || null;
+  })();
+
+  // Ids of comments posted from THIS browser — gates where the Delete button
+  // renders. The edit token is the actual authorization; this is just UI state,
+  // so without a token there is nothing to remember (delete would 403 anyway).
+  function myIds(){ try { return JSON.parse(hdGet('htmldrop_my_comments') || '[]'); } catch(e){ return []; } }
+  function rememberMine(id){
+    if (!id || !HD_EDIT_TOKEN) return;
+    const ids = myIds();
+    if (ids.indexOf(id) === -1) { ids.push(id); hdSet('htmldrop_my_comments', JSON.stringify(ids.slice(-200))); }
+  }
+
   // Inject highlight + area-box styles into document head (light DOM)
   const docStyle = document.createElement('style');
   docStyle.textContent = `
@@ -134,6 +167,27 @@
       font-weight: 500;
     }
     .hd-reply-btn:hover { text-decoration: underline; }
+    /* Edit/Delete-own-comment: rendered only for comments posted from this browser. */
+    .hd-edit-btn {
+      background: none; border: none; color: #9ca3af;
+      font-size: 11px; cursor: pointer; padding: 0; margin-top: 4px; margin-left: 12px;
+      font-weight: 500;
+    }
+    .hd-edit-btn:hover { color: #6366f1; text-decoration: underline; }
+    .hd-edit-area {
+      width: 100%; border: 1px solid #e5e7eb; border-radius: 6px;
+      padding: 8px 10px; font-size: 13px; font-family: inherit;
+      resize: none; outline: none; line-height: 1.4;
+    }
+    .hd-edit-area:focus { border-color: #6366f1; }
+    .hd-edit-actions { display: flex; gap: 8px; margin-top: 6px; }
+    .hd-delete-btn {
+      background: none; border: none; color: #9ca3af;
+      font-size: 11px; cursor: pointer; padding: 0; margin-top: 4px; margin-left: 12px;
+      font-weight: 500;
+    }
+    .hd-delete-btn:hover { color: #dc2626; text-decoration: underline; }
+    .hd-delete-btn[data-armed="1"] { color: #dc2626; }
     .hd-reply-input {
       display: flex; gap: 6px; margin-top: 8px; margin-left: 32px; align-items: center;
     }
@@ -443,15 +497,19 @@
       content: { type: 'text', text },
       author: { displayName: name },
       parentId: null,
+      editToken: HD_EDIT_TOKEN || undefined,
+      docHash: HD_DOC_HASH || undefined,
     };
     var headers = { 'Content-Type': 'application/json' };
     if (HD_ACCESS) headers['X-HTMLDrop-Access'] = HD_ACCESS;
     try {
-      await fetch((config.workerUrl || '') + '/api/feedback/' + config.docId, {
+      const res = await fetch((config.workerUrl || '') + '/api/feedback/' + config.docId, {
         method: 'POST',
         headers: headers,
         body: JSON.stringify(body),
       });
+      const data = await res.json().catch(() => null);
+      if (data && data.id) rememberMine(data.id);
       await loadComments();
     } catch(e) { /* silent fail */ }
   }
@@ -468,15 +526,19 @@
       content: { type: 'text', text },
       author: { displayName: name },
       parentId: null,
+      editToken: HD_EDIT_TOKEN || undefined,
+      docHash: HD_DOC_HASH || undefined,
     };
     var headers = { 'Content-Type': 'application/json' };
     if (HD_ACCESS) headers['X-HTMLDrop-Access'] = HD_ACCESS;
     try {
-      await fetch((config.workerUrl || '') + '/api/feedback/' + config.docId, {
+      const res = await fetch((config.workerUrl || '') + '/api/feedback/' + config.docId, {
         method: 'POST',
         headers: headers,
         body: JSON.stringify(body),
       });
+      const data = await res.json().catch(() => null);
+      if (data && data.id) rememberMine(data.id);
       await loadComments();
     } catch(e) { /* silent fail */ }
   }
@@ -538,17 +600,108 @@
       content: { type: 'text', text: replyText },
       author: { displayName: name },
       parentId: parentItem.id,
+      editToken: HD_EDIT_TOKEN || undefined,
     };
     var headers = { 'Content-Type': 'application/json' };
     if (HD_ACCESS) headers['X-HTMLDrop-Access'] = HD_ACCESS;
     try {
-      await fetch((config.workerUrl || '') + '/api/feedback/' + config.docId + '/' + parentItem.id + '/reply', {
+      const res = await fetch((config.workerUrl || '') + '/api/feedback/' + config.docId + '/' + parentItem.id + '/reply', {
         method: 'POST',
         headers: headers,
         body: JSON.stringify(body),
       });
+      const data = await res.json().catch(() => null);
+      if (data && data.id) rememberMine(data.id);
       await loadComments();
     } catch(e) { /* silent fail */ }
+  }
+
+  // DELETE own comment (or reply). The edit token authorizes; the worker cascades
+  // a top-level delete to its reply thread.
+  async function deleteComment(item) {
+    var headers = { 'X-HTMLDrop-Edit-Token': HD_EDIT_TOKEN };
+    if (HD_ACCESS) headers['X-HTMLDrop-Access'] = HD_ACCESS;
+    try {
+      await fetch((config.workerUrl || '') + '/api/feedback/' + config.docId + '/' + item.id, {
+        method: 'DELETE',
+        headers: headers,
+      });
+      await loadComments();
+    } catch(e) { /* silent fail */ }
+  }
+
+  // PATCH own comment text. Same edit-token authorization as delete; the worker
+  // stamps editedAt, which renders as "· edited".
+  async function editComment(item, newText) {
+    var headers = { 'Content-Type': 'application/json', 'X-HTMLDrop-Edit-Token': HD_EDIT_TOKEN };
+    if (HD_ACCESS) headers['X-HTMLDrop-Access'] = HD_ACCESS;
+    try {
+      await fetch((config.workerUrl || '') + '/api/feedback/' + config.docId + '/' + item.id, {
+        method: 'PATCH',
+        headers: headers,
+        body: JSON.stringify({ content: { type: 'text', text: newText } }),
+      });
+      await loadComments();
+    } catch(e) { /* silent fail */ }
+  }
+
+  // Swap the comment's text for an inline textarea + Save/Cancel.
+  function makeEditButton(item, textEl) {
+    const btn = document.createElement('button');
+    btn.className = 'hd-edit-btn';
+    btn.textContent = 'Edit';
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (textEl.querySelector('textarea')) return; // already editing
+      const original = (item.content && item.content.text) || '';
+      textEl.replaceChildren();
+      const ta = document.createElement('textarea');
+      ta.className = 'hd-edit-area';
+      ta.rows = 3;
+      ta.value = original;
+      const row = document.createElement('div');
+      row.className = 'hd-edit-actions';
+      const saveBtn = document.createElement('button');
+      saveBtn.className = 'hd-popover-submit';
+      saveBtn.textContent = 'Save';
+      saveBtn.addEventListener('click', async (ev) => {
+        ev.stopPropagation();
+        const t = ta.value.trim();
+        if (!t || t === original) { textEl.textContent = original; return; }
+        saveBtn.disabled = true;
+        saveBtn.textContent = '...';
+        await editComment(item, t);
+      });
+      const cancelBtn = document.createElement('button');
+      cancelBtn.className = 'hd-popover-cancel';
+      cancelBtn.textContent = 'Cancel';
+      cancelBtn.addEventListener('click', (ev) => { ev.stopPropagation(); textEl.textContent = original; });
+      row.append(saveBtn, cancelBtn);
+      textEl.append(ta, row);
+      ta.focus();
+    });
+    return btn;
+  }
+
+  // Two-click inline confirm (first click arms, second deletes) — a native
+  // confirm() dialog would block the page in embedded/automation contexts.
+  function makeDeleteButton(item) {
+    const btn = document.createElement('button');
+    btn.className = 'hd-delete-btn';
+    btn.textContent = 'Delete';
+    btn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      if (btn.dataset.armed !== '1') {
+        btn.dataset.armed = '1';
+        btn.textContent = 'Confirm delete';
+        setTimeout(() => { if (!btn.disabled) { btn.dataset.armed = ''; btn.textContent = 'Delete'; } }, 4000);
+        return;
+      }
+      btn.disabled = true;
+      btn.textContent = '...';
+      await deleteComment(item);
+    });
+    return btn;
   }
 
   function buildSelector(node) {
@@ -650,19 +803,83 @@
     return { selector: selector, capturedText: capturedText };
   }
 
-  // Flatten the document's visible text (excluding the widget's own UI) into one
-  // lowercased string. SHARED by computeAnchorStatus (orphan detection) and the
-  // match in highlightText, so the two can never disagree about whether a phrase
-  // is present.
-  function bodyTextLower() {
+  // Flatten the document's visible text (excluding the widget's own UI) into the
+  // RAW concatenation of its text nodes, remembering where each node starts so a
+  // match position maps back to (node, offset) pairs.
+  function flattenBodyText() {
+    const nodes = [];
     let flat = '';
     const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
     while (walker.nextNode()) {
       const node = walker.currentNode;
       if (node.parentElement && (node.parentElement.id === 'htmldrop-widget-host' || node.parentElement.closest('#htmldrop-widget-host'))) continue;
+      nodes.push({ node, start: flat.length, len: node.textContent.length });
       flat += node.textContent;
     }
-    return flat.toLowerCase();
+    return { flat, nodes };
+  }
+
+  // selectedText comes from sel.toString(), which is RENDERED text: CSS collapses
+  // every whitespace run to a single space. The document, flattened above, keeps
+  // its SOURCE whitespace (newlines + indentation from pretty-printed HTML). A
+  // plain indexOf between the two fails whenever the selection spans a source
+  // line break — which made brand-new comments look orphaned ("text updated") and
+  // tinted their whole paragraph. So: match in whitespace-normalized space, and
+  // keep a map from each normalized char back to its raw offset so highlights
+  // still land on the exact raw text-node slices.
+  function normKey(s) { return (s || '').replace(/\s+/g, ' ').trim().toLowerCase(); }
+
+  function normalizeWithMap(raw) {
+    let norm = '';
+    const map = [];      // map[i] = index in `raw` of the char behind norm[i]
+    let wsStart = -1;    // raw index where the current whitespace run began
+    for (let i = 0; i < raw.length; i++) {
+      if (/\s/.test(raw[i])) { if (wsStart === -1) wsStart = i; continue; }
+      if (wsStart !== -1 && norm.length > 0) { norm += ' '; map.push(wsStart); }
+      wsStart = -1;
+      norm += raw[i].toLowerCase(); map.push(i);
+    }
+    return { norm, map };
+  }
+
+  // Fingerprint of the doc's normalized visible text. Every comment is stamped
+  // with the fingerprint of the doc state it was made against, which turns "has
+  // the text changed since this comment?" from a substring-match guess into an
+  // exact comparison: same fingerprint -> the doc text is provably unchanged, so
+  // the widget must never claim "text updated" (any anchor miss would be our own
+  // matching bug, and we fail safe). Different fingerprint -> the doc genuinely
+  // changed. FNV-1a (two seeds + length) — versioning, not security, so no
+  // CSPRNG/secure-context dependency; the worker keeps the trail for audit.
+  function fnv1a(str, seed) {
+    let h = seed >>> 0;
+    for (let i = 0; i < str.length; i++) {
+      h ^= str.charCodeAt(i);
+      h = Math.imul(h, 0x01000193) >>> 0;
+    }
+    return ('00000000' + h.toString(16)).slice(-8);
+  }
+  function docFingerprint() {
+    const norm = normKey(flattenBodyText().flat);
+    return fnv1a(norm, 0x811c9dc5) + fnv1a(norm, 0x01234567) + '-' + norm.length.toString(16);
+  }
+  var HD_DOC_HASH = null; // assigned once at load, before the first loadComments()
+
+  // Locate searchText in the body, whitespace-insensitively. Returns the node list
+  // plus RAW flat-text offsets of the match, or null when the text truly is gone.
+  // SHARED by computeAnchorStatus (orphan detection) and highlightText (mark
+  // placement), so the two can never disagree about whether a phrase is present.
+  function findInBodyText(searchText) {
+    const target = normKey(searchText);
+    if (!target) return null;
+    const fb = flattenBodyText();
+    const m = normalizeWithMap(fb.flat);
+    const at = m.norm.indexOf(target);
+    if (at === -1) return null;
+    return {
+      nodes: fb.nodes,
+      matchStart: m.map[at],
+      matchEnd: m.map[at + target.length - 1] + 1,
+    };
   }
 
   // Decide, for every top-level text_range comment, whether its anchored text still
@@ -671,7 +888,9 @@
   // capture what the anchored element now says (_currentText), tolerating a stored
   // selector that is missing or syntactically invalid.
   function computeAnchorStatus() {
-    const flatLower = bodyTextLower();
+    // Normalize the body once; each anchor is then a cheap indexOf. Uses the SAME
+    // normalization as findInBodyText so orphan status and highlighting agree.
+    const bodyNorm = normalizeWithMap(flattenBodyText().flat).norm;
     comments.forEach(item => {
       if (item.parentId) return;
       if (!item.anchor || item.anchor.type !== 'text_range' || !item.anchor.selectedText) {
@@ -679,7 +898,11 @@
         item._currentText = undefined;
         return;
       }
-      const found = flatLower.indexOf(item.anchor.selectedText.toLowerCase()) !== -1;
+      let found = bodyNorm.indexOf(normKey(item.anchor.selectedText)) !== -1;
+      // Hash guard: if the doc's text fingerprint is IDENTICAL to when the
+      // comment was posted, the text cannot have been edited — any match miss
+      // would be a bug in our own matching, so never accuse the doc of changing.
+      if (!found && item.docHash && HD_DOC_HASH && item.docHash === HD_DOC_HASH) found = true;
       item._orphaned = !found;
       item._currentText = undefined;
       if (!found && item.anchor.selector) {
@@ -874,7 +1097,7 @@
 
     // Click → scroll to the anchored text highlight, or to the area box.
     el.addEventListener('click', (e) => {
-      if (e.target.tagName === 'BUTTON' || e.target.tagName === 'INPUT') return;
+      if (e.target.tagName === 'BUTTON' || e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
       if (item.anchor && item.anchor.type === 'element_rect') scrollToAreaBox(item);
       else scrollToHighlight(item);
       panel.querySelectorAll('.hd-comment').forEach(c => c.classList.remove('active'));
@@ -891,7 +1114,7 @@
     name.textContent = item.author?.displayName || 'Anonymous';
     const time = document.createElement('span');
     time.className = 'hd-time';
-    time.textContent = formatTime(item.createdAt);
+    time.textContent = formatTime(item.createdAt) + (item.editedAt ? ' · edited' : '');
     header.append(avatar, name, time);
 
     const text = document.createElement('div');
@@ -974,6 +1197,12 @@
     });
     el.appendChild(replyBtn);
 
+    // Edit/Delete — only for comments posted from this browser (id remembered at POST).
+    if (myIds().indexOf(item.id) !== -1) {
+      el.appendChild(makeEditButton(item, text));
+      el.appendChild(makeDeleteButton(item));
+    }
+
     // Nested replies
     const childReplies = replyMap[item.id] || [];
     if (childReplies.length > 0) {
@@ -993,12 +1222,18 @@
         rName.textContent = reply.author?.displayName || 'Anonymous';
         const rTime = document.createElement('span');
         rTime.className = 'hd-time';
-        rTime.textContent = formatTime(reply.createdAt);
+        rTime.textContent = formatTime(reply.createdAt) + (reply.editedAt ? ' · edited' : '');
         rHeader.append(rAvatar, rName, rTime);
         const rText = document.createElement('div');
         rText.className = 'hd-text';
         rText.textContent = reply.content?.text || '';
         r.append(rHeader, rText);
+        if (myIds().indexOf(reply.id) !== -1) {
+          const rEdit = makeEditButton(reply, rText);
+          rEdit.style.marginLeft = '0';
+          const rDel = makeDeleteButton(reply);
+          r.append(rEdit, rDel);
+        }
         section.appendChild(r);
       });
       el.appendChild(section);
@@ -1009,7 +1244,7 @@
 
   function scrollToHighlight(item) {
     if (!item.anchor?.selectedText) return;
-    const lower = item.anchor.selectedText.toLowerCase();
+    const lower = normKey(item.anchor.selectedText);
     // A single anchor may be split into several <mark> segments — flash them all.
     let marks = Array.from(document.querySelectorAll('mark.hd-hl')).filter(m => m.dataset.anchor === lower);
     if (marks.length === 0) {
@@ -1067,34 +1302,25 @@
           }
           return;
         }
-        const key = item.anchor.selectedText.toLowerCase();
+        const key = normKey(item.anchor.selectedText);
         if (!seen.has(key)) { seen.add(key); highlightText(item.anchor.selectedText); }
       }
     });
   }
 
   // Highlight the first occurrence of searchText even when it spans multiple text
-  // nodes (e.g. a sentence containing <strong>…</strong>). We flatten the page
-  // text, locate the match, then wrap each overlapping text-node segment in its
-  // own <mark> — surroundContents() only works within a single text node, so a
-  // cross-element selection needs one mark per node it touches.
+  // nodes (e.g. a sentence containing <strong>…</strong>) or a pretty-printed
+  // source line break. findInBodyText locates the match in normalized space and
+  // hands back RAW offsets; we then wrap each overlapping text-node segment in
+  // its own <mark> — surroundContents() only works within a single text node, so
+  // a cross-element selection needs one mark per node it touches.
   function highlightText(searchText) {
-    const lower = searchText.toLowerCase();
-
-    // Flatten candidate text nodes (skipping the widget's own UI).
-    const nodes = [];
-    let flat = '';
-    const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
-    while (walker.nextNode()) {
-      const node = walker.currentNode;
-      if (node.parentElement && (node.parentElement.id === 'htmldrop-widget-host' || node.parentElement.closest('#htmldrop-widget-host'))) continue;
-      nodes.push({ node, start: flat.length, len: node.textContent.length });
-      flat += node.textContent;
-    }
-
-    const matchStart = flat.toLowerCase().indexOf(lower);
-    if (matchStart === -1) return false;
-    const matchEnd = matchStart + lower.length;
+    const lower = normKey(searchText);
+    const found = findInBodyText(searchText);
+    if (!found) return false;
+    const nodes = found.nodes;
+    const matchStart = found.matchStart;
+    const matchEnd = found.matchEnd;
 
     // Resolve every overlapping (node, from, to) slice BEFORE mutating the DOM,
     // so wrapping one node doesn't invalidate offsets of the others.
@@ -1153,6 +1379,11 @@
     if (diff < 86400000) return Math.floor(diff / 3600000) + 'h';
     return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
   }
+
+  // Fingerprint the doc BEFORE the first render (highlighting wraps text nodes in
+  // <mark>s; that never changes the text, but hashing first keeps this obvious).
+  HD_DOC_HASH = docFingerprint();
+  host.dataset.docHash = HD_DOC_HASH; // exposed for debugging + test harnesses
 
   // Initial load only — use ↻ button to refresh manually
   loadComments();
