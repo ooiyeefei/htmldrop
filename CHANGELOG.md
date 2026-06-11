@@ -4,6 +4,46 @@ All notable changes to this project are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/), and this project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [1.7.0] — 2026-06-11
+
+Commenters can now edit and delete their own comments, and anchor "text updated"
+detection is no longer a substring guess — comments are pinned to a fingerprint
+of the doc state they were made against. Requires a Worker redeploy; Surge docs
+pick up the new widget on next re-push.
+
+### Features
+
+- **Edit/delete your own comments.** The widget mints a per-browser CSPRNG edit
+  token, sent with every comment/reply; the Worker stores only its SHA-256 hash.
+  `DELETE`/`PATCH /api/feedback/:docId/:commentId` authorize via the token (or
+  the author key, which can act on any comment). Deleting a top-level comment
+  removes its reply thread; edits stamp `editedAt` (shown as "· edited"). The
+  Edit/Delete buttons render only for comments posted from that browser.
+- **Doc-version stamping + revision trail.** The widget fingerprints the doc's
+  normalized visible text at load (FNV-1a — versioning, not security) and stamps
+  every comment with `docHash`. "Has the text changed since this comment?" is now
+  an exact hash comparison, not an inference: identical fingerprint → the widget
+  can never claim "text updated" (fail-safe against matcher bugs). The Worker
+  appends distinct fingerprints to `revisions:<docId>` (capped at 50) as an audit
+  trail of doc states commenters observed — `GET /api/revisions/:docId`, gated
+  like feedback reads.
+
+### Fixes
+
+- **False "text updated since this comment" on pretty-printed docs.** Anchor
+  matching compared rendered selection text (whitespace collapsed) against raw
+  text nodes (source newlines/indentation kept), so any selection spanning a
+  source line break failed to match, falsely orphaned the comment, and tinted its
+  whole paragraph. Matching now runs in whitespace-normalized space with an
+  offset map back to raw text-node positions, shared by orphan detection and
+  highlight placement so the two can never disagree.
+
+### Upgrade
+
+- **Redeploy the Worker**, then **re-push Surge-published docs** (the widget is
+  baked in at push time). Comments posted before 1.7.0 carry no edit token, so
+  they can't be deleted/edited by their commenter — only by the doc author.
+
 ## [1.6.0] — 2026-05-25
 
 Changes the **feedback access contract** for private docs and the client/Worker
