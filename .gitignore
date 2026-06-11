@@ -16,4 +16,9 @@ test-fixtures/*
 !test-fixtures/access-token.test.mjs
 !test-fixtures/worker-access.integration.mjs
 !test-fixtures/build-private-gate.mjs
+# Local secrets — Cloudflare account id + API token (deploy creds). Never commit.
+.env.local
+
+# Verification screenshots (local scratch)
 uat-private-feedback-decrypted.png
+live-edit-delete-buttons.png
