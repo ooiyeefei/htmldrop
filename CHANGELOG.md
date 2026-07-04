@@ -26,9 +26,10 @@ Not yet on npm; on release this becomes the next minor version.
   - **Two channels:** the conversation is transient instructions to the agent
     (a drain-on-delivery queue); comments are persistent annotations (the reused
     widget, served same-origin). The composer **locks while the agent is working**
-    (unlocks on its reply or next poll) so messages can't pile up mid-edit. No new
-    dependencies — a detached `node:http` server, `fs.watch` → SSE live-reload,
-    sessions keyed by file path under `~/.htmldrop/edit/`.
+    (unlocks on its reply or next poll) so messages can't pile up mid-edit, and an
+    unsent draft is saved to `sessionStorage` so a live-reload never loses what you
+    were typing. No new dependencies — a detached `node:http` server, `fs.watch` →
+    SSE live-reload, sessions keyed by file path under `~/.htmldrop/edit/`.
 - **Localhost hardening.** The edit server rejects non-loopback `Host` headers
   (DNS-rebinding), rejects cross-origin writes (CSRF), and serves only
   `.html`/`.htm` resolved by realpath.

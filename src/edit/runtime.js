@@ -32,6 +32,7 @@ export function injectEditRuntime(html, { key }) {
 (function () {
   var KEY = ${keyJson};
   var SCROLL_KEY = 'htmldrop_edit_scroll:' + KEY;
+  var DRAFT_KEY = 'htmldrop_edit_draft:' + KEY;
   var WORKER = ''; // same-origin
 
   // Restore scroll after a live reload.
@@ -212,19 +213,48 @@ export function injectEditRuntime(html, { key }) {
     }).catch(function () { updateSendState(); });
   }
 
-  function clearChip() { pendingContext = null; chip.style.display = 'none'; chipText.textContent = ''; }
+  function clearChip() { pendingContext = null; chip.style.display = 'none'; chipText.textContent = ''; persistDraft(); }
+
+  // Persist the in-progress draft (unsent text + attached context) to
+  // sessionStorage so a live-reload — or a refresh / connectivity blip — never
+  // loses what you were typing. Same pattern as the scroll restore above; sent
+  // messages already survive on the server, this covers the unsent tail.
+  function persistDraft() {
+    try {
+      if (ta.value || pendingContext) {
+        sessionStorage.setItem(DRAFT_KEY, JSON.stringify({ text: ta.value, context: pendingContext }));
+      } else {
+        sessionStorage.removeItem(DRAFT_KEY);
+      }
+    } catch (e) { /* storage unavailable — the in-memory draft still works */ }
+  }
+  function restoreDraft() {
+    try {
+      var raw = sessionStorage.getItem(DRAFT_KEY);
+      if (!raw) return;
+      var d = JSON.parse(raw);
+      if (d && typeof d.text === 'string') ta.value = d.text;
+      if (d && d.context && d.context.text) {
+        pendingContext = d.context;
+        chipText.textContent = 're: "' + d.context.text.slice(0, 48) + '"';
+        chip.style.display = 'flex';
+      }
+    } catch (e) { /* malformed draft — ignore */ }
+  }
 
   att.addEventListener('click', function () {
     if (!lastSel || !lastSel.text) { att.textContent = '\\u2295 Select text first'; setTimeout(function () { att.textContent = '\\u2295 Attach selection'; }, 1500); return; }
     pendingContext = lastSel;
     chipText.textContent = 're: "' + lastSel.text.slice(0, 48) + '"';
     chip.style.display = 'flex';
+    persistDraft();
   });
   shadow.getElementById('chipx').addEventListener('click', clearChip);
   sn.addEventListener('click', send);
   ta.addEventListener('keydown', function (e) {
     if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); send(); }
   });
+  ta.addEventListener('input', persistDraft);
 
   // --- minimize + view ------------------------------------------------------
   function setMinimized(on) {
@@ -270,6 +300,7 @@ export function injectEditRuntime(html, { key }) {
     es.addEventListener('ended', function () { ended = true; setState('waiting'); pl.textContent = 'ended'; });
   } catch (e) {}
 
+  restoreDraft();
   updateSendState();
   loadChat();
 })();
