@@ -18,6 +18,7 @@ import { feedbackList } from '../src/feedback/list.js';
 import { feedbackClear } from '../src/feedback/clear.js';
 import { converge } from '../src/feedback/converge.js';
 import { studio } from '../src/studio.js';
+import { editStart, editPoll, editReply, editEnd, editStop } from '../src/edit/index.js';
 
 const pkg = JSON.parse(
   readFileSync(join(dirname(fileURLToPath(import.meta.url)), '../package.json'), 'utf-8')
@@ -206,6 +207,74 @@ program
   .action(async (options) => {
     try {
       await studio(options);
+    } catch (err) {
+      console.error(`Error: ${err.message}`);
+      process.exit(1);
+    }
+  });
+
+const edit = program
+  .command('edit')
+  .description('Local live edit mode — annotate + iterate on an HTML file before publishing (no Surge)');
+
+edit
+  .command('start <file>')
+  .description('Serve an HTML file locally with live annotations and hot reload')
+  .option('--no-open', "Don't open the browser automatically")
+  .option('--with-feedback', "Load this file's published reviewer comments into edit mode (if it was published with --feedback)")
+  .action(async (file, options) => {
+    try {
+      await editStart(file, options);
+    } catch (err) {
+      console.error(`Error: ${err.message}`);
+      process.exit(1);
+    }
+  });
+
+edit
+  .command('poll <file>')
+  .description('Wait for the next chat message from the author (for the agent to listen)')
+  .option('--json', 'Output as JSON')
+  .action(async (file, options) => {
+    try {
+      await editPoll(file, options);
+    } catch (err) {
+      console.error(`Error: ${err.message}`);
+      process.exit(1);
+    }
+  });
+
+edit
+  .command('reply <file>')
+  .description('Reply into the edit conversation after acting on a message (for the agent)')
+  .requiredOption('--text <text>', 'The reply text')
+  .action(async (file, options) => {
+    try {
+      await editReply(file, options);
+    } catch (err) {
+      console.error(`Error: ${err.message}`);
+      process.exit(1);
+    }
+  });
+
+edit
+  .command('end <file>')
+  .description('End a live edit session')
+  .action(async (file) => {
+    try {
+      await editEnd(file);
+    } catch (err) {
+      console.error(`Error: ${err.message}`);
+      process.exit(1);
+    }
+  });
+
+edit
+  .command('stop')
+  .description('Shut down the background edit-mode server')
+  .action(async () => {
+    try {
+      await editStop();
     } catch (err) {
       console.error(`Error: ${err.message}`);
       process.exit(1);
