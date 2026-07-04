@@ -25,9 +25,10 @@ Not yet on npm; on release this becomes the next minor version.
     conversation. `edit end` / `edit stop` tear the session/server down.
   - **Two channels:** the conversation is transient instructions to the agent
     (a drain-on-delivery queue); comments are persistent annotations (the reused
-    widget, served same-origin). No new dependencies — a detached `node:http`
-    server, `fs.watch` → SSE live-reload, sessions keyed by file path under
-    `~/.htmldrop/edit/`.
+    widget, served same-origin). The composer **locks while the agent is working**
+    (unlocks on its reply or next poll) so messages can't pile up mid-edit. No new
+    dependencies — a detached `node:http` server, `fs.watch` → SSE live-reload,
+    sessions keyed by file path under `~/.htmldrop/edit/`.
 - **Localhost hardening.** The edit server rejects non-loopback `Host` headers
   (DNS-rebinding), rejects cross-origin writes (CSRF), and serves only
   `.html`/`.htm` resolved by realpath.

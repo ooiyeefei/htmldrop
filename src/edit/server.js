@@ -121,6 +121,13 @@ export async function startServer({ host = '127.0.0.1', port = 0, idleTimeoutMs 
     else activePolls.set(key, n - 1);
     if (presenceOf(key) !== before) emitPresence(key);
   }
+  // A reply means the agent is done with the current message → drop 'working' so
+  // the composer unlocks even before the agent re-polls.
+  function clearWorking(key) {
+    const before = presenceOf(key);
+    workingKeys.delete(key);
+    if (presenceOf(key) !== before) emitPresence(key);
+  }
 
   // --- file watch → reload -------------------------------------------------
   // Watch the file's *directory* and filter to its basename: editors that save
@@ -390,6 +397,7 @@ export async function startServer({ host = '127.0.0.1', port = 0, idleTimeoutMs 
         const body = await readJsonBody(req);
         const msg = store.addAgentMessage(m[1], body.text);
         if (!msg) { sendJson(res, 404, { error: 'session not found' }); return; }
+        clearWorking(m[1]); // agent responded → unlock the author's composer
         events.emit('chat', m[1]);
         sendJson(res, 201, { id: msg.id });
         return;

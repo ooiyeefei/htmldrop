@@ -155,6 +155,8 @@ export function injectEditRuntime(html, { key }) {
 
   document.body.style.marginLeft = '360px';
   var pendingContext = null;
+  var agentPresence = 'waiting';
+  var ended = false;
 
   // --- chat rendering -------------------------------------------------------
   function renderChat(chat) {
@@ -194,15 +196,20 @@ export function injectEditRuntime(html, { key }) {
   }
 
   function send() {
+    if (sn.disabled) return; // locked (agent working) or ended
     var text = ta.value.trim();
     if (!text) return;
-    sn.disabled = true;
     var body = { text: text, context: pendingContext };
+    sn.disabled = true; // in-flight guard against double-send
     fetch(WORKER + '/api/edit/' + KEY + '/message', {
       method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body)
     }).then(function () {
-      ta.value = ''; clearChip(); sn.disabled = false;
-    }).catch(function () { sn.disabled = false; });
+      ta.value = ''; clearChip();
+      // If the agent was listening, it's about to take this message — lock the
+      // composer now; the server's 'working' SSE confirms it a beat later.
+      if (agentPresence === 'listening') setState('working');
+      else updateSendState();
+    }).catch(function () { updateSendState(); });
   }
 
   function clearChip() { pendingContext = null; chip.style.display = 'none'; chipText.textContent = ''; }
@@ -231,9 +238,25 @@ export function injectEditRuntime(html, { key }) {
     document.documentElement.classList.toggle('htmldrop-view');
   });
 
-  // --- presence -------------------------------------------------------------
+  // --- presence + send lock -------------------------------------------------
+  // While the agent is "working" (it took your last message and hasn't replied
+  // or re-polled), lock the composer so messages can't pile up mid-edit — the
+  // same rule Lavish uses. Unlocks on the agent's reply or its next poll.
   var STATES = { waiting: ['#9ca3af', 'idle'], listening: ['#22c55e', 'listening'], working: ['#f59e0b', 'working'] };
-  function setState(s) { var v = STATES[s] || STATES.waiting; dt.style.background = v[0]; pl.textContent = v[1]; }
+  function updateSendState() {
+    var working = agentPresence === 'working';
+    sn.disabled = ended || working;
+    att.disabled = ended || working;
+    ta.disabled = ended; // still typeable while the agent works; just can't send
+    sn.textContent = ended ? 'Session ended' : (working ? 'Agent working…' : 'Send to agent');
+  }
+  function setState(s) {
+    agentPresence = (s === 'listening' || s === 'working') ? s : 'waiting';
+    var v = STATES[agentPresence];
+    dt.style.background = v[0];
+    pl.textContent = v[1];
+    updateSendState();
+  }
 
   // --- SSE ------------------------------------------------------------------
   try {
@@ -244,9 +267,10 @@ export function injectEditRuntime(html, { key }) {
       try { sessionStorage.setItem(SCROLL_KEY, String(window.scrollY || window.pageYOffset || 0)); } catch (e) {}
       location.reload();
     });
-    es.addEventListener('ended', function () { setState('waiting'); pl.textContent = 'ended'; ta.disabled = true; sn.disabled = true; });
+    es.addEventListener('ended', function () { ended = true; setState('waiting'); pl.textContent = 'ended'; });
   } catch (e) {}
 
+  updateSendState();
   loadChat();
 })();
 </script>`;
