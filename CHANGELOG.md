@@ -4,6 +4,46 @@ All notable changes to this project are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/), and this project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+Adds **edit mode** — a local, real-time loop to refine a doc *with your AI agent*
+before publishing. The asynchronous publish/feedback/converge flow is unchanged.
+Not yet on npm; on release this becomes the next minor version.
+
+### Features
+
+- **Edit mode (`htmldrop edit`).** A new command group, fully local and separate
+  from the publish flow:
+  - `edit start <file>` serves the file on `127.0.0.1` with a conversation panel
+    (chat with the agent) beside the existing comment widget, and **live-reloads**
+    the page whenever the file changes. `--with-feedback` pulls the published
+    doc's reviewer comments into the session to work through with the agent;
+    `--no-open` skips the browser.
+  - `edit poll <file> --json` is the agent's listen call — it long-polls until you
+    send a chat message **or leave a comment on the page**, then returns them with
+    the page's comments and any layout warnings as context. `edit reply <file>
+    --text …` posts the agent's response back into the conversation.
+    `edit layout <file>` reports render problems on demand. `edit end` / `edit
+    stop` tear the session/server down.
+  - **Layout QA.** The injected auditor measures the rendered page (after load
+    and on resize) and reports horizontal overflow, clipped text, and oversize
+    elements as structured `{selector, kind, detail, severity}` warnings — so the
+    agent can fix layout bugs it can't see from source. Delivered on the poll and
+    via `edit layout`.
+  - **Re-engage from the UI.** A Send reopens an ended session (no terminal trip),
+    and the composer honestly shows whether a listener caught the message
+    (delivered) or it's queued for the next poll, with a best-effort OS nudge.
+  - **Two channels:** the conversation is transient instructions to the agent
+    (a drain-on-delivery queue); comments are persistent annotations (the reused
+    widget, served same-origin). The composer **locks while the agent is working**
+    (unlocks on its reply or next poll) so messages can't pile up mid-edit, and an
+    unsent draft is saved to `sessionStorage` so a live-reload never loses what you
+    were typing. No new dependencies — a detached `node:http` server, `fs.watch` →
+    SSE live-reload, sessions keyed by file path under `~/.htmldrop/edit/`.
+- **Localhost hardening.** The edit server rejects non-loopback `Host` headers
+  (DNS-rebinding), rejects cross-origin writes (CSRF), and serves only
+  `.html`/`.htm` resolved by realpath.
+
 ## [1.7.0] — 2026-06-11
 
 Commenters can now edit and delete their own comments, and anchor "text updated"

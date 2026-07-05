@@ -2,10 +2,11 @@
 
 Publish HTML files as shareable links — and optionally collect inline feedback on them and synthesize it with AI.
 
-htmldrop has two modes:
+htmldrop has three modes:
 
 1. **Simple share** — publish any HTML file and get a public (or password-protected) link, hosted free on [Surge.sh](https://surge.sh).
 2. **Collaborative feedback + converge** — publish with an embedded annotation widget so reviewers can highlight text and comment (no account needed), then pull that feedback and let an LLM synthesize an improved version.
+3. **Edit mode** — a local, real-time loop to refine a page *with your AI agent* before you publish it. No hosting, no link; it runs entirely on `127.0.0.1`.
 
 ```
 npm install -g @yeefeiooi/htmldrop
@@ -22,6 +23,7 @@ npm install -g @yeefeiooi/htmldrop
 - [Command reference](#command-reference)
 - [Example walkthroughs](#example-walkthroughs)
 - [The agent loop](#the-agent-loop)
+- [Edit mode (local, pre-publish)](#edit-mode-local-pre-publish)
 - [Multi-provider AI (Anthropic / OpenAI / Gemini)](#multi-provider-ai)
 - [Architecture](#architecture)
 - [Security model](#security-model)
@@ -86,6 +88,11 @@ For AI converge you also need an LLM API key in your environment — see [Multi-
 | `htmldrop fetch <url> [--password <p>] [--out <f>]` | Fetch a published doc, decrypting password-protected pages — lets an agent read the content |
 | `htmldrop converge <file>` | Synthesize feedback → improved HTML (owner). `--dry-run`, `--provider`, `--model`, `--api-key` |
 | `htmldrop studio` | Open the Converge Studio dashboard locally. `--port <n>`, `--no-browser` |
+| `htmldrop edit start <file>` | **Edit mode** — serve the file locally and iterate with your agent in real time before publishing. `--with-feedback` loads the published doc's reviewer comments; `--no-open` skips the browser |
+| `htmldrop edit poll <file> [--json]` | The agent listens — blocks until you send a chat message or leave a comment, then returns them with the page's comments and layout warnings as context |
+| `htmldrop edit reply <file> --text <t>` | The agent replies into the conversation after editing the file |
+| `htmldrop edit layout <file> [--json]` | Report layout issues (overflow, clipped/overlapping text) in the rendered page |
+| `htmldrop edit end <file>` · `htmldrop edit stop` | End a session · shut the local edit server down |
 
 File arguments accept an absolute path, a relative path, or the bare filename — they all resolve to the same published file. Commands that act on **your own** doc (`pull`, `clear`, `converge`) use the local manifest + author key; the **teammate-facing** commands (`read`, `add --doc-id`, `fetch`) work from just a link.
 
@@ -195,6 +202,33 @@ Agent: htmldrop push spec.html --feedback →  updates the SAME link, comments i
 ```
 
 Because re-push keeps the same URL, the document can iterate in place while reviewers keep using the link they already have.
+
+---
+
+## Edit mode (local, pre-publish)
+
+`push --feedback` is for **asynchronous** review — you ship a link and reviewers comment over time. **Edit mode** is the opposite: a **local, real-time** loop where you sit *with your agent* and refine the page first. Nothing is published; it runs entirely on `127.0.0.1`.
+
+```bash
+htmldrop edit start report.html                  # local page: chat on the left, comments on the right
+htmldrop edit start report.html --with-feedback  # …and load reviewers' comments to work through
+```
+
+The page **live-reloads** whenever the file changes, so as your agent edits `report.html` you watch it update instantly, comments re-anchored. You talk to the agent in the conversation panel; it listens and replies:
+
+```
+You (browser): "tighten the intro"
+Agent:  htmldrop edit poll report.html --json     # blocks until your message arrives
+Agent:  …edits report.html…
+Agent:  htmldrop edit reply report.html --text "done — tied it to a number"
+→ page live-reloads · the reply appears in the chat · repeat
+```
+
+- **Two channels, cleanly split.** The **conversation** (left) is transient instructions to the agent; the **comment widget** (right) is the same annotation surface as published docs — so with `--with-feedback` you can read a reviewer's comment, highlight it, and tell the agent to address it.
+- **Local and separate.** Sessions live under `~/.htmldrop/edit/`, keyed by file path — never mixed into a published thread. When the doc is ready, `htmldrop push --feedback` shares it for external review as usual.
+- **Author-facing.** Where `push --feedback` is *for your reviewers*, edit mode is for **you** (or whoever holds the HTML) to firm the doc up with an agent — before the first round, or between rounds.
+
+The local server binds loopback only, rejects non-loopback `Host`/`Origin` (guarding against DNS-rebinding and CSRF from other sites you have open), serves only `.html`/`.htm`, and self-shuts after 30 minutes idle.
 
 ---
 
