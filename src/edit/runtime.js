@@ -282,8 +282,8 @@ export function injectEditRuntime(html, { key }) {
 
   // --- presence + send lock -------------------------------------------------
   // While the agent is "working" (it took your last message and hasn't replied
-  // or re-polled), lock the composer so messages can't pile up mid-edit — the
-  // same rule Lavish uses. Unlocks on the agent's reply or its next poll.
+  // or re-polled), lock the composer so messages can't pile up mid-edit.
+  // Unlocks on the agent's reply or its next poll.
   var STATES = { waiting: ['#9ca3af', 'idle'], listening: ['#22c55e', 'listening'], working: ['#f59e0b', 'working'] };
   function updateSendState() {
     var working = agentPresence === 'working';

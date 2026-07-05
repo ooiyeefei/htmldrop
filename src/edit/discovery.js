@@ -1,8 +1,8 @@
 // How client commands (`edit poll`, `edit end`, `edit stop`) find the running
 // server. The detached server writes its chosen ephemeral port + pid here on
 // listen and removes the file on shutdown; clients read it and health-check.
-// Same idea as Lavish's ~/.lavish-axi state, minus the session data (that lives
-// per-file in store.js).
+// A tiny discovery file (port + pid) under the config dir, minus the session
+// data (that lives per-file in store.js).
 
 import { existsSync, readFileSync, writeFileSync, unlinkSync } from 'node:fs';
 import { join } from 'node:path';

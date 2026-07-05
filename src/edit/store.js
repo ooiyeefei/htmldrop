@@ -3,9 +3,9 @@
 // Edit mode is the *pre-publish* loop: no Surge, no Cloudflare Worker, no
 // network. This module is the local stand-in for the Worker's KV feedback
 // store (worker/src/storage.ts), reduced to a single-user, single-machine
-// model. Two design borrowings make it small:
+// model. Two design choices make it small:
 //
-//   * Session identity = the file path itself (Lavish's model): the key is
+//   * Session identity = the file path itself: the key is
 //     sha256(realpath(file)).slice(0,16). Re-opening the same file resumes the
 //     same session and its comments. No opaque doc ids to track.
 //
@@ -39,8 +39,8 @@ export function ensureEditDir() {
   return getEditDir();
 }
 
-// Canonicalize a path the same way Lavish does so that `./report.html`,
-// `report.html`, and an absolute path all resolve to one session. realpathSync
+// Canonicalize a path so that `./report.html`, `report.html`, and an absolute
+// path all resolve to one session. realpathSync
 // requires the file to exist — callers open sessions only for files they serve,
 // so that holds.
 export function sessionKeyFor(file) {
@@ -87,7 +87,7 @@ export function getSession(key) {
 
 // Open or resume a session for `file`. Idempotent: resuming keeps existing
 // comments and the delivery watermark, only flipping a previously-ended session
-// back to open (Lavish's upsertSession does the same).
+// back to open.
 export function upsertSession(file) {
   const { key, file: abs } = sessionKeyFor(file);
   const existing = readSessionFile(key);
@@ -177,7 +177,7 @@ export function importComments(key, items) {
 // --- Chat: the author ↔ agent conversation ----------------------------------
 // User messages are the agent's real instructions, so they go two places: the
 // chat log (persistent, shown in the browser) AND a queue the poll drains. The
-// queue is Lavish's transient-prompt model — cleared on delivery so the agent
+// queue is a transient-prompt model — cleared on delivery so the agent
 // never re-runs an instruction, while the chat log keeps the history visible.
 
 export function getChat(key) {

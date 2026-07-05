@@ -21,8 +21,8 @@
 //   Control:
 //     GET /health, POST /__edit/sessions, POST /__edit/:key/end, POST /shutdown
 //
-// The whole thing is one request handler and an EventEmitter — the same shape as
-// Lavish's server, minus Express.
+// The whole thing is one request handler and an EventEmitter — no web framework,
+// just Node built-ins.
 
 import { createServer } from 'node:http';
 import { EventEmitter } from 'node:events';
@@ -202,7 +202,7 @@ export async function startServer({ host = '127.0.0.1', port = 0, idleTimeoutMs 
   // --- the agent long-poll drain ------------------------------------------
   // Holds the connection open until the author sends a chat message (or the
   // session ends), then returns the queued instructions plus the current
-  // comments as context. Lavish's queue model: messages are drained on delivery.
+  // comments as context. Queue model: messages are drained on delivery.
   function handlePoll(req, res, query) {
     const filePath = query.get('file');
     if (!filePath) { sendJson(res, 400, { status: 'error', error: 'missing file' }); return; }
