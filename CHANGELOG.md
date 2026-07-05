@@ -4,11 +4,10 @@ All notable changes to this project are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/), and this project adheres to
 [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [1.8.0] — 2026-07-05
 
 Adds **edit mode** — a local, real-time loop to refine a doc *with your AI agent*
 before publishing. The asynchronous publish/feedback/converge flow is unchanged.
-Not yet on npm; on release this becomes the next minor version.
 
 ### Features
 
