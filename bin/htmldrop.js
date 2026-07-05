@@ -18,7 +18,7 @@ import { feedbackList } from '../src/feedback/list.js';
 import { feedbackClear } from '../src/feedback/clear.js';
 import { converge } from '../src/feedback/converge.js';
 import { studio } from '../src/studio.js';
-import { editStart, editPoll, editReply, editEnd, editStop } from '../src/edit/index.js';
+import { editStart, editPoll, editReply, editLayout, editEnd, editStop } from '../src/edit/index.js';
 
 const pkg = JSON.parse(
   readFileSync(join(dirname(fileURLToPath(import.meta.url)), '../package.json'), 'utf-8')
@@ -251,6 +251,19 @@ edit
   .action(async (file, options) => {
     try {
       await editReply(file, options);
+    } catch (err) {
+      console.error(`Error: ${err.message}`);
+      process.exit(1);
+    }
+  });
+
+edit
+  .command('layout <file>')
+  .description('Report layout issues (overflow, clipped/overlapping text) in the rendered page (for agents)')
+  .option('--json', 'Output as JSON')
+  .action(async (file, options) => {
+    try {
+      await editLayout(file, options);
     } catch (err) {
       console.error(`Error: ${err.message}`);
       process.exit(1);

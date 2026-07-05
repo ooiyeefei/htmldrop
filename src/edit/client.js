@@ -52,6 +52,15 @@ export function runningPort() {
   return info?.port || null;
 }
 
+export async function getJson(port, path) {
+  const res = await fetch(`http://127.0.0.1:${port}${path}`);
+  const text = await res.text();
+  let data = null;
+  try { data = text ? JSON.parse(text) : null; } catch { /* non-JSON */ }
+  if (!res.ok) throw new Error((data && data.error) || `request failed (${res.status})`);
+  return data;
+}
+
 export async function postJson(port, path, body) {
   const res = await fetch(`http://127.0.0.1:${port}${path}`, {
     method: 'POST',

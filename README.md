@@ -89,8 +89,9 @@ For AI converge you also need an LLM API key in your environment — see [Multi-
 | `htmldrop converge <file>` | Synthesize feedback → improved HTML (owner). `--dry-run`, `--provider`, `--model`, `--api-key` |
 | `htmldrop studio` | Open the Converge Studio dashboard locally. `--port <n>`, `--no-browser` |
 | `htmldrop edit start <file>` | **Edit mode** — serve the file locally and iterate with your agent in real time before publishing. `--with-feedback` loads the published doc's reviewer comments; `--no-open` skips the browser |
-| `htmldrop edit poll <file> [--json]` | The agent listens — blocks until you send a chat message, then returns it with the page's comments as context |
+| `htmldrop edit poll <file> [--json]` | The agent listens — blocks until you send a chat message or leave a comment, then returns them with the page's comments and layout warnings as context |
 | `htmldrop edit reply <file> --text <t>` | The agent replies into the conversation after editing the file |
+| `htmldrop edit layout <file> [--json]` | Report layout issues (overflow, clipped/overlapping text) in the rendered page |
 | `htmldrop edit end <file>` · `htmldrop edit stop` | End a session · shut the local edit server down |
 
 File arguments accept an absolute path, a relative path, or the bare filename — they all resolve to the same published file. Commands that act on **your own** doc (`pull`, `clear`, `converge`) use the local manifest + author key; the **teammate-facing** commands (`read`, `add --doc-id`, `fetch`) work from just a link.

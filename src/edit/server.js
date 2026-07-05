@@ -251,11 +251,15 @@ export async function startServer({ host = '127.0.0.1', port = 0, idleTimeoutMs 
         if (newComments.length) store.markCommentsDelivered(key, newComments[newComments.length - 1].createdAt);
         // Full comment set as standing context; newComments flags what just arrived.
         const comments = store.getComments(key).items;
+        // Attach current layout warnings as standing context so the agent can
+        // fix render problems in the same turn it addresses feedback.
+        const layout = store.getLayout(key);
         finish({
           status: 'feedback',
           messages,
           newComments,
           comments,
+          layoutWarnings: layout.warnings || [],
           count: messages.length + newComments.length,
           file: session.file,
         });
@@ -437,6 +441,16 @@ export async function startServer({ host = '127.0.0.1', port = 0, idleTimeoutMs 
 
       // Edit-mode chat: author ↔ agent conversation.
       if ((m = path.match(/^\/api\/edit\/([a-f0-9]{16})\/chat$/)) && method === 'GET') { sendJson(res, 200, store.getChat(m[1])); return; }
+      // Layout QA: the widget's auditor posts the current render's warnings here.
+      if ((m = path.match(/^\/api\/edit\/([a-f0-9]{16})\/layout$/))) {
+        if (method === 'POST') {
+          const body = await readJsonBody(req);
+          store.setLayout(m[1], body.warnings || [], body.docHash);
+          sendJson(res, 200, { ok: true });
+          return;
+        }
+        if (method === 'GET') { sendJson(res, 200, store.getLayout(m[1])); return; }
+      }
       if ((m = path.match(/^\/api\/edit\/([a-f0-9]{16})\/message$/)) && method === 'POST') {
         const body = await readJsonBody(req);
         // Was a poll listening at the moment the message arrived? Capture BEFORE

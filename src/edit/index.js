@@ -13,7 +13,7 @@
 import { existsSync, statSync } from 'node:fs';
 import { resolve, extname, basename } from 'node:path';
 import open from 'open';
-import { ensureServerRunning, runningPort, postJson, pollFeedback } from './client.js';
+import { ensureServerRunning, runningPort, postJson, getJson, pollFeedback } from './client.js';
 import { sessionKeyFor } from './store.js';
 import { feedbackPull } from '../feedback/pull.js';
 import { loadManifest } from '../manifest.js';
@@ -138,8 +138,36 @@ export async function editPoll(file, options = {}) {
 
   const others = (data.comments?.length || 0) - fresh.length;
   if (others > 0) console.log(`\n  (${others} earlier annotation(s) on the page for context)`);
+  printLayoutWarnings(data.layoutWarnings);
   console.log(`\nEdit ${file} to address these — the page reloads live. Then let the author know:`);
   console.log(`  htmldrop edit reply ${file} --text "<what you changed>"`);
+  return data;
+}
+
+// Shared renderer for layout-QA warnings (poll output + `edit layout`).
+function printLayoutWarnings(warnings) {
+  if (!warnings?.length) return;
+  console.log(`\n⚠ ${warnings.length} layout issue(s) detected in the rendered page:`);
+  for (const w of warnings) {
+    const sev = w.severity === 'high' ? '[HIGH]' : w.severity === 'medium' ? '[med]' : '[low]';
+    console.log(`  ${sev} ${w.kind} — ${w.selector}`);
+    console.log(`     ${w.detail}${w.text ? `  (text: "${w.text}")` : ''}`);
+  }
+}
+
+// On-demand layout check (agent QA before/after edits, no message needed).
+export async function editLayout(file, options = {}) {
+  const abs = assertHtmlFile(file);
+  const port = await ensureServerRunning();
+  await postJson(port, '/__edit/sessions', { file: abs });
+  const { key } = sessionKeyFor(abs);
+  const data = await getJson(port, `/api/edit/${key}/layout`);
+  if (options.json) { console.log(JSON.stringify(data, null, 2)); return data; }
+  if (!data.warnings?.length) {
+    console.log(data.at ? 'No layout issues detected in the current render.' : 'No layout audit yet — open the page in the browser first so it can be measured.');
+    return data;
+  }
+  printLayoutWarnings(data.warnings);
   return data;
 }
 

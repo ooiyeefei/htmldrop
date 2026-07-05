@@ -311,6 +311,86 @@ export function injectEditRuntime(html, { key }) {
     updateSendState();
   }
 
+  // --- Layout QA ------------------------------------------------------------
+  // Measure the RENDERED page and report layout problems the agent can't "see"
+  // from source: horizontal overflow (the big one for narrow review panels),
+  // text clipped by its container, and overlapping text runs. Runs after load
+  // and on debounced resize; posts the current warning set to the server, which
+  // hands it to the agent on the next poll. Read-only — never mutates the page.
+  function cssPath(el) {
+    if (!el || el === document.body || !el.tagName) return 'body';
+    var parts = [], n = el, depth = 0;
+    while (n && n !== document.body && n.tagName && depth < 6) {
+      var part = n.tagName.toLowerCase();
+      if (n.id) { parts.unshift('#' + n.id); return parts.join(' > '); }
+      var p = n.parentElement;
+      if (p) {
+        var same = Array.prototype.filter.call(p.children, function (c) { return c.tagName === n.tagName; });
+        if (same.length > 1) part += ':nth-of-type(' + (same.indexOf(n) + 1) + ')';
+      }
+      parts.unshift(part); n = p; depth++;
+    }
+    return parts.join(' > ');
+  }
+  function isHidden(el) {
+    var s = getComputedStyle(el);
+    if (s.display === 'none' || s.visibility === 'hidden' || parseFloat(s.opacity) === 0) return true;
+    var r = el.getBoundingClientRect();
+    return r.width < 1 && r.height < 1;
+  }
+  function shortText(el) {
+    return (el.textContent || '').replace(/\\s+/g, ' ').trim().slice(0, 60);
+  }
+  function auditLayout() {
+    var out = [];
+    var seen = 0;
+    // 1) Horizontal overflow — page or any element wider than the viewport, or a
+    //    child spilling past a non-scroll parent. Highest severity: it's the most
+    //    common rich-artifact bug and the hardest to notice at desk width.
+    var docW = document.documentElement.clientWidth;
+    if (document.documentElement.scrollWidth > docW + 2) {
+      out.push({ kind: 'page-overflow', selector: 'html', detail: 'Page scrolls horizontally: content is ' + (document.documentElement.scrollWidth - docW) + 'px wider than the viewport (' + docW + 'px).', severity: 'high' });
+    }
+    var all = document.body ? document.body.querySelectorAll('*') : [];
+    for (var i = 0; i < all.length && seen < 4000; i++) {
+      var el = all[i];
+      seen++;
+      if (host.contains(el) || (el.closest && el.closest('#htmldrop-edit-chat-host'))) continue; // skip our own UI
+      if (el.id === 'htmldrop-widget-host' || (el.closest && el.closest('#htmldrop-widget-host'))) continue;
+      if (isHidden(el)) continue;
+      var cs = getComputedStyle(el);
+      // element wider than viewport
+      var r = el.getBoundingClientRect();
+      if (r.width > docW + 2 && el.parentElement === document.body) {
+        out.push({ kind: 'element-overflow', selector: cssPath(el), detail: 'Element is ' + Math.round(r.width) + 'px wide, past the ' + docW + 'px viewport.', text: shortText(el), severity: 'high' });
+      }
+      // 2) Clipped text — content taller/wider than a fixed, non-scrolling box.
+      var clipsY = el.scrollHeight - el.clientHeight > 4 && (cs.overflowY === 'hidden' || cs.overflow === 'hidden');
+      var clipsX = el.scrollWidth - el.clientWidth > 4 && (cs.overflowX === 'hidden' || cs.overflow === 'hidden');
+      if ((clipsY || clipsX) && (el.textContent || '').trim()) {
+        out.push({ kind: 'clipped-text', selector: cssPath(el), detail: 'Text is clipped by a fixed-size container (overflow:hidden hides ' + (clipsY ? (el.scrollHeight - el.clientHeight) + 'px vertically' : (el.scrollWidth - el.clientWidth) + 'px horizontally') + ').', text: shortText(el), severity: 'medium' });
+      }
+      if (out.length >= 60) break;
+    }
+    return out;
+  }
+  var layoutTimer;
+  function runAudit() {
+    clearTimeout(layoutTimer);
+    layoutTimer = setTimeout(function () {
+      var warnings;
+      try { warnings = auditLayout(); } catch (e) { return; }
+      var docHash = null;
+      try { var h = document.getElementById('htmldrop-widget-host'); docHash = h && h.dataset ? h.dataset.docHash : null; } catch (e) {}
+      fetch(WORKER + '/api/edit/' + KEY + '/layout', {
+        method: 'POST', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ warnings: warnings, docHash: docHash })
+      }).catch(function () {});
+    }, 350);
+  }
+  window.addEventListener('load', runAudit);
+  window.addEventListener('resize', runAudit);
+
   // --- SSE ------------------------------------------------------------------
   try {
     var es = new EventSource('/__edit/events/' + KEY);

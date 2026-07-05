@@ -215,6 +215,29 @@ export function pendingCount(key) {
   return s && Array.isArray(s.queue) ? s.queue.length : 0;
 }
 
+// --- Layout QA ---------------------------------------------------------------
+// The widget's auditor measures the RENDERED page (overflow / clipped /
+// overlapping text) and posts the current warning set here. It's state, not an
+// event stream — it always reflects the latest render — so we overwrite rather
+// than append. Stored with the docHash it was measured against so a stale audit
+// (from a pre-edit render) can be told apart from the current one.
+export function setLayout(key, warnings, docHash) {
+  const s = readSessionFile(key);
+  if (!s) return null;
+  s.layout = {
+    warnings: Array.isArray(warnings) ? warnings.slice(0, 100) : [],
+    docHash: docHash || undefined,
+    at: new Date().toISOString(),
+  };
+  writeSessionFile(s);
+  return s.layout;
+}
+
+export function getLayout(key) {
+  const s = readSessionFile(key);
+  return (s && s.layout) || { warnings: [], at: null };
+}
+
 // Drain queued user messages for the agent and clear them (delivered). Peeked
 // with pendingCount first so we only drain when we're about to respond.
 export function takeQueuedMessages(key) {
