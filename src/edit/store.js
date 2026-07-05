@@ -133,6 +133,15 @@ export function endSession(key) {
   return writeSessionFile(session);
 }
 
+// Reopen an ended session (C: re-engage from the UI). Flips status back to open
+// so a poll will serve it again; returns the session or null if unknown.
+export function reopenSession(key) {
+  const session = readSessionFile(key);
+  if (!session) return null;
+  if (session.status === 'ended') session.status = 'open';
+  return writeSessionFile(session);
+}
+
 export function listSessions() {
   const dir = getSessionsDir();
   if (!existsSync(dir)) return [];
@@ -182,6 +191,9 @@ export function getChat(key) {
 export function addUserMessage(key, { text, context } = {}) {
   const s = readSessionFile(key);
   if (!s) return null;
+  // C: a message from the UI reopens an ended session, so you never have to go
+  // back to the terminal to un-end it — the message lands and waits for a poll.
+  if (s.status === 'ended') s.status = 'open';
   const msg = { id: randomUUID(), role: 'user', text: String(text || ''), context: context || null, at: new Date().toISOString() };
   s.chat = [...(s.chat || []), msg];
   s.queue = [...(s.queue || []), msg];

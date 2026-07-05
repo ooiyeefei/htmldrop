@@ -28,7 +28,8 @@ import { createServer } from 'node:http';
 import { EventEmitter } from 'node:events';
 import { readFile } from 'node:fs/promises';
 import { watch } from 'node:fs';
-import { dirname, resolve, relative, isAbsolute, extname } from 'node:path';
+import { spawn } from 'node:child_process';
+import { basename, dirname, resolve, relative, isAbsolute, extname } from 'node:path';
 import { injectFeedbackWidget } from '../feedback/inject.js';
 import { injectEditRuntime } from './runtime.js';
 import * as store from './store.js';
@@ -75,6 +76,34 @@ function isLoopbackOrigin(origin) {
   try { return LOOPBACK_HOSTS.has(new URL(origin).hostname); } catch { return false; }
 }
 
+// Best-effort desktop nudge when a message arrives with no poll listening (B).
+// Purely advisory — the authoritative "queued vs delivered" signal is the
+// `delivered` flag returned to the browser. Never throws, never blocks: if no
+// notifier exists (headless/CI/unknown OS) it silently no-ops. Opt out with
+// HTMLDROP_EDIT_NOTIFY=0.
+let lastNotifyAt = 0;
+function osNotify(title, message) {
+  if (process.env.HTMLDROP_EDIT_NOTIFY === '0') return;
+  const now = Date.now();
+  if (now - lastNotifyAt < 5000) return; // throttle bursts
+  lastNotifyAt = now;
+  let cmd, args;
+  if (process.platform === 'darwin') {
+    cmd = 'osascript';
+    args = ['-e', `display notification ${JSON.stringify(message)} with title ${JSON.stringify(title)}`];
+  } else if (process.platform === 'linux') {
+    cmd = 'notify-send';
+    args = [title, message];
+  } else {
+    return; // windows/other — skip; the browser signal still covers it
+  }
+  try {
+    const p = spawn(cmd, args, { stdio: 'ignore', detached: true });
+    p.on('error', () => {}); // notifier not installed — ignore
+    p.unref();
+  } catch { /* ignore */ }
+}
+
 function readJsonBody(req, limit = 2 * 1024 * 1024) {
   return new Promise((resolve2, reject) => {
     let size = 0;
@@ -112,6 +141,13 @@ export async function startServer({ host = '127.0.0.1', port = 0, idleTimeoutMs 
   }
   function emitPresence(key) {
     events.emit('presence', key, presenceOf(key));
+  }
+  // Fired when a message lands with no poll open: nudge the human to have the
+  // agent re-poll (the browser also shows an honest "queued" state).
+  function notifyNoListener(key) {
+    const s = store.getSession(key);
+    const name = s && s.file ? basename(s.file) : 'a doc';
+    osNotify('htmldrop edit — message waiting', `Run: htmldrop edit poll ${name}`);
   }
   function setPollActive(key, active) {
     const before = presenceOf(key);
@@ -403,11 +439,17 @@ export async function startServer({ host = '127.0.0.1', port = 0, idleTimeoutMs 
       if ((m = path.match(/^\/api\/edit\/([a-f0-9]{16})\/chat$/)) && method === 'GET') { sendJson(res, 200, store.getChat(m[1])); return; }
       if ((m = path.match(/^\/api\/edit\/([a-f0-9]{16})\/message$/)) && method === 'POST') {
         const body = await readJsonBody(req);
+        // Was a poll listening at the moment the message arrived? Capture BEFORE
+        // emit, since emitting synchronously wakes and drains the open poll. This
+        // is the honest "did it land now, or is it queued?" signal for the UI (B).
+        const wasListening = (activePolls.get(m[1]) || 0) > 0;
         const msg = store.addUserMessage(m[1], body);
         if (!msg) { sendJson(res, 404, { error: 'session not found' }); return; }
-        events.emit('message', m[1]); // wakes the agent poll
+        events.emit('message', m[1]); // wakes the agent poll (if one is open)
         events.emit('chat', m[1]);    // updates the browser chat log
-        sendJson(res, 201, { id: msg.id });
+        events.emit('presence', m[1], presenceOf(m[1])); // reopen may change it
+        if (!wasListening) notifyNoListener(m[1]); // best-effort nudge to re-poll (B)
+        sendJson(res, 201, { id: msg.id, delivered: wasListening });
         return;
       }
       if ((m = path.match(/^\/api\/edit\/([a-f0-9]{16})\/reply$/)) && method === 'POST') {

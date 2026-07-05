@@ -109,8 +109,10 @@ export function injectEditRuntime(html, { key }) {
     '.chip span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }',
     '.chip button { border: none; background: transparent; color: #6b7280; cursor: pointer; margin-left: auto; font-size: 13px; }',
     '.ta { width: 100%; border: 1px solid #e5e7eb; border-radius: 8px; padding: 9px 11px; font: inherit;',
-    '  resize: none; min-height: 46px; outline: none; line-height: 1.4; }',
+    '  resize: vertical; min-height: 64px; outline: none; line-height: 1.45; }',
     '.ta:focus { border-color: #6366f1; }',
+    '.status { margin-top: 8px; font-size: 11.5px; line-height: 1.4; color: #b45309; background: #fef3c7;',
+    '  border-radius: 6px; padding: 6px 9px; }',
     '.row { display: flex; gap: 8px; margin-top: 8px; align-items: center; }',
     '.att { border: 1px solid #e5e7eb; background: #fff; color: #6b7280; border-radius: 6px; padding: 7px 10px;',
     '  font: inherit; font-size: 11px; cursor: pointer; white-space: nowrap; }',
@@ -136,6 +138,7 @@ export function injectEditRuntime(html, { key }) {
     '<div class="co">' +
     '<div class="chip" id="chip" style="display:none"><span id="chiptext"></span><button id="chipx">\\u00d7</button></div>' +
     '<textarea class="ta" id="ta" placeholder="Ask the agent to refine the page..."></textarea>' +
+    '<div class="status" id="status" style="display:none"></div>' +
     '<div class="row"><button class="att" id="att">\\u2295 Attach selection</button>' +
     '<button class="sn" id="sn">Send to agent</button></div></div>';
   shadow.appendChild(panel);
@@ -153,6 +156,7 @@ export function injectEditRuntime(html, { key }) {
   var chipText = shadow.getElementById('chiptext');
   var dt = shadow.getElementById('dt');
   var pl = shadow.getElementById('pl');
+  var statusEl = shadow.getElementById('status');
 
   document.body.style.marginLeft = '360px';
   var pendingContext = null;
@@ -197,20 +201,28 @@ export function injectEditRuntime(html, { key }) {
   }
 
   function send() {
-    if (sn.disabled) return; // locked (agent working) or ended
+    if (sn.disabled) return; // locked (agent working); note: NOT blocked when ended (C)
     var text = ta.value.trim();
     if (!text) return;
     var body = { text: text, context: pendingContext };
     sn.disabled = true; // in-flight guard against double-send
+    ended = false; // C: sending reopens an ended session (server reopens too)
     fetch(WORKER + '/api/edit/' + KEY + '/message', {
       method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body)
-    }).then(function () {
+    }).then(function (r) { return r.json().catch(function () { return {}; }); })
+      .then(function (d) {
       ta.value = ''; clearChip();
-      // If the agent was listening, it's about to take this message — lock the
-      // composer now; the server's 'working' SSE confirms it a beat later.
-      if (agentPresence === 'listening') setState('working');
-      else updateSendState();
-    }).catch(function () { updateSendState(); });
+      // B: honest feedback about whether a listener actually caught it.
+      if (d && d.delivered) {
+        // Agent was polling — it just took this. Lock composer; 'working' SSE confirms.
+        setState('working');
+      } else {
+        // No poll open — the message is queued and will reach the agent on its
+        // next poll. Say so plainly instead of pretending it was received.
+        flashStatus('Queued — agent isn\\u2019t listening yet. It\\u2019ll arrive on the next poll.');
+        updateSendState();
+      }
+    }).catch(function () { flashStatus('Send failed — check the connection.'); updateSendState(); });
   }
 
   function clearChip() { pendingContext = null; chip.style.display = 'none'; chipText.textContent = ''; persistDraft(); }
@@ -275,10 +287,21 @@ export function injectEditRuntime(html, { key }) {
   var STATES = { waiting: ['#9ca3af', 'idle'], listening: ['#22c55e', 'listening'], working: ['#f59e0b', 'working'] };
   function updateSendState() {
     var working = agentPresence === 'working';
-    sn.disabled = ended || working;
-    att.disabled = ended || working;
-    ta.disabled = ended; // still typeable while the agent works; just can't send
-    sn.textContent = ended ? 'Session ended' : (working ? 'Agent working…' : 'Send to agent');
+    // C: when ended, the composer stays ALIVE — a Send reopens the session
+    // (server-side too) so you re-engage from the page, no terminal trip. Only
+    // "working" locks it (a message is in flight to the agent).
+    sn.disabled = working;
+    att.disabled = working;
+    ta.disabled = false;
+    sn.textContent = working ? 'Agent working…' : (ended ? 'Re-engage agent' : 'Send to agent');
+  }
+  // Transient one-line status under the composer (honest send feedback — B).
+  var statusTimer;
+  function flashStatus(text) {
+    statusEl.textContent = text;
+    statusEl.style.display = 'block';
+    clearTimeout(statusTimer);
+    statusTimer = setTimeout(function () { statusEl.style.display = 'none'; }, 6000);
   }
   function setState(s) {
     agentPresence = (s === 'listening' || s === 'working') ? s : 'waiting';
@@ -297,7 +320,11 @@ export function injectEditRuntime(html, { key }) {
       try { sessionStorage.setItem(SCROLL_KEY, String(window.scrollY || window.pageYOffset || 0)); } catch (e) {}
       location.reload();
     });
-    es.addEventListener('ended', function () { ended = true; setState('waiting'); pl.textContent = 'ended'; });
+    es.addEventListener('ended', function () {
+      ended = true; setState('waiting'); pl.textContent = 'ended';
+      // C: don't lock the composer — a Send will reopen the session from here.
+      flashStatus('Session ended. Type a message to re-engage the agent.');
+    });
   } catch (e) {}
 
   restoreDraft();
