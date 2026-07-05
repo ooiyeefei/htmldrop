@@ -103,21 +103,41 @@ export async function editPoll(file, options = {}) {
     console.log('No edit session for this file. Run `htmldrop edit start` first.');
     return data;
   }
-  if (data.status !== 'feedback' || !data.messages?.length) {
+  const msgs = data.messages || [];
+  const fresh = data.newComments || [];
+  if (data.status !== 'feedback' || (!msgs.length && !fresh.length)) {
     console.log('No new messages.');
     return data;
   }
 
-  console.log(`\n${data.count} message(s) from the author on ${file}:\n`);
-  for (const m of data.messages) {
-    const ctx = m.context?.text
-      ? `\n     ↳ re: "${m.context.text.slice(0, 80)}"${m.context.selector ? ` (${m.context.selector})` : ''}`
-      : '';
-    console.log(`  • ${m.text}${ctx}`);
+  if (msgs.length) {
+    console.log(`\n${msgs.length} chat message(s) from the author on ${file}:\n`);
+    for (const m of msgs) {
+      const ctx = m.context?.text
+        ? `\n     ↳ re: "${m.context.text.slice(0, 80)}"${m.context.selector ? ` (${m.context.selector})` : ''}`
+        : '';
+      console.log(`  • ${m.text}${ctx}`);
+    }
   }
-  if (data.comments?.length) {
-    console.log(`\n  (${data.comments.length} annotation(s) on the page for context)`);
+
+  // Comments now reach the agent directly (posting a comment on the page wakes
+  // this poll), so surface them as actionable feedback, not just context.
+  if (fresh.length) {
+    console.log(`\n${fresh.length} new comment(s) on the page:\n`);
+    for (const c of fresh) {
+      const a = c.anchor || {};
+      const on = a.selectedText
+        ? ` [on: "${a.selectedText.slice(0, 60)}"]`
+        : a.type === 'element_rect'
+          ? (a.capturedText ? ` [on: area — "${a.capturedText.slice(0, 60)}"]` : ' [on: area]')
+          : c.parentId ? ' [reply]' : '';
+      console.log(`  • ${c.author?.displayName || 'Anonymous'}${on}`);
+      console.log(`    ${c.content?.text || '(no text)'}`);
+    }
   }
+
+  const others = (data.comments?.length || 0) - fresh.length;
+  if (others > 0) console.log(`\n  (${others} earlier annotation(s) on the page for context)`);
   console.log(`\nEdit ${file} to address these — the page reloads live. Then let the author know:`);
   console.log(`  htmldrop edit reply ${file} --text "<what you changed>"`);
   return data;

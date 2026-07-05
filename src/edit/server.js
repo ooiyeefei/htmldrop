@@ -189,6 +189,7 @@ export async function startServer({ host = '127.0.0.1', port = 0, idleTimeoutMs 
     const cleanup = () => {
       clearInterval(heartbeat);
       events.off('message', onChange);
+      events.off('comment', onChange);
       events.off('ended', onChange);
       setPollActive(key, false);
       refreshIdleTimer();
@@ -204,19 +205,33 @@ export async function startServer({ host = '127.0.0.1', port = 0, idleTimeoutMs 
       if (settled || res.writableEnded) return;
       const session = store.getSession(key);
       if (!session) { finish({ status: 'missing' }); return; }
-      // Peek before draining so we only clear the queue when about to respond.
-      if (store.pendingCount(key) > 0) {
-        const messages = store.takeQueuedMessages(key);
+      // Deliver on EITHER a queued chat message OR a new page comment. Chat
+      // messages are transient (drained); comments are persistent (delivered by
+      // watermark, then the watermark advances so each reaches the agent once).
+      const pending = store.pendingCount(key) > 0;
+      const newComments = store.undeliveredComments(key);
+      if (pending || newComments.length) {
+        const messages = pending ? store.takeQueuedMessages(key) : [];
+        if (newComments.length) store.markCommentsDelivered(key, newComments[newComments.length - 1].createdAt);
+        // Full comment set as standing context; newComments flags what just arrived.
         const comments = store.getComments(key).items;
-        finish({ status: 'feedback', messages, comments, count: messages.length, file: session.file });
+        finish({
+          status: 'feedback',
+          messages,
+          newComments,
+          comments,
+          count: messages.length + newComments.length,
+          file: session.file,
+        });
         return;
       }
       if (session.status === 'ended') finish({ status: 'ended' });
-      // else: nothing queued — stay open until onChange or the client disconnects.
+      // else: nothing new — stay open until onChange or the client disconnects.
     };
     const onChange = (changedKey) => { if (changedKey === key) check(); };
 
     events.on('message', onChange);
+    events.on('comment', onChange);
     events.on('ended', onChange);
     req.on('close', () => { if (!settled) { settled = true; cleanup(); } });
     check(); // deliver immediately if a message is already queued
@@ -350,7 +365,8 @@ export async function startServer({ host = '127.0.0.1', port = 0, idleTimeoutMs 
           const body = await readJsonBody(req);
           const result = store.addComment(key, body);
           if (!result) { sendJson(res, 404, { error: 'session not found' }); return; }
-          events.emit('feedback', key);
+          events.emit('feedback', key); // refresh browser panels (SSE)
+          events.emit('comment', key);  // wake the agent's poll — comments reach it too
           sendJson(res, 201, result);
           return;
         }
@@ -360,6 +376,7 @@ export async function startServer({ host = '127.0.0.1', port = 0, idleTimeoutMs 
         const result = store.addReply(m[1], m[2], body);
         if (!result) { sendJson(res, 404, { error: 'session not found' }); return; }
         events.emit('feedback', m[1]);
+        events.emit('comment', m[1]);
         sendJson(res, 201, result);
         return;
       }

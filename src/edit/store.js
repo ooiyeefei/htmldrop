@@ -106,10 +106,23 @@ export function upsertSession(file) {
     // User messages not yet delivered to the agent's poll. Transient
     // instructions: drained (cleared) on delivery, unlike comments.
     queue: [],
+    // Watermark (ISO time) for comment delivery. Comments are persistent so they
+    // can't be drained like the queue; instead the poll delivers comments newer
+    // than this and advances it. Starts at creation so pre-existing/imported
+    // comments aren't replayed as "new" on the first poll.
+    commentsDeliveredAt: now,
   };
   session.file = abs;
   session.docId = key;
   if (session.status === 'ended') session.status = 'open';
+  // Migrate/resume: if a session predates comment-delivery tracking, treat all
+  // existing comments as already seen (set the watermark to the newest one), so
+  // resuming never floods the agent with the whole backlog. Only comments posted
+  // AFTER this resume will be delivered as new.
+  if (!session.commentsDeliveredAt) {
+    const times = (session.comments || []).map((c) => c.createdAt || '').filter(Boolean);
+    session.commentsDeliveredAt = times.length ? times.sort().pop() : now;
+  }
   return writeSessionFile(session);
 }
 
@@ -238,6 +251,30 @@ export function addComment(key, body) {
 
 export function addReply(key, parentId, body) {
   return addComment(key, { ...body, parentId });
+}
+
+// Comments created since the delivery watermark — what the agent's poll hasn't
+// seen yet. Sorted oldest-first. editTokenHash stripped (same as getComments).
+export function undeliveredComments(key) {
+  const s = readSessionFile(key);
+  if (!s) return [];
+  const since = s.commentsDeliveredAt || s.createdAt || '';
+  return (s.comments || [])
+    .filter((c) => (c.createdAt || '') > since)
+    .sort((a, b) => (a.createdAt || '').localeCompare(b.createdAt || ''))
+    .map(({ editTokenHash, ...rest }) => rest);
+}
+
+// Advance the comment watermark to `iso` once the poll has delivered them, so
+// each comment reaches the agent exactly once (kept separate from reading so a
+// poll that dies before responding re-delivers on the next poll).
+export function markCommentsDelivered(key, iso) {
+  const s = readSessionFile(key);
+  if (!s) return;
+  if (iso && (!s.commentsDeliveredAt || iso > s.commentsDeliveredAt)) {
+    s.commentsDeliveredAt = iso;
+    writeSessionFile(s);
+  }
 }
 
 // DELETE: cascade to the reply thread (a top-level delete removes its replies),
