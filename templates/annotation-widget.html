@@ -17,6 +17,11 @@
   function hdGet(k){ try { return localStorage.getItem(k); } catch(e){ return HD_MEM[k] != null ? HD_MEM[k] : null; } }
   function hdSet(k, v){ HD_MEM[k] = v; try { localStorage.setItem(k, v); } catch(e){} }
 
+  // Platform-aware submit-shortcut label: ⌘⏎ on Mac, Ctrl+Enter elsewhere.
+  // Shown in placeholders so the keyboard shortcut is discoverable.
+  var HD_IS_MAC = (function(){ try { return /Mac|iP(hone|ad|od)/.test(navigator.platform || navigator.userAgent); } catch(e){ return false; } })();
+  var HD_SEND_KEY = HD_IS_MAC ? '⌘⏎' : 'Ctrl+Enter';
+
   // Surface a save failure instead of swallowing it. A dropped POST used to fail
   // silently — the reviewer thought a comment saved when it didn't (e.g. the
   // local server restarted onto a new port). This shows a brief toast so a
@@ -514,7 +519,7 @@
     const body = document.createElement('div');
     body.className = 'hd-popover-body';
     const textarea = document.createElement('textarea');
-    textarea.placeholder = 'Add a comment...';
+    textarea.placeholder = 'Add a comment…  (' + HD_SEND_KEY + ' to send)';
     textarea.rows = 3;
     body.appendChild(textarea);
 
@@ -544,6 +549,12 @@
         submitBtn.disabled = false;
         submitBtn.textContent = 'Retry';
       }
+    });
+    // Cmd/Ctrl+Enter submits (Enter alone = newline, so multi-line comments
+    // work). Matches the chat-app convention the user expects. Escape cancels.
+    textarea.addEventListener('keydown', (ke) => {
+      if (ke.key === 'Enter' && (ke.metaKey || ke.ctrlKey) && !ke.isComposing) { ke.preventDefault(); submitBtn.click(); }
+      else if (ke.key === 'Escape') { ke.preventDefault(); removePopover(); }
     });
     actions.append(cancelBtn, submitBtn);
 
@@ -1216,7 +1227,7 @@
     const compose = document.createElement('div');
     compose.className = 'hd-compose';
     const textarea = document.createElement('textarea');
-    textarea.placeholder = 'Add a comment...';
+    textarea.placeholder = 'Add a comment…  (' + HD_SEND_KEY + ' to send)';
     textarea.rows = 2;
     const composeActions = document.createElement('div');
     composeActions.className = 'hd-compose-actions';
@@ -1239,6 +1250,10 @@
         textarea.value = ''; // clear only on success
       } catch (e) { /* failed: toast shown, text kept in the box for retry */ }
       submitBtn.disabled = false;
+    });
+    // Cmd/Ctrl+Enter submits the comment (Enter alone = newline).
+    textarea.addEventListener('keydown', (ke) => {
+      if (ke.key === 'Enter' && (ke.metaKey || ke.ctrlKey) && !ke.isComposing) { ke.preventDefault(); submitBtn.click(); }
     });
     composeActions.append(nameInput, submitBtn);
     compose.append(textarea, composeActions);
@@ -1272,9 +1287,10 @@
         await submitReply(parentItem, t);
       } catch (e) { sendBtn.disabled = false; sendBtn.textContent = 'Retry'; } // keep the text
     });
-    // Enter sends, Shift+Enter newlines — matches the chat composer.
+    // Cmd/Ctrl+Enter sends (Enter alone = newline) — consistent with the comment
+    // popover and the bottom compose box, so submit is the same everywhere.
     input.addEventListener('keydown', (ke) => {
-      if (ke.key === 'Enter' && !ke.shiftKey && !ke.isComposing) { ke.preventDefault(); sendBtn.click(); }
+      if (ke.key === 'Enter' && (ke.metaKey || ke.ctrlKey) && !ke.isComposing) { ke.preventDefault(); sendBtn.click(); }
     });
     wrap.append(input, sendBtn);
     hostEl.appendChild(wrap);
