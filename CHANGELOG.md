@@ -4,6 +4,29 @@ All notable changes to this project are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/), and this project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [1.9.1] — 2026-07-06
+
+Edit-mode UX fixes from real use of 1.9.0.
+
+### Fixes
+
+- **Control bar no longer overlaps the comments panel.** The panel now offsets
+  below the floating bar (via a CSS custom property that crosses the shadow
+  boundary), re-measured as the bar grows.
+- **View (eye) toggle is reversible.** It hid the bar too, stranding you with no
+  way back; now it hides only the comments panel, leaving the bar's controls.
+- **Area-box tool is discoverable.** A ▢ button in the Edit bar (next to the mode
+  toggle) enters area-draw mode, matching the prominence of select-to-comment.
+- **Honest Async batch.** "Send N to agent" no longer claims success when no
+  agent is listening — it says the comments stay queued until one polls, and the
+  count clears only on real delivery. Clearer Live/Async copy: both modes save
+  the comment; the mode only changes *when* the agent is notified.
+- **Open tabs self-update.** `/health` reports the version and the injected
+  runtime knows the version it was built from; a tab reloads itself when the
+  server restarts onto a newer version — no more stale UI after an upgrade.
+- **⌘⏎ / Ctrl+Enter submits** a comment in every box (Enter = newline), with a
+  hint in the placeholder.
+
 ## [1.9.0] — 2026-07-06
 
 Reshapes **edit mode** into a single, reliable review surface with a real

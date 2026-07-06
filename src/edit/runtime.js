@@ -17,10 +17,10 @@
 //
 // It lives in its own shadow root so the artifact's CSS can't touch it.
 
-export function injectEditRuntime(html, { key }) {
+export function injectEditRuntime(html, { key, version = '0' }) {
   const keyJson = JSON.stringify(String(key));
+  const verJson = JSON.stringify(String(version));
   const runtime = `<style id="htmldrop-edit-style">
-:root.htmldrop-view #htmldrop-widget-host,
 :root.htmldrop-view #htmldrop-widget-host,
 :root.htmldrop-view .hd-area-overlay { display: none !important; }
 :root.htmldrop-view body { margin-right: 0 !important; margin-bottom: 0 !important; }
@@ -29,6 +29,7 @@ export function injectEditRuntime(html, { key }) {
 <script>
 (function () {
   var KEY = ${keyJson};
+  var BUILT_VERSION = ${verJson}; // version this runtime was served from
   var SCROLL_KEY = 'htmldrop_edit_scroll:' + KEY;
   var WORKER = ''; // same-origin
 
@@ -364,12 +365,23 @@ export function injectEditRuntime(html, { key }) {
   // Refresh the Async batch count on a light interval while in Async mode.
   setInterval(function () { if (holdOn && !ended) renderMode(); }, 2500);
 
-  // --- auto-heal on a dropped/restarted server ------------------------------
-  var sawOutage = false;
+  // --- auto-heal on a dropped/restarted server, and on a NEW version --------
+  // Reload the tab when the server (a) recovers after an outage, or (b) reports
+  // a different version than this runtime was built from — so restarting onto
+  // upgraded code updates open tabs instead of leaving them on stale UI.
+  var sawOutage = false, reloading = false;
   setInterval(function () {
     fetch('/health', { cache: 'no-store' }).then(function (r) {
-      if (r.ok && sawOutage) { location.reload(); return; }
-      if (r.ok && statusEl.dataset.sticky === '1') { statusEl.dataset.sticky = ''; statusEl.style.display = 'none'; }
+      if (!r.ok) return;
+      if (sawOutage) { location.reload(); return; }
+      if (statusEl.dataset.sticky === '1') { statusEl.dataset.sticky = ''; statusEl.style.display = 'none'; }
+      return r.json().then(function (h) {
+        if (h && h.version && h.version !== BUILT_VERSION && !reloading) {
+          reloading = true;
+          try { sessionStorage.setItem(SCROLL_KEY, String(window.scrollY || window.pageYOffset || 0)); } catch (e) {}
+          location.reload();
+        }
+      });
     }).catch(function () {
       sawOutage = true; statusEl.dataset.sticky = '1';
       statusEl.textContent = 'Local server unreachable — comments won\\u2019t save until it\\u2019s back. Keep this tab open; it reconnects automatically.';

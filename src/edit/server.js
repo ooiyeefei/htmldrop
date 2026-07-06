@@ -27,15 +27,26 @@
 import { createServer } from 'node:http';
 import { EventEmitter } from 'node:events';
 import { readFile } from 'node:fs/promises';
-import { watch } from 'node:fs';
+import { watch, readFileSync } from 'node:fs';
 import { spawn } from 'node:child_process';
 import { basename, dirname, resolve, relative, isAbsolute, extname } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { injectFeedbackWidget } from '../feedback/inject.js';
 import { injectEditRuntime } from './runtime.js';
 import * as store from './store.js';
 
 const HEARTBEAT_MS = 15000;
 const DEFAULT_IDLE_MS = 30 * 60 * 1000;
+
+// The running package version — served at /health and baked into the injected
+// runtime, so an open tab can detect a server restart onto NEW code and reload
+// itself once (stops "the fix is in but the tab still shows the old UI").
+const PKG_VERSION = (() => {
+  try {
+    const p = fileURLToPath(new URL('../../package.json', import.meta.url));
+    return JSON.parse(readFileSync(p, 'utf8')).version || '0';
+  } catch { return '0'; }
+})();
 
 const MIME = {
   '.html': 'text/html; charset=utf-8', '.htm': 'text/html; charset=utf-8',
@@ -335,7 +346,7 @@ export async function startServer({ host = '127.0.0.1', port = 0, idleTimeoutMs 
     try { html = await readFile(session.file, 'utf-8'); }
     catch { res.writeHead(404).end('File not found'); return; }
     html = injectFeedbackWidget(html, { docId: key, workerUrl: '' });
-    html = injectEditRuntime(html, { key });
+    html = injectEditRuntime(html, { key, version: PKG_VERSION });
     res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' });
     res.end(html);
   }
@@ -371,7 +382,7 @@ export async function startServer({ host = '127.0.0.1', port = 0, idleTimeoutMs 
         res.writeHead(403, { 'content-type': 'text/plain' }).end('Forbidden'); return;
       }
 
-      if (path === '/health') { sendJson(res, 200, { ok: true, app: 'htmldrop-edit', port: publicPort }); return; }
+      if (path === '/health') { sendJson(res, 200, { ok: true, app: 'htmldrop-edit', port: publicPort, version: PKG_VERSION }); return; }
       // Browsers auto-request /favicon.ico; answer 204 so it isn't a console 404.
       if (path === '/favicon.ico') { res.writeHead(204).end(); return; }
       if (path === '/shutdown' && method === 'POST') { sendJson(res, 200, { status: 'shutting-down' }); setImmediate(shutdown); return; }
