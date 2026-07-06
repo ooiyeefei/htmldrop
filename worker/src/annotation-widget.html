@@ -710,6 +710,8 @@
     areaMode = on;
     document.body.classList.toggle('hd-area-mode', on);
     if (areaToggleBtn) areaToggleBtn.classList.toggle('hd-toggle-on', on);
+    // Let an external control (edit mode's ▢ bar button) mirror the state.
+    try { window.postMessage({ type: 'htmldrop:areaState', on: on }, '*'); } catch (e) {}
   }
 
   let areaDrawing = false, areaStartX = 0, areaStartY = 0, areaDrawBox = null;
@@ -1592,6 +1594,14 @@
   // <mark>s; that never changes the text, but hashing first keeps this obvious).
   HD_DOC_HASH = docFingerprint();
   host.dataset.docHash = HD_DOC_HASH; // exposed for debugging + test harnesses
+
+  // External trigger for area-box mode (edit mode surfaces a ▢ button in its own
+  // control bar, outside this shadow DOM). It postMessages us to toggle; the
+  // state broadcast lives in setAreaMode so the button can reflect on/off.
+  window.addEventListener('message', (e) => {
+    if (e.source !== window || !e.data || e.data.type !== 'htmldrop:area') return;
+    setAreaMode(typeof e.data.on === 'boolean' ? e.data.on : !areaMode);
+  });
 
   // Initial load only — use ↻ button to refresh manually
   loadComments();

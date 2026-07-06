@@ -106,6 +106,7 @@ export function injectEditRuntime(html, { key }) {
       '<span class="pr"><span class="dt" id="dt"></span><span id="pl">idle</span></span>' +
       '<span class="spacer"></span>' +
       '<span class="seg"><button id="mLive" class="on">\\u25cf Live</button><button id="mAsync">Async</button></span>' +
+      '<button class="ib" id="area" title="Comment on an area — click, then drag a box on the page">\\u25a2</button>' +
       '<button class="ib" id="feedToggle" title="Show/hide agent replies">\\u{1F4AC}</button>' +
       '<button class="ib" id="view" title="Toggle view / annotate"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg></button>' +
     '</div>' +
@@ -150,27 +151,44 @@ export function injectEditRuntime(html, { key }) {
   }
 
   // --- mode (Live ⇄ Async) --------------------------------------------------
-  // Live: an agent poll is attached; comments reach it in real time (hold off).
-  // Async: collect comments for a later pull; nothing is sent (hold on). A
-  // "Send N to agent" button appears in Async so you can flush a batch on demand.
+  // BOTH modes save your comment on the page — the difference is only WHEN the
+  // agent is pinged about it:
+  //   Live  — each comment pings the agent's poll immediately (real-time).
+  //   Async — comments pile up quietly; the agent isn't pinged until you click
+  //           "Send N to agent". Use it to leave a whole review pass, then send once.
+  // (Whether the agent actually RECEIVES the ping depends on it running
+  //  edit poll — the presence dot shows "listening" when it is.)
   function renderMode() {
     mLive.classList.toggle('on', !holdOn);
     mAsync.classList.toggle('on', holdOn);
     if (holdOn) {
       fetch(WORKER + '/api/edit/' + KEY + '/hold').then(function (r) { return r.json(); }).then(function (d) {
         var n = (d && d.pending) || 0;
-        hint.innerHTML = '<b>Async</b> — comments are collected on the page for a later pull. Nothing is sent to the agent until you send the batch.' +
-          '<button class="batch" id="batch"' + (n ? '' : ' disabled') + '>Send ' + n + ' comment(s) to agent \\u2192</button>';
-        var b = shadow.getElementById('batch');
-        if (b) b.addEventListener('click', function () {
-          b.disabled = true;
+        var h = document.createElement('div');
+        var p = document.createElement('div');
+        p.innerHTML = '<b>Async</b> — comments are collected on the page and held. The agent is <b>not</b> notified until you send the batch below.';
+        h.appendChild(p);
+        var b = document.createElement('button');
+        b.className = 'batch'; b.id = 'batch';
+        b.textContent = n ? ('Send ' + n + ' comment(s) to agent →') : 'No new comments to send';
+        b.disabled = !n;
+        b.addEventListener('click', function () {
+          b.disabled = true; b.textContent = 'Sending…';
           fetch(WORKER + '/api/edit/' + KEY + '/flush', { method: 'POST', headers: { 'content-type': 'application/json' } })
-            .then(function () { flashStatus('Batch sent to the agent.'); setTimeout(renderMode, 400); })
+            .then(function (r) { return r.json().catch(function () { return {}; }); })
+            .then(function (res) {
+              // Honest: only claim "sent" if an agent was actually listening.
+              if (res && res.delivered) flashStatus('Batch delivered to the agent.');
+              else flashStatus('No agent is listening (presence: idle). Your comments stay queued — they\\u2019ll arrive when the agent runs edit poll.');
+              setTimeout(renderMode, 500);
+            })
             .catch(function () { renderMode(); });
         });
+        h.appendChild(b);
+        hint.replaceChildren(h);
       }).catch(function () {});
     } else {
-      hint.innerHTML = '<b>Live</b> — comment or reply anywhere on the page (select text to comment on it) and it reaches the listening agent right away. The page reloads as the agent edits.';
+      hint.innerHTML = '<b>Live</b> — each comment pings the listening agent right away, and the page reloads as it edits. (Comments still appear in the panel either way — Live vs Async only changes <i>when</i> the agent is notified.)';
     }
   }
   function setMode(live) {
@@ -181,6 +199,17 @@ export function injectEditRuntime(html, { key }) {
   }
   mLive.addEventListener('click', function () { setMode(true); });
   mAsync.addEventListener('click', function () { setMode(false); });
+
+  // --- area-box button (drives the widget's area mode across the shadow boundary)
+  var areaBtn = shadow.getElementById('area');
+  areaBtn.addEventListener('click', function () { window.postMessage({ type: 'htmldrop:area' }, '*'); });
+  // Reflect the widget's area on/off state on the button.
+  window.addEventListener('message', function (e) {
+    if (e.source === window && e.data && e.data.type === 'htmldrop:areaState') {
+      areaBtn.style.background = e.data.on ? '#6366f1' : '';
+      areaBtn.style.color = e.data.on ? '#fff' : '';
+    }
+  });
 
   // --- agent reply feed -----------------------------------------------------
   // The agent's replies (via edit reply) show here so the human sees responses

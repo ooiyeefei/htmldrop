@@ -519,10 +519,13 @@ export async function startServer({ host = '127.0.0.1', port = 0, idleTimeoutMs 
       }
       // Explicit flush while staying in hold mode: arm a one-shot delivery, then
       // wake the poll so the held batch goes out once (hold stays on after).
+      // Report whether an agent was actually LISTENING, so the UI can be honest:
+      // if none is polling, the batch stays queued (nothing was really "sent").
       if ((m = path.match(/^\/api\/edit\/([a-f0-9]{16})\/flush$/)) && method === 'POST') {
+        const listening = (activePolls.get(m[1]) || 0) > 0;
         store.armFlush(m[1]);
         events.emit('comment', m[1]);
-        sendJson(res, 200, { flushed: true });
+        sendJson(res, 200, { flushed: true, delivered: listening, pending: store.undeliveredComments(m[1]).length });
         return;
       }
       if ((m = path.match(/^\/api\/edit\/([a-f0-9]{16})\/message$/)) && method === 'POST') {
