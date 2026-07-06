@@ -21,7 +21,7 @@ export function injectEditRuntime(html, { key }) {
   const keyJson = JSON.stringify(String(key));
   const runtime = `<style id="htmldrop-edit-style">
 :root.htmldrop-view #htmldrop-widget-host,
-:root.htmldrop-view #htmldrop-edit-host,
+:root.htmldrop-view #htmldrop-widget-host,
 :root.htmldrop-view .hd-area-overlay { display: none !important; }
 :root.htmldrop-view body { margin-right: 0 !important; margin-bottom: 0 !important; }
 :root.htmldrop-view mark.hd-hl { background: transparent !important; border-bottom-color: transparent !important; }
@@ -127,6 +127,20 @@ export function injectEditRuntime(html, { key }) {
   var agentPresence = 'waiting';
   var ended = false;
   var holdOn = false; // Async mode === hold comments (don't wake the agent)
+
+  // Keep the comment panel clear of the floating bar. The panel lives in the
+  // widget's shadow DOM, so we can't style it directly — but CSS custom props
+  // inherit THROUGH shadow boundaries, so we publish the bar's bottom edge as
+  // --htmldrop-edit-top on :root and the widget's .hd-panel reads it for its top
+  // offset. Re-measured whenever the bar's size changes (mode/feed/question).
+  function syncBarHeight() {
+    try {
+      var top = bar.getBoundingClientRect().bottom + 8; // 12px top + height + gap
+      document.documentElement.style.setProperty('--htmldrop-edit-top', Math.round(top) + 'px');
+    } catch (e) {}
+  }
+  window.addEventListener('resize', syncBarHeight);
+  try { new ResizeObserver(syncBarHeight).observe(bar); } catch (e) {}
 
   var statusTimer;
   function flashStatus(text) {
@@ -338,6 +352,8 @@ export function injectEditRuntime(html, { key }) {
   fetch(WORKER + '/api/edit/' + KEY + '/hold').then(function (r) { return r.json(); })
     .then(function (d) { holdOn = !!(d && d.hold); renderMode(); }).catch(function () { renderMode(); });
   loadChat();
+  syncBarHeight();
+  setTimeout(syncBarHeight, 300); // after fonts/layout settle
 })();
 </script>`;
 

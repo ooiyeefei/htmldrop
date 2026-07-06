@@ -120,8 +120,12 @@
     :host { all: initial; }
     * { box-sizing: border-box; }
     .hd-panel {
-      position: fixed; top: 0; right: 0;
-      width: 390px; height: 100vh;
+      /* Start below the edit-mode control bar when it's present (the runtime
+         publishes its bottom edge as --htmldrop-edit-top on :root, inherited
+         through the shadow boundary). Falls back to 0 for published docs, which
+         have no bar. */
+      position: fixed; top: var(--htmldrop-edit-top, 0px); right: 0;
+      width: 390px; height: calc(100vh - var(--htmldrop-edit-top, 0px));
       background: #fff; border-left: 1px solid #e5e7eb;
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Inter, system-ui, sans-serif;
       font-size: 13px; color: #111827;
