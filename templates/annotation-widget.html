@@ -429,56 +429,65 @@
   // Open the panel if it's collapsed (used by the name nudge). No-op if open.
   function openPanel() { if (!panelOpen) togglePanel(); }
 
-  // Text selection → tooltip (shared logic for desktop + mobile)
-  function tryShowTooltip() {
-    if (tooltip) return; // already showing
-    const sel = window.getSelection();
-    if (!sel || sel.isCollapsed || sel.toString().trim().length === 0) return;
+  // Selection → comment input. Two behaviours, controlled by AUTO_OPEN:
+  //   AUTO_OPEN (default): finishing a selection opens the comment input
+  //     immediately, focused and ready — no "+ Comment" click. This is the fast,
+  //     lavish-like feel: highlight → type.
+  //   fallback: show a "+ Comment" tooltip the user clicks first. Kept as a mode
+  //     because sometimes people select text just to read/copy, not to comment.
+  var AUTO_OPEN = (function(){ var v = hdGet('htmldrop_autocomment'); return v === null || v === '1'; })();
 
+  // Read the current selection into {selectedText, selector, rect} or null.
+  function captureSelection() {
+    const sel = window.getSelection();
+    if (!sel || sel.isCollapsed || sel.toString().trim().length === 0) return null;
     const range = sel.getRangeAt(0);
     const rect = range.getBoundingClientRect();
-    if (rect.width === 0 && rect.height === 0) return;
-
-    // Capture the selection NOW — clicking the tooltip or the native
-    // mobile menu clears the page selection before our click handler fires.
-    const selectedText = sel.toString().trim().slice(0, 2000);
+    if (rect.width === 0 && rect.height === 0) return null;
     const node = sel.anchorNode && sel.anchorNode.parentElement;
-    const selector = node ? buildSelector(node) : '';
+    return { selectedText: sel.toString().trim().slice(0, 2000), selector: node ? buildSelector(node) : '', rect };
+  }
 
+  function tryShowTooltip() {
+    if (tooltip) return; // already showing
+    const c = captureSelection();
+    if (!c) return;
     tooltip = document.createElement('div');
     tooltip.className = 'hd-tooltip';
     tooltip.textContent = '+ Comment';
-    tooltip.style.left = Math.max(8, Math.min(rect.left + rect.width / 2 - 40, window.innerWidth - 100)) + 'px';
-    tooltip.style.top = (rect.bottom + window.scrollY + 8) + 'px';
-    tooltip.addEventListener('click', () => {
-      removeTooltip();
-      showPopover(rect, selectedText, selector);
-    });
-    // On mobile, also handle touchend on the tooltip (click may not fire reliably)
-    tooltip.addEventListener('touchend', (te) => {
-      te.preventDefault();
-      removeTooltip();
-      showPopover(rect, selectedText, selector);
-    });
+    tooltip.style.left = Math.max(8, Math.min(c.rect.left + c.rect.width / 2 - 40, window.innerWidth - 100)) + 'px';
+    tooltip.style.top = (c.rect.bottom + window.scrollY + 8) + 'px';
+    tooltip.addEventListener('click', () => { removeTooltip(); showPopover(c.rect, c.selectedText, c.selector); });
+    tooltip.addEventListener('touchend', (te) => { te.preventDefault(); removeTooltip(); showPopover(c.rect, c.selectedText, c.selector); });
     shadow.appendChild(tooltip);
   }
 
-  // Desktop: mouseup
+  // Auto-open path: skip the tooltip and open the comment input directly on the
+  // selection. Guarded so a plain click (no selection) does nothing.
+  function autoOpenOnSelection() {
+    if (activePopover) return; // already composing
+    const c = captureSelection();
+    if (!c) return;
+    showPopover(c.rect, c.selectedText, c.selector);
+  }
+
+  // Desktop: mouseup finalizes a selection.
   document.addEventListener('mouseup', (e) => {
     if (areaMode) return;
     if (e.target && (host.contains(e.target) || shadow.contains(e.target))) return;
     removeTooltip();
-    tryShowTooltip();
+    // Defer one tick so the browser commits the final selection before we read it.
+    setTimeout(() => { if (AUTO_OPEN) autoOpenOnSelection(); else tryShowTooltip(); }, 0);
   });
 
-  // Mobile: selectionchange fires when the user selects text via tap-hold.
-  // Debounce because it fires many times during selection adjustment.
+  // Mobile: selectionchange fires repeatedly during tap-hold adjust — debounce,
+  // then use the same behaviour as desktop.
   let selChangeTimer;
   document.addEventListener('selectionchange', () => {
     clearTimeout(selChangeTimer);
     selChangeTimer = setTimeout(() => {
-      removeTooltip();
-      tryShowTooltip();
+      if (AUTO_OPEN) { if (!activePopover) autoOpenOnSelection(); }
+      else { removeTooltip(); tryShowTooltip(); }
     }, 400);
   });
 

@@ -1,38 +1,35 @@
-// The edit-mode browser runtime, injected beside the (untouched) comment widget.
+// The edit-mode browser runtime, injected alongside the annotation widget.
 //
-// Edit mode is the author sitting WITH the agent, in real time, before/between
-// rounds of external feedback. So this adds a conversation panel on the LEFT
-// (you talk to the agent; it edits the live doc and replies) while the comment
-// widget stays on the RIGHT (read reviewers' notes, highlight, annotate). Two
-// channels, cleanly split:
+// ONE surface, not two. Earlier this injected a separate "Conversation" chat
+// panel next to the annotation widget — which split "annotate" (widget) from
+// "send live" (chat) and let you reach the agent two confusingly-different ways.
+// Now the annotation widget is the single surface for everything: a page-level
+// comment is a message to the agent, a threaded reply is the agent's answer.
 //
-//   * Comments (right, the reused widget) — persistent annotations, shared with
-//     reviewers when published. Not modified here.
-//   * Chat (left, this file) — transient instructions to the agent, delivered
-//     via the poll and answered with `htmldrop edit reply`.
+// This runtime adds only the thin control layer the widget doesn't have:
+//   * a Live ⇄ Async mode toggle (Live = an agent poll is attached, comments
+//     reach it in real time; Async = collect comments for a later pull, nothing
+//     sent) — this is the batch-hold flag, surfaced as the mode the user asked for
+//   * presence (idle / listening / working) + agent-reply notifications
+//   * live reload on file change, scroll preservation, layout QA, auto-heal
+//   * auto-open the comment input on text selection (lavish-like), and a
+//     View toggle for clean reading
 //
-// Plus: live reload on file change (agent edits → page updates, comments
-// re-anchor via the widget's docHash guard), a presence dot, and an
-// Annotate⇄View toggle that hides both panels for clean reading.
-//
-// The panel lives in a shadow root (like the widget) so the artifact's CSS can
-// neither style nor break it. Plain, defensive JS — it runs inside arbitrary
-// user HTML.
+// It lives in its own shadow root so the artifact's CSS can't touch it.
 
 export function injectEditRuntime(html, { key }) {
   const keyJson = JSON.stringify(String(key));
   const runtime = `<style id="htmldrop-edit-style">
 :root.htmldrop-view #htmldrop-widget-host,
-:root.htmldrop-view #htmldrop-edit-chat-host,
+:root.htmldrop-view #htmldrop-edit-host,
 :root.htmldrop-view .hd-area-overlay { display: none !important; }
-:root.htmldrop-view body { margin-left: 0 !important; margin-right: 0 !important; margin-bottom: 0 !important; }
+:root.htmldrop-view body { margin-right: 0 !important; margin-bottom: 0 !important; }
 :root.htmldrop-view mark.hd-hl { background: transparent !important; border-bottom-color: transparent !important; }
 </style>
 <script>
 (function () {
   var KEY = ${keyJson};
   var SCROLL_KEY = 'htmldrop_edit_scroll:' + KEY;
-  var DRAFT_KEY = 'htmldrop_edit_draft:' + KEY;
   var WORKER = ''; // same-origin
 
   // Restore scroll after a live reload.
@@ -44,320 +41,153 @@ export function injectEditRuntime(html, { key }) {
     });
   } catch (e) {}
 
-  // Track the last non-empty text selection made in the DOCUMENT (not our
-  // panels) so "Attach selection" can pin a chat message to it.
-  var lastSel = null;
-  function buildSelector(node) {
-    if (!node || node === document.body) return '';
-    var parts = [], n = node;
-    while (n && n !== document.body && parts.length < 6) {
-      if (!n.tagName) break;
-      var part = n.tagName.toLowerCase();
-      if (n.id) { parts.unshift('#' + n.id); break; }
-      var p = n.parentElement;
-      if (p) {
-        var sib = Array.prototype.filter.call(p.children, function (c) { return c.tagName === n.tagName; });
-        if (sib.length > 1) part += ':nth-of-type(' + (sib.indexOf(n) + 1) + ')';
-      }
-      parts.unshift(part); n = p;
-    }
-    return parts.join(' > ');
-  }
-  document.addEventListener('selectionchange', function () {
-    var sel = window.getSelection();
-    if (!sel || sel.isCollapsed) return;
-    var t = sel.toString().trim();
-    if (!t) return;
-    var node = sel.anchorNode;
-    var el = node && node.nodeType === 3 ? node.parentElement : node;
-    if (!el) return;
-    if (host.contains(el) || (el.closest && el.closest('#htmldrop-widget-host'))) return; // ignore panel selections
-    lastSel = { kind: 'selection', text: t.slice(0, 500), selector: buildSelector(el) };
-  });
-
-  // --- shadow-hosted conversation panel (left) ------------------------------
+  // --- control bar (shadow-hosted, top-right, above the annotation widget) ---
   var host = document.createElement('div');
-  host.id = 'htmldrop-edit-chat-host';
+  host.id = 'htmldrop-edit-host';
   document.body.appendChild(host);
   var shadow = host.attachShadow({ mode: 'open' });
   var style = document.createElement('style');
   style.textContent = [
     ':host { all: initial; }',
     '* { box-sizing: border-box; }',
-    '.p { position: fixed; top: 0; left: 0; width: 360px; height: 100vh; background: #fff;',
-    '  border-right: 1px solid #e5e7eb; z-index: 999980; display: flex; flex-direction: column;',
-    "  font-family: -apple-system,BlinkMacSystemFont,'Segoe UI',Inter,system-ui,sans-serif;",
-    '  font-size: 13px; color: #111827; box-shadow: 1px 0 3px rgba(0,0,0,.04); }',
-    '.hd { padding: 14px 16px; border-bottom: 1px solid #f3f4f6; display: flex; align-items: center; gap: 8px; }',
-    '.ti { font-weight: 600; letter-spacing: -.2px; }',
-    '.pr { margin-left: auto; display: flex; align-items: center; gap: 6px; font-size: 11px; color: #6b7280; }',
+    ".bar { position: fixed; top: 12px; right: 12px; z-index: 999992; width: 360px; max-width: calc(100vw - 24px);",
+    "  background: #fff; border: 1px solid #e5e7eb; border-radius: 12px; box-shadow: 0 6px 24px rgba(0,0,0,.10);",
+    "  font-family: -apple-system,BlinkMacSystemFont,'Segoe UI',Inter,system-ui,sans-serif; font-size: 13px; color: #111827; overflow: hidden; }",
+    '.row1 { display: flex; align-items: center; gap: 10px; padding: 10px 12px; }',
+    '.brand { font-weight: 700; letter-spacing: -.2px; font-size: 12px; color: #4f46e5; }',
+    '.pr { display: flex; align-items: center; gap: 6px; font-size: 11px; color: #6b7280; }',
     '.dt { width: 8px; height: 8px; border-radius: 50%; background: #9ca3af; transition: background .2s; }',
+    '.spacer { margin-left: auto; }',
+    // Live/Async segmented toggle
+    '.seg { display: inline-flex; border: 1px solid #e5e7eb; border-radius: 999px; overflow: hidden; }',
+    '.seg button { border: none; background: #fff; color: #6b7280; font: inherit; font-size: 11px; font-weight: 600;',
+    '  padding: 5px 11px; cursor: pointer; }',
+    '.seg button.on { background: #6366f1; color: #fff; }',
     '.ib { border: none; background: transparent; cursor: pointer; color: #9ca3af; border-radius: 6px;',
-    '  width: 26px; height: 26px; font-size: 15px; display: flex; align-items: center; justify-content: center; }',
+    '  width: 26px; height: 26px; font-size: 14px; display: flex; align-items: center; justify-content: center; }',
     '.ib:hover { background: #f3f4f6; color: #374151; }',
-    '.lg { flex: 1; overflow-y: auto; padding: 14px; display: flex; flex-direction: column; gap: 10px; }',
-    '.b { max-width: 88%; padding: 8px 11px; border-radius: 12px; line-height: 1.45; white-space: pre-wrap; word-wrap: break-word; }',
-    '.b.u { align-self: flex-end; background: #6366f1; color: #fff; border-bottom-right-radius: 3px; }',
-    '.b.a { align-self: flex-start; background: #f3f4f6; color: #111827; border-bottom-left-radius: 3px; }',
-    '.rl { font-size: 10px; opacity: .65; margin-bottom: 2px; }',
-    '.cx { align-self: flex-end; max-width: 88%; font-size: 11px; color: #4f46e5; background: #eef2ff;',
-    '  border-radius: 6px; padding: 3px 8px; margin-bottom: -4px; }',
-    '.em { margin: auto 0; text-align: center; color: #9ca3af; font-size: 12px; padding: 24px; line-height: 1.6; }',
-    '.co { border-top: 1px solid #f3f4f6; padding: 12px; }',
-    '.chip { display: flex; align-items: center; gap: 6px; font-size: 11px; color: #4f46e5; background: #eef2ff;',
-    '  border-radius: 6px; padding: 4px 8px; margin-bottom: 8px; }',
-    '.chip span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }',
-    '.chip button { border: none; background: transparent; color: #6b7280; cursor: pointer; margin-left: auto; font-size: 13px; }',
-    '.ta { width: 100%; border: 1px solid #e5e7eb; border-radius: 8px; padding: 9px 11px; font: inherit;',
-    '  resize: vertical; min-height: 64px; outline: none; line-height: 1.45; }',
-    '.ta:focus { border-color: #6366f1; }',
-    '.status { margin-top: 8px; font-size: 11.5px; line-height: 1.4; color: #b45309; background: #fef3c7;',
-    '  border-radius: 6px; padding: 6px 9px; }',
-    '.holdbar { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }',
-    '.holdtoggle { display: flex; align-items: center; gap: 6px; font-size: 11.5px; color: #6b7280; cursor: pointer; user-select: none; }',
-    '.holdtoggle input { accent-color: #6366f1; cursor: pointer; }',
-    '.batch { margin-left: auto; background: #6366f1; color: #fff; border: none; border-radius: 7px; padding: 6px 12px;',
-    '  font: inherit; font-size: 11.5px; font-weight: 600; cursor: pointer; white-space: nowrap; }',
+    '.hint { padding: 0 12px 10px; font-size: 11px; line-height: 1.45; color: #6b7280; }',
+    '.hint b { color: #111827; }',
+    // agent reply feed (collapsible)
+    '.feed { border-top: 1px solid #f3f4f6; max-height: 40vh; overflow-y: auto; padding: 8px 12px; display: none; }',
+    '.feed.show { display: block; }',
+    '.msg { margin-bottom: 8px; }',
+    '.msg .who { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: #9ca3af; margin-bottom: 2px; }',
+    '.msg.a .who { color: #4f46e5; }',
+    '.msg .tx { line-height: 1.45; white-space: pre-wrap; word-wrap: break-word; }',
+    '.batch { width: 100%; margin-top: 6px; background: #6366f1; color: #fff; border: none; border-radius: 8px;',
+    '  padding: 8px 12px; font: inherit; font-size: 12px; font-weight: 600; cursor: pointer; }',
     '.batch:hover { background: #4f46e5; } .batch:disabled { opacity: .5; cursor: not-allowed; }',
-    '.row { display: flex; gap: 8px; margin-top: 8px; align-items: center; }',
-    '.att { border: 1px solid #e5e7eb; background: #fff; color: #6b7280; border-radius: 6px; padding: 7px 10px;',
-    '  font: inherit; font-size: 11px; cursor: pointer; white-space: nowrap; }',
-    '.att:hover { border-color: #6366f1; color: #4f46e5; }',
-    '.sn { margin-left: auto; background: #6366f1; color: #fff; border: none; border-radius: 8px; padding: 8px 16px;',
-    '  font: inherit; font-weight: 600; cursor: pointer; }',
-    '.sn:hover { background: #4f46e5; } .sn:disabled { opacity: .5; cursor: not-allowed; }',
-    '.launch { position: fixed; left: 16px; bottom: 16px; background: #6366f1; color: #fff; border: none;',
-    '  border-radius: 999px; padding: 10px 15px; font: 600 12px system-ui; cursor: pointer;',
-    '  box-shadow: 0 2px 10px rgba(0,0,0,.18); display: none; align-items: center; gap: 7px; }',
-    '@media (max-width: 820px) { .p { width: 86vw; } }'
+    '.status { margin: 0 12px 10px; font-size: 11px; line-height: 1.4; color: #b45309; background: #fef3c7; border-radius: 6px; padding: 6px 9px; display: none; }',
+    '@media (max-width: 768px) { .bar { top: auto; bottom: 12px; right: 12px; left: 12px; width: auto; } }'
   ].join('\\n');
   shadow.appendChild(style);
 
-  var panel = document.createElement('div');
-  panel.className = 'p';
-  panel.innerHTML =
-    '<div class="hd"><span class="ti">Conversation</span>' +
-    '<span class="pr"><span class="dt" id="dt"></span><span id="pl">idle</span></span>' +
-    '<button class="ib" id="view" title="Toggle view / annotate"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg></button>' +
-    '<button class="ib" id="min" title="Minimize">\\u2013</button></div>' +
-    '<div class="lg" id="lg"></div>' +
-    '<div class="co">' +
-    '<div class="holdbar"><label class="holdtoggle"><input type="checkbox" id="holdcb"><span>Hold comments for batch send</span></label>' +
-    '<button class="batch" id="batch" style="display:none">Send 0 to agent \\u2192</button></div>' +
-    '<div class="chip" id="chip" style="display:none"><span id="chiptext"></span><button id="chipx">\\u00d7</button></div>' +
-    '<textarea class="ta" id="ta" placeholder="Ask the agent to refine the page..."></textarea>' +
-    '<div class="status" id="status" style="display:none"></div>' +
-    '<div class="row"><button class="att" id="att">\\u2295 Attach selection</button>' +
-    '<button class="sn" id="sn">Send to agent</button></div></div>';
-  shadow.appendChild(panel);
+  var bar = document.createElement('div');
+  bar.className = 'bar';
+  bar.innerHTML =
+    '<div class="row1">' +
+      '<span class="brand">Edit</span>' +
+      '<span class="pr"><span class="dt" id="dt"></span><span id="pl">idle</span></span>' +
+      '<span class="spacer"></span>' +
+      '<span class="seg"><button id="mLive" class="on">\\u25cf Live</button><button id="mAsync">Async</button></span>' +
+      '<button class="ib" id="feedToggle" title="Show/hide agent replies">\\u{1F4AC}</button>' +
+      '<button class="ib" id="view" title="Toggle view / annotate"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg></button>' +
+    '</div>' +
+    '<div class="hint" id="hint"></div>' +
+    '<div class="status" id="status"></div>' +
+    '<div class="feed" id="feed"></div>';
+  shadow.appendChild(bar);
 
-  var launch = document.createElement('button');
-  launch.className = 'launch';
-  launch.textContent = '\\u{1F4AC} Chat with agent';
-  shadow.appendChild(launch);
-
-  var lg = shadow.getElementById('lg');
-  var ta = shadow.getElementById('ta');
-  var sn = shadow.getElementById('sn');
-  var att = shadow.getElementById('att');
-  var chip = shadow.getElementById('chip');
-  var chipText = shadow.getElementById('chiptext');
   var dt = shadow.getElementById('dt');
   var pl = shadow.getElementById('pl');
+  var mLive = shadow.getElementById('mLive');
+  var mAsync = shadow.getElementById('mAsync');
+  var hint = shadow.getElementById('hint');
   var statusEl = shadow.getElementById('status');
-  var holdcb = shadow.getElementById('holdcb');
-  var batchBtn = shadow.getElementById('batch');
+  var feed = shadow.getElementById('feed');
 
-  document.body.style.marginLeft = '360px';
-  var pendingContext = null;
   var agentPresence = 'waiting';
   var ended = false;
+  var holdOn = false; // Async mode === hold comments (don't wake the agent)
 
-  // --- chat rendering -------------------------------------------------------
-  function renderChat(chat) {
-    lg.replaceChildren();
-    if (!chat || !chat.length) {
-      var e = document.createElement('div');
-      e.className = 'em';
-      e.textContent = 'Talk to the agent about this page. Select text and Attach it to point at a spot. The page updates live as the agent edits.';
-      lg.appendChild(e);
-      return;
+  var statusTimer;
+  function flashStatus(text) {
+    statusEl.textContent = text; statusEl.style.display = 'block';
+    clearTimeout(statusTimer);
+    statusTimer = setTimeout(function () { if (statusEl.dataset.sticky !== '1') statusEl.style.display = 'none'; }, 6000);
+  }
+
+  // --- mode (Live ⇄ Async) --------------------------------------------------
+  // Live: an agent poll is attached; comments reach it in real time (hold off).
+  // Async: collect comments for a later pull; nothing is sent (hold on). A
+  // "Send N to agent" button appears in Async so you can flush a batch on demand.
+  function renderMode() {
+    mLive.classList.toggle('on', !holdOn);
+    mAsync.classList.toggle('on', holdOn);
+    if (holdOn) {
+      fetch(WORKER + '/api/edit/' + KEY + '/hold').then(function (r) { return r.json(); }).then(function (d) {
+        var n = (d && d.pending) || 0;
+        hint.innerHTML = '<b>Async</b> — comments are collected on the page for a later pull. Nothing is sent to the agent until you send the batch.' +
+          '<button class="batch" id="batch"' + (n ? '' : ' disabled') + '>Send ' + n + ' comment(s) to agent \\u2192</button>';
+        var b = shadow.getElementById('batch');
+        if (b) b.addEventListener('click', function () {
+          b.disabled = true;
+          fetch(WORKER + '/api/edit/' + KEY + '/flush', { method: 'POST', headers: { 'content-type': 'application/json' } })
+            .then(function () { flashStatus('Batch sent to the agent.'); setTimeout(renderMode, 400); })
+            .catch(function () { renderMode(); });
+        });
+      }).catch(function () {});
+    } else {
+      hint.innerHTML = '<b>Live</b> — comment or reply anywhere on the page (select text to comment on it) and it reaches the listening agent right away. The page reloads as the agent edits.';
     }
-    chat.forEach(function (m) {
-      if (m.context && m.context.text) {
-        var cx = document.createElement('div');
-        cx.className = 'cx';
-        cx.textContent = 're: "' + m.context.text.slice(0, 60) + '"';
-        lg.appendChild(cx);
-      }
-      var b = document.createElement('div');
-      b.className = 'b ' + (m.role === 'agent' ? 'a' : 'u');
-      var r = document.createElement('div');
-      r.className = 'rl';
-      r.textContent = m.role === 'agent' ? 'Agent' : 'You';
-      var t = document.createElement('div');
-      t.textContent = m.text || '';
-      b.appendChild(r); b.appendChild(t);
-      lg.appendChild(b);
+  }
+  function setMode(live) {
+    holdOn = !live;
+    fetch(WORKER + '/api/edit/' + KEY + '/hold', {
+      method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ on: holdOn })
+    }).then(function () { renderMode(); }).catch(function () {});
+  }
+  mLive.addEventListener('click', function () { setMode(true); });
+  mAsync.addEventListener('click', function () { setMode(false); });
+
+  // --- agent reply feed -----------------------------------------------------
+  // The agent's replies (via edit reply) show here so the human sees responses
+  // without leaving the page. Reviewer comments live in the annotation widget.
+  function renderFeed(chat) {
+    var agentMsgs = (chat || []).filter(function (m) { return m.role === 'agent'; });
+    feed.replaceChildren();
+    if (!agentMsgs.length) { feed.classList.remove('show'); return; }
+    agentMsgs.slice(-12).forEach(function (m) {
+      var d = document.createElement('div'); d.className = 'msg a';
+      var w = document.createElement('div'); w.className = 'who'; w.textContent = 'Agent';
+      var t = document.createElement('div'); t.className = 'tx'; t.textContent = m.text || '';
+      d.appendChild(w); d.appendChild(t); feed.appendChild(d);
     });
-    lg.scrollTop = lg.scrollHeight;
   }
-
+  var feedManualToggle = false;
+  shadow.getElementById('feedToggle').addEventListener('click', function () {
+    feedManualToggle = !feed.classList.contains('show');
+    feed.classList.toggle('show');
+  });
   function loadChat() {
-    fetch(WORKER + '/api/edit/' + KEY + '/chat')
-      .then(function (r) { return r.json(); })
-      .then(function (d) { renderChat(d.chat || []); })
-      .catch(function () {});
+    fetch(WORKER + '/api/edit/' + KEY + '/chat').then(function (r) { return r.json(); })
+      .then(function (d) { renderFeed(d.chat || []); }).catch(function () {});
   }
 
-  function send() {
-    if (sn.disabled) return; // locked (agent working); note: NOT blocked when ended (C)
-    var text = ta.value.trim();
-    if (!text) return;
-    var body = { text: text, context: pendingContext };
-    sn.disabled = true; // in-flight guard against double-send
-    ended = false; // C: sending reopens an ended session (server reopens too)
-    fetch(WORKER + '/api/edit/' + KEY + '/message', {
-      method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body)
-    }).then(function (r) { return r.json().catch(function () { return {}; }); })
-      .then(function (d) {
-      ta.value = ''; clearChip();
-      // B: honest feedback about whether a listener actually caught it.
-      if (d && d.delivered) {
-        // Agent was polling — it just took this. Lock composer; 'working' SSE confirms.
-        setState('working');
-      } else {
-        // No poll open — the message is queued and will reach the agent on its
-        // next poll. Say so plainly instead of pretending it was received.
-        flashStatus('Queued — agent isn\\u2019t listening yet. It\\u2019ll arrive on the next poll.');
-        updateSendState();
-      }
-    }).catch(function () { flashStatus('Send failed — check the connection.'); updateSendState(); });
+  // --- presence -------------------------------------------------------------
+  var STATES = { waiting: ['#9ca3af', 'idle'], listening: ['#22c55e', 'listening'], working: ['#f59e0b', 'working'] };
+  function setState(s) {
+    agentPresence = (s === 'listening' || s === 'working') ? s : 'waiting';
+    var v = STATES[agentPresence]; dt.style.background = v[0]; pl.textContent = v[1];
   }
 
-  function clearChip() { pendingContext = null; chip.style.display = 'none'; chipText.textContent = ''; persistDraft(); }
-
-  // Persist the in-progress draft (unsent text + attached context) to
-  // sessionStorage so a live-reload — or a refresh / connectivity blip — never
-  // loses what you were typing. Same pattern as the scroll restore above; sent
-  // messages already survive on the server, this covers the unsent tail.
-  function persistDraft() {
-    try {
-      if (ta.value || pendingContext) {
-        sessionStorage.setItem(DRAFT_KEY, JSON.stringify({ text: ta.value, context: pendingContext }));
-      } else {
-        sessionStorage.removeItem(DRAFT_KEY);
-      }
-    } catch (e) { /* storage unavailable — the in-memory draft still works */ }
-  }
-  function restoreDraft() {
-    try {
-      var raw = sessionStorage.getItem(DRAFT_KEY);
-      if (!raw) return;
-      var d = JSON.parse(raw);
-      if (d && typeof d.text === 'string') ta.value = d.text;
-      if (d && d.context && d.context.text) {
-        pendingContext = d.context;
-        chipText.textContent = 're: "' + d.context.text.slice(0, 48) + '"';
-        chip.style.display = 'flex';
-      }
-    } catch (e) { /* malformed draft — ignore */ }
-  }
-
-  att.addEventListener('click', function () {
-    if (!lastSel || !lastSel.text) { att.textContent = '\\u2295 Select text first'; setTimeout(function () { att.textContent = '\\u2295 Attach selection'; }, 1500); return; }
-    pendingContext = lastSel;
-    chipText.textContent = 're: "' + lastSel.text.slice(0, 48) + '"';
-    chip.style.display = 'flex';
-    persistDraft();
-  });
-  shadow.getElementById('chipx').addEventListener('click', clearChip);
-  sn.addEventListener('click', send);
-  ta.addEventListener('keydown', function (e) {
-    if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); send(); }
-  });
-  ta.addEventListener('input', persistDraft);
-
-  // --- minimize + view ------------------------------------------------------
-  function setMinimized(on) {
-    panel.style.display = on ? 'none' : 'flex';
-    launch.style.display = on ? 'flex' : 'none';
-    document.body.style.marginLeft = on ? '0' : '360px';
-  }
-  shadow.getElementById('min').addEventListener('click', function () { setMinimized(true); });
-  launch.addEventListener('click', function () { setMinimized(false); });
+  // --- View toggle ----------------------------------------------------------
   shadow.getElementById('view').addEventListener('click', function () {
     document.documentElement.classList.toggle('htmldrop-view');
   });
 
-  // --- presence + send lock -------------------------------------------------
-  // While the agent is "working" (it took your last message and hasn't replied
-  // or re-polled), lock the composer so messages can't pile up mid-edit.
-  // Unlocks on the agent's reply or its next poll.
-  var STATES = { waiting: ['#9ca3af', 'idle'], listening: ['#22c55e', 'listening'], working: ['#f59e0b', 'working'] };
-  function updateSendState() {
-    var working = agentPresence === 'working';
-    // C: when ended, the composer stays ALIVE — a Send reopens the session
-    // (server-side too) so you re-engage from the page, no terminal trip. Only
-    // "working" locks it (a message is in flight to the agent).
-    sn.disabled = working;
-    att.disabled = working;
-    ta.disabled = false;
-    sn.textContent = working ? 'Agent working…' : (ended ? 'Re-engage agent' : 'Send to agent');
-  }
-  // Transient one-line status under the composer (honest send feedback — B).
-  var statusTimer;
-  function flashStatus(text) {
-    statusEl.textContent = text;
-    statusEl.style.display = 'block';
-    clearTimeout(statusTimer);
-    statusTimer = setTimeout(function () { statusEl.style.display = 'none'; }, 6000);
-  }
-  function setState(s) {
-    agentPresence = (s === 'listening' || s === 'working') ? s : 'waiting';
-    var v = STATES[agentPresence];
-    dt.style.background = v[0];
-    pl.textContent = v[1];
-    updateSendState();
-  }
-
-  // --- Batch hold -----------------------------------------------------------
-  // Default OFF = comments send on-the-go (instant). When ON, comments still
-  // post + render but don't wake the agent; a "Send N to agent" button flushes
-  // the held batch in one delivery. Server owns the hold state; we sync via SSE.
-  var holdOn = false;
-  function refreshHoldUI() {
-    holdcb.checked = holdOn;
-    if (!holdOn) { batchBtn.style.display = 'none'; return; }
-    fetch(WORKER + '/api/edit/' + KEY + '/hold').then(function (r) { return r.json(); }).then(function (d) {
-      var n = (d && d.pending) || 0;
-      batchBtn.style.display = 'inline-block';
-      batchBtn.textContent = 'Send ' + n + ' to agent \\u2192';
-      batchBtn.disabled = n === 0;
-    }).catch(function () {});
-  }
-  holdcb.addEventListener('change', function () {
-    holdOn = holdcb.checked;
-    fetch(WORKER + '/api/edit/' + KEY + '/hold', {
-      method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ on: holdOn })
-    }).then(function () {
-      refreshHoldUI();
-      flashStatus(holdOn ? 'Holding comments — they will not reach the agent until you Send the batch.' : 'Live again — comments send to the agent on the go.');
-    }).catch(function () {});
-  });
-  batchBtn.addEventListener('click', function () {
-    batchBtn.disabled = true;
-    fetch(WORKER + '/api/edit/' + KEY + '/flush', { method: 'POST', headers: { 'content-type': 'application/json' } })
-      .then(function () { flashStatus('Batch sent to the agent.'); setTimeout(refreshHoldUI, 400); })
-      .catch(function () { refreshHoldUI(); });
-  });
-
   // --- Layout QA ------------------------------------------------------------
-  // Measure the RENDERED page and report layout problems the agent can't "see"
-  // from source: horizontal overflow (the big one for narrow review panels),
-  // text clipped by its container, and overlapping text runs. Runs after load
-  // and on debounced resize; posts the current warning set to the server, which
-  // hands it to the agent on the next poll. Read-only — never mutates the page.
   function cssPath(el) {
     if (!el || el === document.body || !el.tagName) return 'body';
     var parts = [], n = el, depth = 0;
@@ -365,10 +195,7 @@ export function injectEditRuntime(html, { key }) {
       var part = n.tagName.toLowerCase();
       if (n.id) { parts.unshift('#' + n.id); return parts.join(' > '); }
       var p = n.parentElement;
-      if (p) {
-        var same = Array.prototype.filter.call(p.children, function (c) { return c.tagName === n.tagName; });
-        if (same.length > 1) part += ':nth-of-type(' + (same.indexOf(n) + 1) + ')';
-      }
+      if (p) { var same = Array.prototype.filter.call(p.children, function (c) { return c.tagName === n.tagName; }); if (same.length > 1) part += ':nth-of-type(' + (same.indexOf(n) + 1) + ')'; }
       parts.unshift(part); n = p; depth++;
     }
     return parts.join(' > ');
@@ -376,41 +203,27 @@ export function injectEditRuntime(html, { key }) {
   function isHidden(el) {
     var s = getComputedStyle(el);
     if (s.display === 'none' || s.visibility === 'hidden' || parseFloat(s.opacity) === 0) return true;
-    var r = el.getBoundingClientRect();
-    return r.width < 1 && r.height < 1;
+    var r = el.getBoundingClientRect(); return r.width < 1 && r.height < 1;
   }
-  function shortText(el) {
-    return (el.textContent || '').replace(/\\s+/g, ' ').trim().slice(0, 60);
-  }
+  function shortText(el) { return (el.textContent || '').replace(/\\s+/g, ' ').trim().slice(0, 60); }
   function auditLayout() {
     var out = [];
-    var seen = 0;
-    // 1) Horizontal overflow — page or any element wider than the viewport, or a
-    //    child spilling past a non-scroll parent. Highest severity: it's the most
-    //    common rich-artifact bug and the hardest to notice at desk width.
     var docW = document.documentElement.clientWidth;
-    if (document.documentElement.scrollWidth > docW + 2) {
+    if (document.documentElement.scrollWidth > docW + 2)
       out.push({ kind: 'page-overflow', selector: 'html', detail: 'Page scrolls horizontally: content is ' + (document.documentElement.scrollWidth - docW) + 'px wider than the viewport (' + docW + 'px).', severity: 'high' });
-    }
-    var all = document.body ? document.body.querySelectorAll('*') : [];
+    var all = document.body ? document.body.querySelectorAll('*') : [], seen = 0;
     for (var i = 0; i < all.length && seen < 4000; i++) {
-      var el = all[i];
-      seen++;
-      if (host.contains(el) || (el.closest && el.closest('#htmldrop-edit-chat-host'))) continue; // skip our own UI
+      var el = all[i]; seen++;
+      if (host.contains(el) || (el.closest && el.closest('#htmldrop-edit-host'))) continue;
       if (el.id === 'htmldrop-widget-host' || (el.closest && el.closest('#htmldrop-widget-host'))) continue;
       if (isHidden(el)) continue;
-      var cs = getComputedStyle(el);
-      // element wider than viewport
-      var r = el.getBoundingClientRect();
-      if (r.width > docW + 2 && el.parentElement === document.body) {
+      var cs = getComputedStyle(el), r = el.getBoundingClientRect();
+      if (r.width > docW + 2 && el.parentElement === document.body)
         out.push({ kind: 'element-overflow', selector: cssPath(el), detail: 'Element is ' + Math.round(r.width) + 'px wide, past the ' + docW + 'px viewport.', text: shortText(el), severity: 'high' });
-      }
-      // 2) Clipped text — content taller/wider than a fixed, non-scrolling box.
       var clipsY = el.scrollHeight - el.clientHeight > 4 && (cs.overflowY === 'hidden' || cs.overflow === 'hidden');
       var clipsX = el.scrollWidth - el.clientWidth > 4 && (cs.overflowX === 'hidden' || cs.overflow === 'hidden');
-      if ((clipsY || clipsX) && (el.textContent || '').trim()) {
-        out.push({ kind: 'clipped-text', selector: cssPath(el), detail: 'Text is clipped by a fixed-size container (overflow:hidden hides ' + (clipsY ? (el.scrollHeight - el.clientHeight) + 'px vertically' : (el.scrollWidth - el.clientWidth) + 'px horizontally') + ').', text: shortText(el), severity: 'medium' });
-      }
+      if ((clipsY || clipsX) && (el.textContent || '').trim())
+        out.push({ kind: 'clipped-text', selector: cssPath(el), detail: 'Text is clipped by a fixed-size container.', text: shortText(el), severity: 'medium' });
       if (out.length >= 60) break;
     }
     return out;
@@ -419,14 +232,10 @@ export function injectEditRuntime(html, { key }) {
   function runAudit() {
     clearTimeout(layoutTimer);
     layoutTimer = setTimeout(function () {
-      var warnings;
-      try { warnings = auditLayout(); } catch (e) { return; }
+      var warnings; try { warnings = auditLayout(); } catch (e) { return; }
       var docHash = null;
       try { var h = document.getElementById('htmldrop-widget-host'); docHash = h && h.dataset ? h.dataset.docHash : null; } catch (e) {}
-      fetch(WORKER + '/api/edit/' + KEY + '/layout', {
-        method: 'POST', headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ warnings: warnings, docHash: docHash })
-      }).catch(function () {});
+      fetch(WORKER + '/api/edit/' + KEY + '/layout', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ warnings: warnings, docHash: docHash }) }).catch(function () {});
     }, 350);
   }
   window.addEventListener('load', runAudit);
@@ -435,48 +244,40 @@ export function injectEditRuntime(html, { key }) {
   // --- SSE ------------------------------------------------------------------
   try {
     var es = new EventSource('/__edit/events/' + KEY);
-    es.addEventListener('chat', function (e) { try { renderChat(JSON.parse(e.data).chat || []); } catch (_) {} });
+    es.addEventListener('chat', function (e) {
+      try { var chat = JSON.parse(e.data).chat || []; renderFeed(chat);
+        // auto-reveal the feed when a new agent reply arrives
+        if (chat.some(function (m) { return m.role === 'agent'; })) feed.classList.add('show');
+      } catch (_) {}
+    });
     es.addEventListener('presence', function (e) { try { setState(JSON.parse(e.data).state); } catch (_) {} });
     es.addEventListener('reload', function () {
       try { sessionStorage.setItem(SCROLL_KEY, String(window.scrollY || window.pageYOffset || 0)); } catch (e) {}
       location.reload();
     });
-    es.addEventListener('ended', function () {
-      ended = true; setState('waiting'); pl.textContent = 'ended';
-      // C: don't lock the composer — a Send will reopen the session from here.
-      flashStatus('Session ended. Type a message to re-engage the agent.');
-    });
-    es.addEventListener('hold', function (e) { try { holdOn = !!JSON.parse(e.data).hold; refreshHoldUI(); } catch (_) {} });
+    es.addEventListener('ended', function () { ended = true; setState('waiting'); pl.textContent = 'ended'; });
+    es.addEventListener('hold', function (e) { try { holdOn = !!JSON.parse(e.data).hold; renderMode(); } catch (_) {} });
   } catch (e) {}
 
-  // While holding, refresh the "Send N" count on a light interval (the server
-  // doesn't push a per-comment SSE event; this keeps the button count current
-  // as comments accumulate). Cheap GET, only runs while hold is on.
-  setInterval(function () { if (holdOn && !ended) refreshHoldUI(); }, 2000);
+  // Refresh the Async batch count on a light interval while in Async mode.
+  setInterval(function () { if (holdOn && !ended) renderMode(); }, 2500);
 
-  // --- health watch / auto-heal ---------------------------------------------
-  // With a stable port, a restarted server comes back on the SAME origin. Poll
-  // /health: if it goes down then returns, reload so the tab re-attaches instead
-  // of stranding on a dead server (the failure mode that lost comments). While
-  // it's down we show a persistent banner so a failed save is never a mystery.
+  // --- auto-heal on a dropped/restarted server ------------------------------
   var sawOutage = false;
   setInterval(function () {
     fetch('/health', { cache: 'no-store' }).then(function (r) {
       if (r.ok && sawOutage) { location.reload(); return; }
-      if (r.ok && statusEl.dataset.outage === '1') { statusEl.style.display = 'none'; statusEl.dataset.outage = ''; }
+      if (r.ok && statusEl.dataset.sticky === '1') { statusEl.dataset.sticky = ''; statusEl.style.display = 'none'; }
     }).catch(function () {
-      sawOutage = true;
-      statusEl.dataset.outage = '1';
-      statusEl.textContent = 'Connection to the local server lost — comments won\\u2019t save until it\\u2019s back. Keep this tab open; it reconnects automatically.';
+      sawOutage = true; statusEl.dataset.sticky = '1';
+      statusEl.textContent = 'Local server unreachable — comments won\\u2019t save until it\\u2019s back. Keep this tab open; it reconnects automatically.';
       statusEl.style.display = 'block';
     });
   }, 3000);
 
-  // Adopt the server's current hold state on load (survives reload).
+  // Adopt current mode from the server (survives reload) + initial render.
   fetch(WORKER + '/api/edit/' + KEY + '/hold').then(function (r) { return r.json(); })
-    .then(function (d) { holdOn = !!(d && d.hold); refreshHoldUI(); }).catch(function () {});
-  restoreDraft();
-  updateSendState();
+    .then(function (d) { holdOn = !!(d && d.hold); renderMode(); }).catch(function () { renderMode(); });
   loadChat();
 })();
 </script>`;

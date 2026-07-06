@@ -313,6 +313,13 @@ export function addComment(key, body) {
     resolved: false,
     editTokenHash: hashToken(body.editToken),
     docHash: body.docHash || undefined,
+    // Marks a comment the AGENT authored (its own replies/restores). These must
+    // never count toward the human's "Send N" batch, nor be delivered back to
+    // the agent's own poll (which caused a self-echo). The browser widget always
+    // sends a per-browser editToken; the agent/CLI/curl posts don't — so "no
+    // editToken" is a reliable signal for an agent-authored comment. An explicit
+    // body.agent flag also forces it.
+    agent: (body.agent || !body.editToken) ? true : undefined,
   };
   session.comments = [...(session.comments || []), item];
   writeSessionFile(session);
@@ -325,12 +332,14 @@ export function addReply(key, parentId, body) {
 
 // Comments created since the delivery watermark — what the agent's poll hasn't
 // seen yet. Sorted oldest-first. editTokenHash stripped (same as getComments).
+// Excludes agent-authored comments (the agent's own replies/restores): they must
+// never count toward the human's batch nor echo back into the agent's own poll.
 export function undeliveredComments(key) {
   const s = readSessionFile(key);
   if (!s) return [];
   const since = s.commentsDeliveredAt || s.createdAt || '';
   return (s.comments || [])
-    .filter((c) => (c.createdAt || '') > since)
+    .filter((c) => (c.createdAt || '') > since && !c.agent)
     .sort((a, b) => (a.createdAt || '').localeCompare(b.createdAt || ''))
     .map(({ editTokenHash, ...rest }) => rest);
 }
