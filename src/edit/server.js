@@ -226,6 +226,7 @@ export async function startServer({ host = '127.0.0.1', port = 0, idleTimeoutMs 
       clearInterval(heartbeat);
       events.off('message', onChange);
       events.off('comment', onChange);
+      events.off('answer', onChange);
       events.off('ended', onChange);
       setPollActive(key, false);
       refreshIdleTimer();
@@ -241,6 +242,13 @@ export async function startServer({ host = '127.0.0.1', port = 0, idleTimeoutMs 
       if (settled || res.writableEnded) return;
       const session = store.getSession(key);
       if (!session) { finish({ status: 'missing' }); return; }
+      // Highest priority: the user answered a question the agent asked. Deliver
+      // it once (drained), so the waiting agent gets its decision immediately.
+      const answer = store.takeAnswer(key);
+      if (answer) {
+        finish({ status: 'feedback', answer, messages: [], newComments: [], comments: store.getComments(key).items, count: 1, file: session.file });
+        return;
+      }
       // Deliver on EITHER a queued chat message OR a new page comment. Chat
       // messages are transient (drained); comments are persistent (delivered by
       // watermark, then the watermark advances so each reaches the agent once).
@@ -279,6 +287,7 @@ export async function startServer({ host = '127.0.0.1', port = 0, idleTimeoutMs 
 
     events.on('message', onChange);
     events.on('comment', onChange);
+    events.on('answer', onChange);
     events.on('ended', onChange);
     req.on('close', () => { if (!settled) { settled = true; cleanup(); } });
     check(); // deliver immediately if a message is already queued
@@ -289,6 +298,9 @@ export async function startServer({ host = '127.0.0.1', port = 0, idleTimeoutMs 
     res.writeHead(200, { 'content-type': 'text/event-stream', 'cache-control': 'no-cache', connection: 'keep-alive' });
     res.write(`event: presence\ndata: ${JSON.stringify({ state: presenceOf(key) })}\n\n`);
     res.write(`event: chat\ndata: ${JSON.stringify(store.getChat(key))}\n\n`);
+    // Replay any already-pending question so a freshly-loaded/reloaded tab shows it.
+    const q0 = store.getQuestion(key);
+    if (q0) res.write(`event: question\ndata: ${JSON.stringify({ question: q0 })}\n\n`);
     sseClients.add(res);
     refreshIdleTimer();
     const onReload = (k) => { if (k === key && !res.writableEnded) res.write('event: reload\ndata: {}\n\n'); };
@@ -296,11 +308,13 @@ export async function startServer({ host = '127.0.0.1', port = 0, idleTimeoutMs 
     const onChat = (k) => { if (k === key && !res.writableEnded) res.write(`event: chat\ndata: ${JSON.stringify(store.getChat(key))}\n\n`); };
     const onEnded = (k) => { if (k === key && !res.writableEnded) res.write('event: ended\ndata: {}\n\n'); };
     const onHold = (k, on) => { if (k === key && !res.writableEnded) res.write(`event: hold\ndata: ${JSON.stringify({ hold: on })}\n\n`); };
+    const onQuestion = (k) => { if (k === key && !res.writableEnded) res.write(`event: question\ndata: ${JSON.stringify({ question: store.getQuestion(key) })}\n\n`); };
     events.on('reload', onReload);
     events.on('presence', onPresence);
     events.on('chat', onChat);
     events.on('ended', onEnded);
     events.on('hold', onHold);
+    events.on('question', onQuestion);
     req.on('close', () => {
       sseClients.delete(res);
       events.off('reload', onReload);
@@ -308,6 +322,7 @@ export async function startServer({ host = '127.0.0.1', port = 0, idleTimeoutMs 
       events.off('chat', onChat);
       events.off('ended', onEnded);
       events.off('hold', onHold);
+      events.off('question', onQuestion);
       refreshIdleTimer();
     });
   }
@@ -455,6 +470,29 @@ export async function startServer({ host = '127.0.0.1', port = 0, idleTimeoutMs 
 
       // Edit-mode chat: author ↔ agent conversation.
       if ((m = path.match(/^\/api\/edit\/([a-f0-9]{16})\/chat$/)) && method === 'GET') { sendJson(res, 200, store.getChat(m[1])); return; }
+      // Agent → user question (reverse channel). GET current pending question;
+      // POST (agent) sets one + SSE-pops the card; the /answer route below stores
+      // the user's reply and wakes the poll.
+      if ((m = path.match(/^\/api\/edit\/([a-f0-9]{16})\/question$/))) {
+        if (method === 'GET') { sendJson(res, 200, { question: store.getQuestion(m[1]) }); return; }
+        if (method === 'POST') {
+          const body = await readJsonBody(req);
+          const q = store.setQuestion(m[1], body);
+          if (!q) { sendJson(res, 404, { error: 'session not found' }); return; }
+          events.emit('question', m[1]); // SSE → browser pops the card
+          sendJson(res, 201, { id: q.id });
+          return;
+        }
+      }
+      if ((m = path.match(/^\/api\/edit\/([a-f0-9]{16})\/answer$/)) && method === 'POST') {
+        const body = await readJsonBody(req);
+        const a = store.answerQuestion(m[1], body);
+        if (!a) { sendJson(res, 409, { error: 'no pending question' }); return; }
+        events.emit('answer', m[1]);  // wake the agent's poll with the answer
+        events.emit('question', m[1]); // SSE → browser dismisses the card
+        sendJson(res, 200, { ok: true });
+        return;
+      }
       // Layout QA: the widget's auditor posts the current render's warnings here.
       if ((m = path.match(/^\/api\/edit\/([a-f0-9]{16})\/layout$/))) {
         if (method === 'POST') {

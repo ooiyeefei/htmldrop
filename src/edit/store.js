@@ -238,6 +238,60 @@ export function getLayout(key) {
   return (s && s.layout) || { warnings: [], at: null };
 }
 
+// --- Agent → user question (reverse channel, dynamic UI) ---------------------
+// When the agent needs a decision, it posts a small UI SPEC (prompt + optional
+// clickable options + whether free text is allowed). The browser renders it as a
+// card dynamically — the agent authors the control, the page renders whatever it
+// specified. The user's answer is stored and delivered to the agent's next poll
+// as a structured value. Only one question is pending at a time (the newest).
+export function setQuestion(key, { text, options } = {}) {
+  const s = readSessionFile(key);
+  if (!s) return null;
+  s.question = {
+    id: randomUUID(),
+    text: String(text || ''),
+    options: Array.isArray(options) ? options.map(String).slice(0, 8) : [],
+    at: new Date().toISOString(),
+  };
+  s.answer = undefined; // a fresh question clears any stale answer
+  writeSessionFile(s);
+  return s.question;
+}
+
+export function getQuestion(key) {
+  const s = readSessionFile(key);
+  return (s && s.question) || null;
+}
+
+// The browser posts the user's answer to the pending question: a chosen option
+// and/or a free-text note. Clears the question (it's answered) and stashes the
+// answer for the poll to pick up.
+export function answerQuestion(key, { choice, text } = {}) {
+  const s = readSessionFile(key);
+  if (!s || !s.question) return null;
+  const answer = {
+    questionId: s.question.id,
+    question: s.question.text,
+    choice: choice != null ? String(choice) : undefined,
+    text: text != null ? String(text) : undefined,
+    at: new Date().toISOString(),
+  };
+  s.answer = answer;
+  s.question = undefined; // answered → clear the pending card
+  writeSessionFile(s);
+  return answer;
+}
+
+// The poll drains a pending answer (delivered once, like a chat message).
+export function takeAnswer(key) {
+  const s = readSessionFile(key);
+  if (!s || !s.answer) return null;
+  const a = s.answer;
+  s.answer = undefined;
+  writeSessionFile(s);
+  return a;
+}
+
 // Drain queued user messages for the agent and clear them (delivered). Peeked
 // with pendingCount first so we only drain when we're about to respond.
 export function takeQueuedMessages(key) {

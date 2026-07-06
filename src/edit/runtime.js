@@ -79,6 +79,21 @@ export function injectEditRuntime(html, { key }) {
     '  padding: 8px 12px; font: inherit; font-size: 12px; font-weight: 600; cursor: pointer; }',
     '.batch:hover { background: #4f46e5; } .batch:disabled { opacity: .5; cursor: not-allowed; }',
     '.status { margin: 0 12px 10px; font-size: 11px; line-height: 1.4; color: #b45309; background: #fef3c7; border-radius: 6px; padding: 6px 9px; display: none; }',
+    // Agent → user question card (dynamic UI rendered from the agent-sent spec)
+    '.qcard { border-top: 1px solid #f3f4f6; padding: 12px; display: none; background: #f5f3ff; }',
+    '.qcard.show { display: block; }',
+    '.qcard .qlabel { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: #6d28d9; margin-bottom: 5px; }',
+    '.qcard .qtext { font-size: 13px; line-height: 1.45; color: #111827; margin-bottom: 10px; }',
+    '.qopts { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }',
+    '.qopt { border: 1px solid #c4b5fd; background: #fff; color: #5b21b6; border-radius: 8px; padding: 6px 12px;',
+    '  font: inherit; font-size: 12px; font-weight: 600; cursor: pointer; }',
+    '.qopt:hover { background: #ede9fe; } .qopt.sel { background: #6d28d9; color: #fff; border-color: #6d28d9; }',
+    '.qnote { width: 100%; border: 1px solid #ddd6fe; border-radius: 8px; padding: 8px 10px; font: inherit; font-size: 12px;',
+    '  resize: vertical; min-height: 40px; outline: none; }',
+    '.qnote:focus { border-color: #6d28d9; }',
+    '.qsend { width: 100%; margin-top: 8px; background: #6d28d9; color: #fff; border: none; border-radius: 8px;',
+    '  padding: 8px 12px; font: inherit; font-size: 12px; font-weight: 600; cursor: pointer; }',
+    '.qsend:hover { background: #5b21b6; } .qsend:disabled { opacity: .5; cursor: not-allowed; }',
     '@media (max-width: 768px) { .bar { top: auto; bottom: 12px; right: 12px; left: 12px; width: auto; } }'
   ].join('\\n');
   shadow.appendChild(style);
@@ -96,6 +111,7 @@ export function injectEditRuntime(html, { key }) {
     '</div>' +
     '<div class="hint" id="hint"></div>' +
     '<div class="status" id="status"></div>' +
+    '<div class="qcard" id="qcard"></div>' +
     '<div class="feed" id="feed"></div>';
   shadow.appendChild(bar);
 
@@ -106,6 +122,7 @@ export function injectEditRuntime(html, { key }) {
   var hint = shadow.getElementById('hint');
   var statusEl = shadow.getElementById('status');
   var feed = shadow.getElementById('feed');
+  var qcard = shadow.getElementById('qcard');
 
   var agentPresence = 'waiting';
   var ended = false;
@@ -241,6 +258,47 @@ export function injectEditRuntime(html, { key }) {
   window.addEventListener('load', runAudit);
   window.addEventListener('resize', runAudit);
 
+  // --- agent → user question (dynamic card) ---------------------------------
+  // Renders the agent-sent spec into a card: prompt + option buttons (chosen
+  // one highlights) + a free-text note + Answer. Built with textContent (the
+  // prompt/options are agent-authored) so there's no injection surface. The
+  // answer POSTs back and wakes the agent's poll.
+  function renderQuestion(q) {
+    qcard.replaceChildren();
+    if (!q) { qcard.classList.remove('show'); return; }
+    var chosen = null;
+    var lab = document.createElement('div'); lab.className = 'qlabel'; lab.textContent = 'Agent asks';
+    var txt = document.createElement('div'); txt.className = 'qtext'; txt.textContent = q.text || '';
+    qcard.appendChild(lab); qcard.appendChild(txt);
+    if (q.options && q.options.length) {
+      var opts = document.createElement('div'); opts.className = 'qopts';
+      q.options.forEach(function (o) {
+        var b = document.createElement('button'); b.className = 'qopt'; b.textContent = o;
+        b.addEventListener('click', function () {
+          chosen = (chosen === o) ? null : o; // toggle
+          Array.prototype.forEach.call(opts.children, function (c) { c.classList.toggle('sel', c === b && chosen === o); });
+        });
+        opts.appendChild(b);
+      });
+      qcard.appendChild(opts);
+    }
+    var note = document.createElement('textarea'); note.className = 'qnote';
+    note.placeholder = q.options && q.options.length ? 'or add a note…' : 'your answer…';
+    qcard.appendChild(note);
+    var send = document.createElement('button'); send.className = 'qsend'; send.textContent = 'Answer →';
+    send.addEventListener('click', function () {
+      var t = note.value.trim();
+      if (!chosen && !t) { note.focus(); return; } // need a choice or a note
+      send.disabled = true;
+      fetch(WORKER + '/api/edit/' + KEY + '/answer', {
+        method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ choice: chosen || undefined, text: t || undefined })
+      }).then(function () { renderQuestion(null); flashStatus('Answer sent to the agent.'); })
+        .catch(function () { send.disabled = false; flashStatus('Couldn\\u2019t send answer — try again.'); });
+    });
+    qcard.appendChild(send);
+    qcard.classList.add('show');
+  }
+
   // --- SSE ------------------------------------------------------------------
   try {
     var es = new EventSource('/__edit/events/' + KEY);
@@ -257,6 +315,7 @@ export function injectEditRuntime(html, { key }) {
     });
     es.addEventListener('ended', function () { ended = true; setState('waiting'); pl.textContent = 'ended'; });
     es.addEventListener('hold', function (e) { try { holdOn = !!JSON.parse(e.data).hold; renderMode(); } catch (_) {} });
+    es.addEventListener('question', function (e) { try { renderQuestion(JSON.parse(e.data).question); } catch (_) {} });
   } catch (e) {}
 
   // Refresh the Async batch count on a light interval while in Async mode.

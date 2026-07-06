@@ -103,6 +103,16 @@ export async function editPoll(file, options = {}) {
     console.log('No edit session for this file. Run `htmldrop edit start` first.');
     return data;
   }
+  // An answer to a question the agent asked (highest priority — it's the reply
+  // to a decision the agent was waiting on).
+  if (data.answer) {
+    const a = data.answer;
+    console.log(`\nThe author answered your question${a.question ? ` ("${a.question.slice(0, 60)}")` : ''}:`);
+    if (a.choice) console.log(`  → chose: ${a.choice}`);
+    if (a.text) console.log(`  → note: ${a.text}`);
+    return data;
+  }
+
   const msgs = data.messages || [];
   const fresh = data.newComments || [];
   if (data.status !== 'feedback' || (!msgs.length && !fresh.length)) {
@@ -183,6 +193,24 @@ export async function editReply(file, options = {}) {
     console.log('Replied in the edit conversation.');
   } catch (e) {
     console.log(`Could not send reply: ${e.message}`);
+  }
+}
+
+// Ask the author a question in the browser (reverse channel). The page pops a
+// card with the prompt + optional clickable options + a free-text note; the
+// author's answer arrives on the next `edit poll`. `--options` is a pipe-list.
+export async function editAsk(file, options = {}) {
+  const abs = assertHtmlFile(file);
+  const port = await ensureServerRunning();
+  await postJson(port, '/__edit/sessions', { file: abs });
+  const { key } = sessionKeyFor(abs);
+  const opts = (options.options || '').split('|').map((s) => s.trim()).filter(Boolean);
+  try {
+    await postJson(port, `/api/edit/${key}/question`, { text: options.text, options: opts });
+    console.log(`Asked the author on the page${opts.length ? ` (options: ${opts.join(', ')})` : ''}.`);
+    console.log(`Now poll for their answer:  htmldrop edit poll ${file} --json`);
+  } catch (e) {
+    console.log(`Could not ask: ${e.message}`);
   }
 }
 
