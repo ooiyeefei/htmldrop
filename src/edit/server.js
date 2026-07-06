@@ -244,8 +244,15 @@ export async function startServer({ host = '127.0.0.1', port = 0, idleTimeoutMs 
       // Deliver on EITHER a queued chat message OR a new page comment. Chat
       // messages are transient (drained); comments are persistent (delivered by
       // watermark, then the watermark advances so each reaches the agent once).
+      // While batch-hold is ON, comments accumulate silently — the poll ignores
+      // them until the user flushes. Chat messages ignore hold (already explicit
+      // send), so a direct message can still reach the agent.
       const pending = store.pendingCount(key) > 0;
-      const newComments = store.undeliveredComments(key);
+      // Comments are gated by batch-hold: deliver them only if not holding, or if
+      // a flush was armed (consumed here). Chat messages ignore the gate.
+      const heldComments = store.undeliveredComments(key);
+      const mayDeliverComments = heldComments.length > 0 && store.consumeDeliveryGate(key);
+      const newComments = mayDeliverComments ? heldComments : [];
       if (pending || newComments.length) {
         const messages = pending ? store.takeQueuedMessages(key) : [];
         if (newComments.length) store.markCommentsDelivered(key, newComments[newComments.length - 1].createdAt);
@@ -288,16 +295,19 @@ export async function startServer({ host = '127.0.0.1', port = 0, idleTimeoutMs 
     const onPresence = (k, state) => { if (k === key && !res.writableEnded) res.write(`event: presence\ndata: ${JSON.stringify({ state })}\n\n`); };
     const onChat = (k) => { if (k === key && !res.writableEnded) res.write(`event: chat\ndata: ${JSON.stringify(store.getChat(key))}\n\n`); };
     const onEnded = (k) => { if (k === key && !res.writableEnded) res.write('event: ended\ndata: {}\n\n'); };
+    const onHold = (k, on) => { if (k === key && !res.writableEnded) res.write(`event: hold\ndata: ${JSON.stringify({ hold: on })}\n\n`); };
     events.on('reload', onReload);
     events.on('presence', onPresence);
     events.on('chat', onChat);
     events.on('ended', onEnded);
+    events.on('hold', onHold);
     req.on('close', () => {
       sseClients.delete(res);
       events.off('reload', onReload);
       events.off('presence', onPresence);
       events.off('chat', onChat);
       events.off('ended', onEnded);
+      events.off('hold', onHold);
       refreshIdleTimer();
     });
   }
@@ -347,6 +357,8 @@ export async function startServer({ host = '127.0.0.1', port = 0, idleTimeoutMs 
       }
 
       if (path === '/health') { sendJson(res, 200, { ok: true, app: 'htmldrop-edit', port: publicPort }); return; }
+      // Browsers auto-request /favicon.ico; answer 204 so it isn't a console 404.
+      if (path === '/favicon.ico') { res.writeHead(204).end(); return; }
       if (path === '/shutdown' && method === 'POST') { sendJson(res, 200, { status: 'shutting-down' }); setImmediate(shutdown); return; }
 
       if (path === '/__edit/sessions' && method === 'POST') {
@@ -405,8 +417,10 @@ export async function startServer({ host = '127.0.0.1', port = 0, idleTimeoutMs 
           const body = await readJsonBody(req);
           const result = store.addComment(key, body);
           if (!result) { sendJson(res, 404, { error: 'session not found' }); return; }
-          events.emit('feedback', key); // refresh browser panels (SSE)
-          events.emit('comment', key);  // wake the agent's poll — comments reach it too
+          events.emit('feedback', key); // refresh browser panels (SSE) — always
+          // Only wake the agent's poll if NOT holding for a batch. While held,
+          // the comment still persisted + rendered; it just waits for a flush.
+          if (!store.getHold(key)) events.emit('comment', key);
           sendJson(res, 201, result);
           return;
         }
@@ -450,6 +464,28 @@ export async function startServer({ host = '127.0.0.1', port = 0, idleTimeoutMs 
           return;
         }
         if (method === 'GET') { sendJson(res, 200, store.getLayout(m[1])); return; }
+      }
+      // Batch hold: GET current state, POST {on} to toggle. Toggling OFF also
+      // flushes — if comments accumulated while held, wake the poll so the whole
+      // batch reaches the agent at once.
+      if ((m = path.match(/^\/api\/edit\/([a-f0-9]{16})\/hold$/))) {
+        if (method === 'GET') { sendJson(res, 200, { hold: store.getHold(m[1]), pending: store.undeliveredComments(m[1]).length }); return; }
+        if (method === 'POST') {
+          const body = await readJsonBody(req);
+          const on = store.setHold(m[1], body.on);
+          if (!on) events.emit('comment', m[1]); // released → deliver the batch
+          events.emit('hold', m[1], on);          // sync the browser toggle
+          sendJson(res, 200, { hold: on, pending: store.undeliveredComments(m[1]).length });
+          return;
+        }
+      }
+      // Explicit flush while staying in hold mode: arm a one-shot delivery, then
+      // wake the poll so the held batch goes out once (hold stays on after).
+      if ((m = path.match(/^\/api\/edit\/([a-f0-9]{16})\/flush$/)) && method === 'POST') {
+        store.armFlush(m[1]);
+        events.emit('comment', m[1]);
+        sendJson(res, 200, { flushed: true });
+        return;
       }
       if ((m = path.match(/^\/api\/edit\/([a-f0-9]{16})\/message$/)) && method === 'POST') {
         const body = await readJsonBody(req);

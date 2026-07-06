@@ -248,6 +248,41 @@ export function takeQueuedMessages(key) {
   return q;
 }
 
+// --- Batch hold --------------------------------------------------------------
+// When hold is ON, comments still persist and render on the page, but the poll
+// must NOT wake/deliver them — they accumulate until the user flushes, so a
+// whole review pass reaches the agent as one batch. State lives on the session
+// so it survives reload and both the poll and the browser agree on it.
+export function getHold(key) {
+  const s = readSessionFile(key);
+  return !!(s && s.hold);
+}
+export function setHold(key, on) {
+  const s = readSessionFile(key);
+  if (!s) return null;
+  s.hold = !!on;
+  writeSessionFile(s);
+  return s.hold;
+}
+// "Send N to agent" while staying in hold mode: arm a one-shot flush the poll
+// consumes, so the held batch is delivered once even though hold stays ON.
+export function armFlush(key) {
+  const s = readSessionFile(key);
+  if (!s) return null;
+  s.flushOnce = true;
+  writeSessionFile(s);
+  return true;
+}
+// The poll asks: may I deliver comments now? Yes if not holding, OR if a flush
+// was armed (which it then consumes). Keeps hold semantics honest.
+export function consumeDeliveryGate(key) {
+  const s = readSessionFile(key);
+  if (!s) return false;
+  if (!s.hold) return true;
+  if (s.flushOnce) { s.flushOnce = false; writeSessionFile(s); return true; }
+  return false;
+}
+
 // --- Comments (the Worker's /api/feedback/:docId contract, local) ------------
 
 // GET: top-level comments + replies, editTokenHash stripped (the widget never

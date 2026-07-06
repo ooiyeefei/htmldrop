@@ -113,6 +113,12 @@ export function injectEditRuntime(html, { key }) {
     '.ta:focus { border-color: #6366f1; }',
     '.status { margin-top: 8px; font-size: 11.5px; line-height: 1.4; color: #b45309; background: #fef3c7;',
     '  border-radius: 6px; padding: 6px 9px; }',
+    '.holdbar { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }',
+    '.holdtoggle { display: flex; align-items: center; gap: 6px; font-size: 11.5px; color: #6b7280; cursor: pointer; user-select: none; }',
+    '.holdtoggle input { accent-color: #6366f1; cursor: pointer; }',
+    '.batch { margin-left: auto; background: #6366f1; color: #fff; border: none; border-radius: 7px; padding: 6px 12px;',
+    '  font: inherit; font-size: 11.5px; font-weight: 600; cursor: pointer; white-space: nowrap; }',
+    '.batch:hover { background: #4f46e5; } .batch:disabled { opacity: .5; cursor: not-allowed; }',
     '.row { display: flex; gap: 8px; margin-top: 8px; align-items: center; }',
     '.att { border: 1px solid #e5e7eb; background: #fff; color: #6b7280; border-radius: 6px; padding: 7px 10px;',
     '  font: inherit; font-size: 11px; cursor: pointer; white-space: nowrap; }',
@@ -136,6 +142,8 @@ export function injectEditRuntime(html, { key }) {
     '<button class="ib" id="min" title="Minimize">\\u2013</button></div>' +
     '<div class="lg" id="lg"></div>' +
     '<div class="co">' +
+    '<div class="holdbar"><label class="holdtoggle"><input type="checkbox" id="holdcb"><span>Hold comments for batch send</span></label>' +
+    '<button class="batch" id="batch" style="display:none">Send 0 to agent \\u2192</button></div>' +
     '<div class="chip" id="chip" style="display:none"><span id="chiptext"></span><button id="chipx">\\u00d7</button></div>' +
     '<textarea class="ta" id="ta" placeholder="Ask the agent to refine the page..."></textarea>' +
     '<div class="status" id="status" style="display:none"></div>' +
@@ -157,6 +165,8 @@ export function injectEditRuntime(html, { key }) {
   var dt = shadow.getElementById('dt');
   var pl = shadow.getElementById('pl');
   var statusEl = shadow.getElementById('status');
+  var holdcb = shadow.getElementById('holdcb');
+  var batchBtn = shadow.getElementById('batch');
 
   document.body.style.marginLeft = '360px';
   var pendingContext = null;
@@ -311,6 +321,37 @@ export function injectEditRuntime(html, { key }) {
     updateSendState();
   }
 
+  // --- Batch hold -----------------------------------------------------------
+  // Default OFF = comments send on-the-go (instant). When ON, comments still
+  // post + render but don't wake the agent; a "Send N to agent" button flushes
+  // the held batch in one delivery. Server owns the hold state; we sync via SSE.
+  var holdOn = false;
+  function refreshHoldUI() {
+    holdcb.checked = holdOn;
+    if (!holdOn) { batchBtn.style.display = 'none'; return; }
+    fetch(WORKER + '/api/edit/' + KEY + '/hold').then(function (r) { return r.json(); }).then(function (d) {
+      var n = (d && d.pending) || 0;
+      batchBtn.style.display = 'inline-block';
+      batchBtn.textContent = 'Send ' + n + ' to agent \\u2192';
+      batchBtn.disabled = n === 0;
+    }).catch(function () {});
+  }
+  holdcb.addEventListener('change', function () {
+    holdOn = holdcb.checked;
+    fetch(WORKER + '/api/edit/' + KEY + '/hold', {
+      method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ on: holdOn })
+    }).then(function () {
+      refreshHoldUI();
+      flashStatus(holdOn ? 'Holding comments — they will not reach the agent until you Send the batch.' : 'Live again — comments send to the agent on the go.');
+    }).catch(function () {});
+  });
+  batchBtn.addEventListener('click', function () {
+    batchBtn.disabled = true;
+    fetch(WORKER + '/api/edit/' + KEY + '/flush', { method: 'POST', headers: { 'content-type': 'application/json' } })
+      .then(function () { flashStatus('Batch sent to the agent.'); setTimeout(refreshHoldUI, 400); })
+      .catch(function () { refreshHoldUI(); });
+  });
+
   // --- Layout QA ------------------------------------------------------------
   // Measure the RENDERED page and report layout problems the agent can't "see"
   // from source: horizontal overflow (the big one for narrow review panels),
@@ -405,8 +446,17 @@ export function injectEditRuntime(html, { key }) {
       // C: don't lock the composer — a Send will reopen the session from here.
       flashStatus('Session ended. Type a message to re-engage the agent.');
     });
+    es.addEventListener('hold', function (e) { try { holdOn = !!JSON.parse(e.data).hold; refreshHoldUI(); } catch (_) {} });
   } catch (e) {}
 
+  // While holding, refresh the "Send N" count on a light interval (the server
+  // doesn't push a per-comment SSE event; this keeps the button count current
+  // as comments accumulate). Cheap GET, only runs while hold is on.
+  setInterval(function () { if (holdOn && !ended) refreshHoldUI(); }, 2000);
+
+  // Adopt the server's current hold state on load (survives reload).
+  fetch(WORKER + '/api/edit/' + KEY + '/hold').then(function (r) { return r.json(); })
+    .then(function (d) { holdOn = !!(d && d.hold); refreshHoldUI(); }).catch(function () {});
   restoreDraft();
   updateSendState();
   loadChat();
