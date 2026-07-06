@@ -4,6 +4,36 @@ All notable changes to this project are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/), and this project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [1.9.0] — 2026-07-06
+
+Reshapes **edit mode** into a single, reliable review surface with a real
+two-way agent loop. Builds on 1.8.0; the async publish/feedback/converge flow is
+unchanged.
+
+### Features
+
+- **One surface, Live ⇄ Async.** The separate chat panel is gone — the annotation
+  widget is now the single place for everything: a page-level comment is a message
+  to the agent, a threaded reply is the agent's answer. A control bar (top-right)
+  carries a **Live ⇄ Async** mode toggle and presence (idle / listening / working).
+  Live = comments reach the listening agent in real time; **Async** = collect
+  comments for a later pull, with a "Send N to agent" batch button.
+- **Agent → user questions.** `htmldrop edit ask <file> --text "…" --options
+  "A|B|C"` pops a card in the browser (rendered from the agent's spec: prompt +
+  clickable options + free-text note). The author's answer returns on the next
+  `edit poll` as a structured `{choice, text}`. Native, zero-dependency dynamic UI.
+- **Faster commenting.** Selecting text auto-opens the comment input (no "+ Comment"
+  click), and **⌘⏎ / Ctrl+Enter submits** in every comment box (Enter = newline).
+- **Reliability.** Stable local port (7391; an open tab survives a server restart),
+  a visible "couldn't save — retry" toast that keeps your text instead of losing it
+  silently, auto-reconnect when the server drops and returns, and a 204 for
+  `/favicon.ico` (no console 404). Sessions persist on disk across restarts.
+
+### Fixes
+
+- Comments authored by the agent (its own replies) no longer count toward the
+  human's batch nor echo back into the agent's own poll.
+
 ## [1.8.0] — 2026-07-05
 
 Adds **edit mode** — a local, real-time loop to refine a doc *with your AI agent*
