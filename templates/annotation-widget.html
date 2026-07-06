@@ -17,6 +17,27 @@
   function hdGet(k){ try { return localStorage.getItem(k); } catch(e){ return HD_MEM[k] != null ? HD_MEM[k] : null; } }
   function hdSet(k, v){ HD_MEM[k] = v; try { localStorage.setItem(k, v); } catch(e){} }
 
+  // Surface a save failure instead of swallowing it. A dropped POST used to fail
+  // silently — the reviewer thought a comment saved when it didn't (e.g. the
+  // local server restarted onto a new port). This shows a brief toast so a
+  // failed save is never invisible; callers keep the user's text so they can retry.
+  var hdToastEl = null, hdToastTimer = null;
+  function hdToastFail(msg){
+    try {
+      if (!hdToastEl) {
+        hdToastEl = document.createElement('div');
+        hdToastEl.style.cssText = 'position:fixed;bottom:16px;left:50%;transform:translateX(-50%);z-index:1000001;'
+          + 'background:#7f1d1d;color:#fff;padding:10px 16px;border-radius:8px;font:500 13px -apple-system,system-ui,sans-serif;'
+          + 'box-shadow:0 4px 16px rgba(0,0,0,.25);max-width:90vw;text-align:center';
+        document.body.appendChild(hdToastEl);
+      }
+      hdToastEl.textContent = msg;
+      hdToastEl.style.display = 'block';
+      clearTimeout(hdToastTimer);
+      hdToastTimer = setTimeout(function(){ if (hdToastEl) hdToastEl.style.display = 'none'; }, 6000);
+    } catch(e){ /* if even this fails, nothing more we can do */ }
+  }
+
   // Per-browser secret that proves "I posted this comment" so a commenter can
   // delete their own comment (e.g. posted under the wrong name). Sent with every
   // POST; the worker stores only its SHA-256 hash. In a sandboxed (opaque-origin)
@@ -505,8 +526,15 @@
       if (!(await promptNameIfNeeded(popover))) return;
       submitBtn.disabled = true;
       submitBtn.textContent = '...';
-      await onSubmit(text);
-      removePopover();
+      try {
+        await onSubmit(text);
+        removePopover();
+      } catch (e) {
+        // Save failed (onSubmit re-threw + toasted). Keep the popover open with
+        // the text intact so the reviewer can retry — never lose their words.
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Retry';
+      }
     });
     actions.append(cancelBtn, submitBtn);
 
@@ -608,10 +636,16 @@
         headers: headers,
         body: JSON.stringify(body),
       });
+      if (!res.ok) throw new Error('HTTP ' + res.status);
       const data = await res.json().catch(() => null);
       if (data && data.id) rememberMine(data.id);
       await loadComments();
-    } catch(e) { /* silent fail */ }
+    } catch(e) {
+      // Don't swallow it — tell the reviewer and re-throw so the caller keeps
+      // their text for a retry (the server may have restarted).
+      hdToastFail('Comment didn’t save — the page may have lost the local server. Reload and try again.');
+      throw e;
+    }
   }
 
   async function submitAreaComment(rect, text, captured) {
@@ -637,10 +671,14 @@
         headers: headers,
         body: JSON.stringify(body),
       });
+      if (!res.ok) throw new Error('HTTP ' + res.status);
       const data = await res.json().catch(() => null);
       if (data && data.id) rememberMine(data.id);
       await loadComments();
-    } catch(e) { /* silent fail */ }
+    } catch(e) {
+      hdToastFail('Comment didn’t save — the page may have lost the local server. Reload and try again.');
+      throw e;
+    }
   }
 
   // ---- Area annotation: drag a rectangle over the document ----
@@ -710,10 +748,14 @@
         headers: headers,
         body: JSON.stringify(body),
       });
+      if (!res.ok) throw new Error('HTTP ' + res.status);
       const data = await res.json().catch(() => null);
       if (data && data.id) rememberMine(data.id);
       await loadComments();
-    } catch(e) { /* silent fail */ }
+    } catch(e) {
+      hdToastFail('Reply didn’t save — the page may have lost the local server. Reload and try again.');
+      throw e;
+    }
   }
 
   // DELETE own comment (or reply). The edit token authorizes; the worker cascades
@@ -1183,8 +1225,10 @@
       // Nudge for a name; if they opt to add one, abort (text stays in the box).
       if (!(await promptNameIfNeeded(nameInput))) return;
       submitBtn.disabled = true;
-      await submitComment(null, null, text);
-      textarea.value = '';
+      try {
+        await submitComment(null, null, text);
+        textarea.value = ''; // clear only on success
+      } catch (e) { /* failed: toast shown, text kept in the box for retry */ }
       submitBtn.disabled = false;
     });
     composeActions.append(nameInput, submitBtn);
@@ -1215,7 +1259,9 @@
       if (!t) return;
       if (!(await promptNameIfNeeded(input))) return; // nudge for a name first
       sendBtn.disabled = true;
-      await submitReply(parentItem, t);
+      try {
+        await submitReply(parentItem, t);
+      } catch (e) { sendBtn.disabled = false; sendBtn.textContent = 'Retry'; } // keep the text
     });
     // Enter sends, Shift+Enter newlines — matches the chat composer.
     input.addEventListener('keydown', (ke) => {

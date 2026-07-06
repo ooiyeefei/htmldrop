@@ -454,6 +454,24 @@ export function injectEditRuntime(html, { key }) {
   // as comments accumulate). Cheap GET, only runs while hold is on.
   setInterval(function () { if (holdOn && !ended) refreshHoldUI(); }, 2000);
 
+  // --- health watch / auto-heal ---------------------------------------------
+  // With a stable port, a restarted server comes back on the SAME origin. Poll
+  // /health: if it goes down then returns, reload so the tab re-attaches instead
+  // of stranding on a dead server (the failure mode that lost comments). While
+  // it's down we show a persistent banner so a failed save is never a mystery.
+  var sawOutage = false;
+  setInterval(function () {
+    fetch('/health', { cache: 'no-store' }).then(function (r) {
+      if (r.ok && sawOutage) { location.reload(); return; }
+      if (r.ok && statusEl.dataset.outage === '1') { statusEl.style.display = 'none'; statusEl.dataset.outage = ''; }
+    }).catch(function () {
+      sawOutage = true;
+      statusEl.dataset.outage = '1';
+      statusEl.textContent = 'Connection to the local server lost — comments won\\u2019t save until it\\u2019s back. Keep this tab open; it reconnects automatically.';
+      statusEl.style.display = 'block';
+    });
+  }, 3000);
+
   // Adopt the server's current hold state on load (survives reload).
   fetch(WORKER + '/api/edit/' + KEY + '/hold').then(function (r) { return r.json(); })
     .then(function (d) { holdOn = !!(d && d.hold); refreshHoldUI(); }).catch(function () {});

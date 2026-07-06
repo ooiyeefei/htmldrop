@@ -11,7 +11,20 @@ const idleMs = process.env.HTMLDROP_EDIT_IDLE_MS
   ? Number(process.env.HTMLDROP_EDIT_IDLE_MS)
   : 30 * 60 * 1000;
 
-const srv = await startServer({ idleTimeoutMs: Number.isFinite(idleMs) && idleMs > 0 ? idleMs : null });
+// Prefer a STABLE default port so an already-open browser tab keeps working
+// across server restarts (an ephemeral port would move and strand the tab on a
+// dead address). Override with HTMLDROP_EDIT_PORT; fall back to an ephemeral
+// port only if the stable one is already taken.
+const STABLE_PORT = Number(process.env.HTMLDROP_EDIT_PORT) || 7391;
+const timeout = Number.isFinite(idleMs) && idleMs > 0 ? idleMs : null;
+
+let srv;
+try {
+  srv = await startServer({ port: STABLE_PORT, idleTimeoutMs: timeout });
+} catch (e) {
+  // EADDRINUSE (or any bind error on the stable port) → take any free port.
+  srv = await startServer({ port: 0, idleTimeoutMs: timeout });
+}
 writeServerInfo({ port: srv.port, pid: process.pid, startedAt: Date.now() });
 
 // The server resolves `done` when it shuts down (idle timeout or explicit
