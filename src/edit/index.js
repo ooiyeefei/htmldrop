@@ -14,7 +14,7 @@ import { existsSync, statSync } from 'node:fs';
 import { resolve, extname, basename } from 'node:path';
 import open from 'open';
 import { ensureServerRunning, runningPort, postJson, getJson, pollFeedback } from './client.js';
-import { sessionKeyFor } from './store.js';
+import { listSessions, pendingCount, sessionKeyFor, undeliveredComments } from './store.js';
 import { feedbackPull } from '../feedback/pull.js';
 import { loadManifest } from '../manifest.js';
 
@@ -85,6 +85,68 @@ const POLL_GOLDEN_RULES = [
   'Fix error-severity layout findings before involving the human.',
   'A dead poll is re-run, never mourned.',
 ];
+
+async function liveEditPort() {
+  const port = runningPort();
+  if (!port) return null;
+  try {
+    const res = await fetch(`http://127.0.0.1:${port}/health`, { signal: AbortSignal.timeout(500) });
+    return res.ok ? port : null;
+  } catch {
+    return null;
+  }
+}
+
+function summarizeSession(session, port) {
+  const abs = session.file || '';
+  const pendingMessages = session.key ? pendingCount(session.key) : (session.queue || []).length;
+  const undelivered = session.key ? undeliveredComments(session.key).length : 0;
+  const pendingQuestion = !!(session.question && !session.answer);
+  return {
+    file: abs ? basename(abs) : '(unknown)',
+    path: abs,
+    status: session.status || 'unknown',
+    pendingMessages,
+    undeliveredComments: undelivered,
+    pendingQuestion,
+    totalComments: (session.comments || []).length,
+    updatedAt: session.updatedAt || session.createdAt || null,
+    url: port && session.key ? `http://127.0.0.1:${port}/s/${session.key}/` : null,
+  };
+}
+
+function needsAttention(session) {
+  return session.status === 'open'
+    && (session.pendingMessages > 0 || session.undeliveredComments > 0 || session.pendingQuestion);
+}
+
+export async function editLs(options = {}) {
+  const port = await liveEditPort();
+  const sessions = listSessions().map((session) => summarizeSession(session, port));
+  const attention = sessions.filter(needsAttention);
+  const payload = { sessions, summary: { total: sessions.length, needsAttention: attention.length } };
+
+  if (options.json) {
+    console.log(JSON.stringify(payload, null, 2));
+    return payload;
+  }
+
+  if (!sessions.length) {
+    console.log('No edit sessions.');
+    return payload;
+  }
+
+  if (attention.length) console.log(`${attention.length} session(s) with unaddressed input.`);
+  console.log('Edit sessions:');
+  for (const s of sessions) {
+    const marker = needsAttention(s) ? '!' : ' ';
+    const question = s.pendingQuestion ? 'yes' : 'no';
+    console.log(`${marker} ${s.file}  [${s.status}] pending=${s.pendingMessages} new-comments=${s.undeliveredComments} question=${question} total-comments=${s.totalComments} updated=${s.updatedAt || 'unknown'}`);
+    console.log(`    ${s.path || '(unknown path)'}`);
+    if (s.url) console.log(`    ${s.url}`);
+  }
+  return payload;
+}
 
 function jsonError(error, agent_hint) {
   const message = error?.message || String(error);
