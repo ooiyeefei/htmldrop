@@ -4,6 +4,52 @@ All notable changes to this project are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/), and this project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [1.10.0] — 2026-07-15
+
+Agent guardrails (Track A) + no-git collaborative editing (Track B). This release
+adds the layer that makes an agent produce good artifacts and drive the review
+loop unsupervised, plus a way for a second editor to build on a published doc
+without git.
+
+### Added — agent guardrails (Track A)
+
+- **`htmldrop playbook [id]`** — per-shape authoring guidance with a MUST-router
+  rule. Seven playbooks: `diagram` (Mermaid, never div-boxes), `comparison`,
+  `input`, `plan`, `table`, `slides`, and `explainer` (the teaching shape:
+  one-idea lead → feel-the-difference micro-demo → before/after loop → cheat
+  sheet). `--json` for machine use.
+- **`htmldrop design`** — the design contract as a command: source-priority
+  rule, copy-paste CDN snippets with **pinned versions + SRI hashes**, a
+  layout-safety CSS block, and a theme-aware Mermaid re-render snippet. Mermaid
+  pinned to v11.16.0 (shared with the `diagram` playbook).
+- **`next_step` choreography** — every agent-facing `--json` output
+  (`edit poll|layout|ask|reply`, `feedback pull`) now ends with an explicit
+  `next_step`, and errors carry an `agent_hint`. Encodes the two golden rules:
+  *fix error-severity layout findings before involving the human*, and *a dead
+  poll is re-run, never mourned*.
+- **Layout audit: overlap detector + severity contract** — the runtime auditor
+  now catches `overlapping-text` (stacked/hidden animation frames), and every
+  warning carries `level: error|warning` + `persistent`. Errors block; warnings
+  may ship with a note.
+- **`htmldrop edit ls [--json]`** — session registry: lists all local edit
+  sessions and flags which have unaddressed input (pending messages, new
+  comments, unanswered questions). Plus a documented SessionStart hook
+  (`docs/session-start-hook.md`).
+
+### Added — collaborative editing (Track B)
+
+- **`htmldrop pull <url>`** — reconstruct clean, editable source from a
+  published doc (decrypt if gated, strip the widget) and re-link it to the same
+  `docId`, so pull → edit → push lands on the **same link with comments
+  intact**. The linchpin of the no-git team loop.
+- **`htmldrop identity export` / `import <blob>`** — share a dedicated **team**
+  identity (subdomain + author key) as one token, with prominent
+  full-co-owner-power warnings and a `--force` guard against clobbering a
+  different identity.
+- **`docs/collaborative-editing.md`** — documents the source-vs-authority
+  model, the sequential hand-off flow, and the last-write-wins caveat (use git
+  for concurrent edits).
+
 ## [1.9.1] — 2026-07-06
 
 Edit-mode UX fixes from real use of 1.9.0.

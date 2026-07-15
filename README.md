@@ -80,6 +80,9 @@ For AI converge you also need an LLM API key in your environment — see [Multi-
 | `htmldrop list` | List published files with their URLs |
 | `htmldrop open <file>` | Open a published file in the browser |
 | `htmldrop delete <file>` | Remove a file and redeploy |
+| `htmldrop pull <url> [--password <p>] [--output <f>]` | Reconstruct clean, editable source from a published doc and re-link it to the same doc/link — the basis of the no-git collaborative loop |
+| `htmldrop playbook [id] [--json]` | Per-shape authoring guidance (diagram, comparison, input, plan, table, slides, explainer). No id lists all + the MUST-router rule |
+| `htmldrop design [--json]` | Print the design contract: source-priority rule, pinned+SRI CDN snippets, layout-safety CSS, theme-aware Mermaid re-render |
 | `htmldrop feedback pull <file> [--json] [--save]` | Retrieve feedback for **your own** file. `--save` writes it to `<file>.feedback.json` in your repo (owned + versioned) |
 | `htmldrop feedback read <docId\|url> [--json]` | Read feedback for **any** doc by id or link — no ownership, no manifest (for teammates/agents) |
 | `htmldrop feedback list` | List which files have feedback enabled |
@@ -93,7 +96,9 @@ For AI converge you also need an LLM API key in your environment — see [Multi-
 | `htmldrop edit reply <file> --text <t>` | The agent replies into the conversation after editing the file |
 | `htmldrop edit ask <file> --text <q> [--options "A\|B\|C"]` | Ask the author a question in the browser; their answer returns on the next `poll` as `{choice, text}` |
 | `htmldrop edit layout <file> [--json]` | Report layout issues (overflow, clipped/overlapping text) in the rendered page |
+| `htmldrop edit ls [--json]` | List all local edit sessions and which have unaddressed input (for agents at session start) |
 | `htmldrop edit end <file>` · `htmldrop edit stop` | End a session · shut the local edit server down |
+| `htmldrop identity export [--json]` · `htmldrop identity import <blob> [--force]` | Export/import a shareable **team** identity (subdomain + author key). Use a dedicated team account only |
 
 File arguments accept an absolute path, a relative path, or the bare filename — they all resolve to the same published file. Commands that act on **your own** doc (`pull`, `clear`, `converge`) use the local manifest + author key; the **teammate-facing** commands (`read`, `add --doc-id`, `fetch`) work from just a link.
 
