@@ -18,7 +18,7 @@ import { feedbackList } from '../src/feedback/list.js';
 import { feedbackClear } from '../src/feedback/clear.js';
 import { converge } from '../src/feedback/converge.js';
 import { studio } from '../src/studio.js';
-import { editStart, editPoll, editReply, editAsk, editLayout, editEnd, editStop } from '../src/edit/index.js';
+import { editStart, editLs, editPoll, editReply, editAsk, editLayout, editEnd, editStop } from '../src/edit/index.js';
 
 const pkg = JSON.parse(
   readFileSync(join(dirname(fileURLToPath(import.meta.url)), '../package.json'), 'utf-8')
@@ -225,6 +225,19 @@ edit
   .action(async (file, options) => {
     try {
       await editStart(file, options);
+    } catch (err) {
+      console.error(`Error: ${err.message}`);
+      process.exit(1);
+    }
+  });
+
+edit
+  .command('ls')
+  .description('List all local edit-mode sessions and which have unaddressed input (for agents at session start)')
+  .option('--json', 'Output as JSON')
+  .action(async (options) => {
+    try {
+      await editLs(options);
     } catch (err) {
       console.error(`Error: ${err.message}`);
       process.exit(1);
