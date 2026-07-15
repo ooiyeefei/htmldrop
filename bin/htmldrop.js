@@ -14,6 +14,8 @@ import { feedbackPull } from '../src/feedback/pull.js';
 import { feedbackRead } from '../src/feedback/read.js';
 import { feedbackAdd } from '../src/feedback/add.js';
 import { fetchDoc } from '../src/fetch.js';
+import { playbook } from '../src/playbook.js';
+import { design } from '../src/design.js';
 import { feedbackList } from '../src/feedback/list.js';
 import { feedbackClear } from '../src/feedback/clear.js';
 import { converge } from '../src/feedback/converge.js';
@@ -102,6 +104,32 @@ program
   .action(async (url, options) => {
     try {
       await fetchDoc(url, options);
+    } catch (err) {
+      console.error(`Error: ${err.message}`);
+      process.exit(1);
+    }
+  });
+
+program
+  .command('playbook [id]')
+  .description('List artifact playbooks or print a playbook by id')
+  .option('--json', 'Output as JSON')
+  .action(async (id, options) => {
+    try {
+      await playbook(id, options);
+    } catch (err) {
+      console.error(`Error: ${err.message}`);
+      process.exit(1);
+    }
+  });
+
+program
+  .command('design')
+  .description('Print the htmldrop design contract')
+  .option('--json', 'Output as JSON')
+  .action(async (options) => {
+    try {
+      await design(options);
     } catch (err) {
       console.error(`Error: ${err.message}`);
       process.exit(1);
