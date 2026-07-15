@@ -16,9 +16,11 @@ import { feedbackAdd } from '../src/feedback/add.js';
 import { fetchDoc } from '../src/fetch.js';
 import { playbook } from '../src/playbook.js';
 import { design } from '../src/design.js';
+import { pull } from '../src/pull.js';
 import { feedbackList } from '../src/feedback/list.js';
 import { feedbackClear } from '../src/feedback/clear.js';
 import { converge } from '../src/feedback/converge.js';
+import { identityExport, identityImport } from '../src/identity.js';
 import { studio } from '../src/studio.js';
 import { editStart, editLs, editPoll, editReply, editAsk, editLayout, editEnd, editStop } from '../src/edit/index.js';
 
@@ -130,6 +132,21 @@ program
   .action(async (options) => {
     try {
       await design(options);
+    } catch (err) {
+      console.error(`Error: ${err.message}`);
+      process.exit(1);
+    }
+  });
+
+program
+  .command('pull <url>')
+  .description('Reconstruct editable source from a published htmldrop doc and re-link it to the same doc/link')
+  .option('-p, --password [password]', 'Password to decrypt a protected doc. Omit the value to use $HTMLDROP_PASSWORD or a hidden prompt')
+  .option('-o, --output <file>', 'Output file (default: filename from the URL path)')
+  .option('--no-open', "Don't open the file after writing")
+  .action(async (url, options) => {
+    try {
+      await pull(url, options);
     } catch (err) {
       console.error(`Error: ${err.message}`);
       process.exit(1);
@@ -366,6 +383,36 @@ auth
       } else {
         await authSetup();
       }
+    } catch (err) {
+      console.error(`Error: ${err.message}`);
+      process.exit(1);
+    }
+  });
+
+const identity = program
+  .command('identity')
+  .description('Export/import the shareable team identity (subdomain + author key)');
+
+identity
+  .command('export')
+  .description('Print a shareable team-identity token (DANGER: full co-owner power)')
+  .option('--json', 'Output as JSON')
+  .action(async (options) => {
+    try {
+      await identityExport(options);
+    } catch (err) {
+      console.error(`Error: ${err.message}`);
+      process.exit(1);
+    }
+  });
+
+identity
+  .command('import <blob>')
+  .description('Import a shared team-identity token into ~/.htmldrop/config.json')
+  .option('-f, --force', 'Overwrite an existing different identity')
+  .action(async (blob, options) => {
+    try {
+      await identityImport(blob, options);
     } catch (err) {
       console.error(`Error: ${err.message}`);
       process.exit(1);
