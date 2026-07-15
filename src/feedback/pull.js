@@ -32,6 +32,12 @@ export async function feedbackPull(file, options = {}) {
   }
 
   const data = await res.json();
+  const outputData = {
+    ...data,
+    next_step: data.items?.length
+      ? `Address each comment, edit the file, then re-run to confirm none remain unaddressed. To iterate locally with these comments loaded: \`htmldrop edit start ${file} --with-feedback\`.`
+      : 'No feedback yet — nothing to address.',
+  };
 
   // --save: write comments into the repo as JSON so they're owned + versioned by the user.
   if (options.save) {
@@ -49,22 +55,24 @@ export async function feedbackPull(file, options = {}) {
       comments: data.items,
     };
     writeFileSync(resolved, JSON.stringify(snapshot, null, 2) + '\n', 'utf-8');
-    console.log(`Saved ${data.count} comment(s) to ${outPath} (commit it to keep them in your repo).`);
-    if (options.silent || options.json) return data;
+    if (!options.silent && !options.json) {
+      console.log(`Saved ${data.count} comment(s) to ${outPath} (commit it to keep them in your repo).`);
+    }
+    if (options.silent) return outputData;
   }
 
   if (options.silent) {
-    return data;
+    return outputData;
   }
 
   if (options.json) {
-    console.log(JSON.stringify(data, null, 2));
-    return data;
+    console.log(JSON.stringify(outputData, null, 2));
+    return outputData;
   }
 
   if (data.items.length === 0) {
     console.log(`No feedback for ${file} yet.`);
-    return data;
+    return outputData;
   }
 
   console.log(`\n${data.items.length} feedback item(s) for ${file}:\n`);
@@ -83,5 +91,5 @@ export async function feedbackPull(file, options = {}) {
     console.log(`    ${new Date(item.createdAt).toLocaleString()}\n`);
   }
 
-  return data;
+  return outputData;
 }
