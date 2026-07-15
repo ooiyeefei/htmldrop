@@ -267,12 +267,59 @@ export function injectEditRuntime(html, { key, version = '0' }) {
     var r = el.getBoundingClientRect(); return r.width < 1 && r.height < 1;
   }
   function shortText(el) { return (el.textContent || '').replace(/\\s+/g, ' ').trim().slice(0, 60); }
+  // Severity protocol: errors block (fix before involving the human); warnings may ship with a note.
+  function layoutWarning(kind, selector, detail, text, severity) {
+    var w = { kind: kind, selector: selector, detail: detail };
+    if (text) w.text = text;
+    w.severity = severity;
+    w.level = (severity === 'high' || severity === 'error') ? 'error' : 'warning';
+    w.persistent = true;
+    return w;
+  }
+  function isPositionedForOverlap(cs) {
+    return cs.position === 'absolute' || cs.position === 'fixed' || cs.position === 'sticky';
+  }
+  function isBlockLikeForOverlap(cs) {
+    var d = cs.display || '';
+    return d === 'block' || d === 'flex' || d === 'grid' || d === 'table' || d === 'list-item' || d === 'flow-root' || d.indexOf('table-') === 0;
+  }
+  function isNormalInlineForOverlap(cs) {
+    var d = cs.display || '';
+    return cs.position === 'static' && (d === 'inline' || d === 'inline-block' || d === 'inline-flex' || d === 'inline-grid');
+  }
+  function hasVisibleTextChild(el) {
+    for (var i = 0; i < el.children.length; i++) {
+      var child = el.children[i];
+      if (!isHidden(child) && shortText(child)) return true;
+    }
+    return false;
+  }
+  function isTextOverlapCandidate(el, cs, r) {
+    if (!shortText(el) || r.width < 2 || r.height < 2) return false;
+    if (hasVisibleTextChild(el)) return false; // leaf-ish: avoid parent/child text boxes.
+    return isPositionedForOverlap(cs) || isBlockLikeForOverlap(cs);
+  }
+  function overlapRect(a, b) {
+    var w = Math.min(a.right, b.right) - Math.max(a.left, b.left);
+    var h = Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top);
+    if (w <= 2 || h <= 2) return null;
+    var area = w * h;
+    var minArea = Math.max(1, Math.min(a.width * a.height, b.width * b.height));
+    if (area < 24 || area / minArea < 0.15) return null;
+    return { width: w, height: h, area: area };
+  }
+  function sameNormalTextLine(a, b) {
+    if (!a.normalInline || !b.normalInline) return false;
+    var y = Math.min(a.rect.bottom, b.rect.bottom) - Math.max(a.rect.top, b.rect.top);
+    return y > Math.min(a.rect.height, b.rect.height) * 0.6;
+  }
   function auditLayout() {
     var out = [];
     var docW = document.documentElement.clientWidth;
     if (document.documentElement.scrollWidth > docW + 2)
-      out.push({ kind: 'page-overflow', selector: 'html', detail: 'Page scrolls horizontally: content is ' + (document.documentElement.scrollWidth - docW) + 'px wider than the viewport (' + docW + 'px).', severity: 'high' });
+      out.push(layoutWarning('page-overflow', 'html', 'Page scrolls horizontally: content is ' + (document.documentElement.scrollWidth - docW) + 'px wider than the viewport (' + docW + 'px).', '', 'high'));
     var all = document.body ? document.body.querySelectorAll('*') : [], seen = 0;
+    var textCandidates = [];
     for (var i = 0; i < all.length && seen < 4000; i++) {
       var el = all[i]; seen++;
       if (host.contains(el) || (el.closest && el.closest('#htmldrop-edit-host'))) continue;
@@ -280,11 +327,24 @@ export function injectEditRuntime(html, { key, version = '0' }) {
       if (isHidden(el)) continue;
       var cs = getComputedStyle(el), r = el.getBoundingClientRect();
       if (r.width > docW + 2 && el.parentElement === document.body)
-        out.push({ kind: 'element-overflow', selector: cssPath(el), detail: 'Element is ' + Math.round(r.width) + 'px wide, past the ' + docW + 'px viewport.', text: shortText(el), severity: 'high' });
+        out.push(layoutWarning('element-overflow', cssPath(el), 'Element is ' + Math.round(r.width) + 'px wide, past the ' + docW + 'px viewport.', shortText(el), 'high'));
       var clipsY = el.scrollHeight - el.clientHeight > 4 && (cs.overflowY === 'hidden' || cs.overflow === 'hidden');
       var clipsX = el.scrollWidth - el.clientWidth > 4 && (cs.overflowX === 'hidden' || cs.overflow === 'hidden');
       if ((clipsY || clipsX) && (el.textContent || '').trim())
-        out.push({ kind: 'clipped-text', selector: cssPath(el), detail: 'Text is clipped by a fixed-size container.', text: shortText(el), severity: 'medium' });
+        out.push(layoutWarning('clipped-text', cssPath(el), 'Text is clipped by a fixed-size container.', shortText(el), 'medium'));
+      if (isTextOverlapCandidate(el, cs, r)) {
+        var candidate = { el: el, rect: r, selector: cssPath(el), text: shortText(el), normalInline: isNormalInlineForOverlap(cs) };
+        for (var j = textCandidates.length - 1, checked = 0; j >= 0 && checked < 30; j--, checked++) {
+          var prev = textCandidates[j];
+          if (prev.el.contains(candidate.el) || candidate.el.contains(prev.el)) continue;
+          var overlap = overlapRect(candidate.rect, prev.rect);
+          if (!overlap || sameNormalTextLine(candidate, prev)) continue;
+          out.push(layoutWarning('overlapping-text', candidate.selector, 'Text overlaps ' + prev.selector + ' by about ' + Math.round(overlap.width) + '×' + Math.round(overlap.height) + 'px; this often means stacked duplicate text or hidden animation frames are visible.', candidate.text, 'high'));
+          break;
+        }
+        textCandidates.push(candidate);
+        if (textCandidates.length > 80) textCandidates.shift();
+      }
       if (out.length >= 60) break;
     }
     return out;

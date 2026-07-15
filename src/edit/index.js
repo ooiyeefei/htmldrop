@@ -81,77 +81,134 @@ function hintPublishedFeedback(abs) {
   } catch { /* no manifest — nothing to hint */ }
 }
 
-export async function editPoll(file, options = {}) {
-  const abs = assertHtmlFile(file);
-  const port = await ensureServerRunning();
-  // Make poll self-sufficient: ensure the session (and its file watcher) exist
-  // even if `edit start` was never run in this shell.
-  await postJson(port, '/__edit/sessions', { file: abs });
+const POLL_GOLDEN_RULES = [
+  'Fix error-severity layout findings before involving the human.',
+  'A dead poll is re-run, never mourned.',
+];
 
-  const data = await pollFeedback(port, abs);
+function jsonError(error, agent_hint) {
+  const message = error?.message || String(error);
+  console.log(JSON.stringify({ error: message, agent_hint }, null, 2));
+  throw error instanceof Error ? error : new Error(message);
+}
 
-  if (options.json) {
-    console.log(JSON.stringify(data, null, 2));
-    return data;
-  }
+function editAgentHint(file, command) {
+  return `Run \`htmldrop edit start ${file}\` first (or \`htmldrop edit stop\` if the server is stale), then retry \`${command}\`.`;
+}
+
+function hasBlockingLayoutWarnings(warnings = []) {
+  return (warnings || []).some((w) => w?.level === 'error' || w?.severity === 'error' || w?.severity === 'high');
+}
+
+function layoutNextStep(warnings = []) {
+  return hasBlockingLayoutWarnings(warnings)
+    ? 'Fix these error-severity (level:error) findings before involving the human; warnings may ship with a note.'
+    : 'No blocking layout issues — safe to proceed.';
+}
+
+function pollNextStep(file, data = {}) {
+  const pollCmd = `htmldrop edit poll ${file} --json`;
+  const replyCmd = `htmldrop edit reply ${file} --text ...`;
+  const rules = `Golden rules: ${POLL_GOLDEN_RULES[0]} ${POLL_GOLDEN_RULES[1]}`;
+  const blockingLayout = hasBlockingLayoutWarnings(data.layoutWarnings)
+    ? ' Fix error-severity (level:error) layout findings BEFORE involving the human.'
+    : '';
 
   if (data.status === 'ended') {
-    console.log('Session ended. Stop polling.');
-    return data;
+    return `Session ended — stop polling this edit session.${blockingLayout} ${rules}`;
   }
   if (data.status === 'missing') {
-    console.log('No edit session for this file. Run `htmldrop edit start` first.');
-    return data;
+    return `No edit session is active for this file — run \`htmldrop edit start ${file}\` first, then run \`${pollCmd}\`.${blockingLayout} ${rules}`;
   }
-  // An answer to a question the agent asked (highest priority — it's the reply
-  // to a decision the agent was waiting on).
   if (data.answer) {
-    const a = data.answer;
-    console.log(`\nThe author answered your question${a.question ? ` ("${a.question.slice(0, 60)}")` : ''}:`);
-    if (a.choice) console.log(`  → chose: ${a.choice}`);
-    if (a.text) console.log(`  → note: ${a.text}`);
-    return data;
+    return `Act on the author's decision, edit the file as needed, then run \`${replyCmd}\`. Then run \`${pollCmd}\` again to keep listening. If the poll returns nothing, re-run it — a dead poll is re-run, never mourned.${blockingLayout} ${rules}`;
   }
 
   const msgs = data.messages || [];
   const fresh = data.newComments || [];
-  if (data.status !== 'feedback' || (!msgs.length && !fresh.length)) {
-    console.log('No new messages.');
+  if (data.status === 'feedback' && (msgs.length || fresh.length)) {
+    return `Do not respond to the user yet.${blockingLayout} Address the messages/comments, then run \`${replyCmd}\`. Then run \`${pollCmd}\` again to keep listening. If the poll returns nothing, re-run it — a dead poll is re-run, never mourned. ${rules}`;
+  }
+  return `No actionable messages were returned. Run \`${pollCmd}\` again to keep listening. If the poll returns nothing, re-run it — a dead poll is re-run, never mourned.${blockingLayout} ${rules}`;
+}
+
+export async function editPoll(file, options = {}) {
+  try {
+    const abs = assertHtmlFile(file);
+    const port = await ensureServerRunning();
+    // Make poll self-sufficient: ensure the session (and its file watcher) exist
+    // even if `edit start` was never run in this shell.
+    await postJson(port, '/__edit/sessions', { file: abs });
+
+    const data = await pollFeedback(port, abs);
+
+    if (options.json) {
+      const output = { ...(data || {}), next_step: pollNextStep(file, data || {}) };
+      console.log(JSON.stringify(output, null, 2));
+      return output;
+    }
+
+    if (data.status === 'ended') {
+      console.log('Session ended. Stop polling.');
+      return data;
+    }
+    if (data.status === 'missing') {
+      console.log('No edit session for this file. Run `htmldrop edit start` first.');
+      return data;
+    }
+    // An answer to a question the agent asked (highest priority — it's the reply
+    // to a decision the agent was waiting on).
+    if (data.answer) {
+      const a = data.answer;
+      console.log(`\nThe author answered your question${a.question ? ` ("${a.question.slice(0, 60)}")` : ''}:`);
+      if (a.choice) console.log(`  → chose: ${a.choice}`);
+      if (a.text) console.log(`  → note: ${a.text}`);
+      return data;
+    }
+
+    const msgs = data.messages || [];
+    const fresh = data.newComments || [];
+    if (data.status !== 'feedback' || (!msgs.length && !fresh.length)) {
+      console.log('No new messages.');
+      return data;
+    }
+
+    if (msgs.length) {
+      console.log(`\n${msgs.length} chat message(s) from the author on ${file}:\n`);
+      for (const m of msgs) {
+        const ctx = m.context?.text
+          ? `\n     ↳ re: "${m.context.text.slice(0, 80)}"${m.context.selector ? ` (${m.context.selector})` : ''}`
+          : '';
+        console.log(`  • ${m.text}${ctx}`);
+      }
+    }
+
+    // Comments now reach the agent directly (posting a comment on the page wakes
+    // this poll), so surface them as actionable feedback, not just context.
+    if (fresh.length) {
+      console.log(`\n${fresh.length} new comment(s) on the page:\n`);
+      for (const c of fresh) {
+        const a = c.anchor || {};
+        const on = a.selectedText
+          ? ` [on: "${a.selectedText.slice(0, 60)}"]`
+          : a.type === 'element_rect'
+            ? (a.capturedText ? ` [on: area — "${a.capturedText.slice(0, 60)}"]` : ' [on: area]')
+            : c.parentId ? ' [reply]' : '';
+        console.log(`  • ${c.author?.displayName || 'Anonymous'}${on}`);
+        console.log(`    ${c.content?.text || '(no text)'}`);
+      }
+    }
+
+    const others = (data.comments?.length || 0) - fresh.length;
+    if (others > 0) console.log(`\n  (${others} earlier annotation(s) on the page for context)`);
+    printLayoutWarnings(data.layoutWarnings);
+    console.log(`\nEdit ${file} to address these — the page reloads live. Then let the author know:`);
+    console.log(`  htmldrop edit reply ${file} --text "<what you changed>"`);
     return data;
+  } catch (e) {
+    if (options.json) jsonError(e, editAgentHint(file, `htmldrop edit poll ${file} --json`));
+    throw e;
   }
-
-  if (msgs.length) {
-    console.log(`\n${msgs.length} chat message(s) from the author on ${file}:\n`);
-    for (const m of msgs) {
-      const ctx = m.context?.text
-        ? `\n     ↳ re: "${m.context.text.slice(0, 80)}"${m.context.selector ? ` (${m.context.selector})` : ''}`
-        : '';
-      console.log(`  • ${m.text}${ctx}`);
-    }
-  }
-
-  // Comments now reach the agent directly (posting a comment on the page wakes
-  // this poll), so surface them as actionable feedback, not just context.
-  if (fresh.length) {
-    console.log(`\n${fresh.length} new comment(s) on the page:\n`);
-    for (const c of fresh) {
-      const a = c.anchor || {};
-      const on = a.selectedText
-        ? ` [on: "${a.selectedText.slice(0, 60)}"]`
-        : a.type === 'element_rect'
-          ? (a.capturedText ? ` [on: area — "${a.capturedText.slice(0, 60)}"]` : ' [on: area]')
-          : c.parentId ? ' [reply]' : '';
-      console.log(`  • ${c.author?.displayName || 'Anonymous'}${on}`);
-      console.log(`    ${c.content?.text || '(no text)'}`);
-    }
-  }
-
-  const others = (data.comments?.length || 0) - fresh.length;
-  if (others > 0) console.log(`\n  (${others} earlier annotation(s) on the page for context)`);
-  printLayoutWarnings(data.layoutWarnings);
-  console.log(`\nEdit ${file} to address these — the page reloads live. Then let the author know:`);
-  console.log(`  htmldrop edit reply ${file} --text "<what you changed>"`);
-  return data;
 }
 
 // Shared renderer for layout-QA warnings (poll output + `edit layout`).
@@ -159,39 +216,70 @@ function printLayoutWarnings(warnings) {
   if (!warnings?.length) return;
   console.log(`\n⚠ ${warnings.length} layout issue(s) detected in the rendered page:`);
   for (const w of warnings) {
+    const level = w.level || (w.severity === 'high' || w.severity === 'error' ? 'error' : 'warning');
+    const levelLabel = level === 'error' ? 'ERROR' : 'warn';
     const sev = w.severity === 'high' ? '[HIGH]' : w.severity === 'medium' ? '[med]' : '[low]';
-    console.log(`  ${sev} ${w.kind} — ${w.selector}`);
+    console.log(`  [${levelLabel}] ${sev} ${w.kind} — ${w.selector}`);
     console.log(`     ${w.detail}${w.text ? `  (text: "${w.text}")` : ''}`);
   }
 }
 
 // On-demand layout check (agent QA before/after edits, no message needed).
 export async function editLayout(file, options = {}) {
-  const abs = assertHtmlFile(file);
-  const port = await ensureServerRunning();
-  await postJson(port, '/__edit/sessions', { file: abs });
-  const { key } = sessionKeyFor(abs);
-  const data = await getJson(port, `/api/edit/${key}/layout`);
-  if (options.json) { console.log(JSON.stringify(data, null, 2)); return data; }
-  if (!data.warnings?.length) {
-    console.log(data.at ? 'No layout issues detected in the current render.' : 'No layout audit yet — open the page in the browser first so it can be measured.');
+  try {
+    const abs = assertHtmlFile(file);
+    const port = await ensureServerRunning();
+    await postJson(port, '/__edit/sessions', { file: abs });
+    const { key } = sessionKeyFor(abs);
+    const data = await getJson(port, `/api/edit/${key}/layout`);
+    if (options.json) {
+      const output = { ...(data || {}), next_step: layoutNextStep(data?.warnings || []) };
+      console.log(JSON.stringify(output, null, 2));
+      return output;
+    }
+    if (!data.warnings?.length) {
+      console.log(data.at ? 'No layout issues detected in the current render.' : 'No layout audit yet — open the page in the browser first so it can be measured.');
+      return data;
+    }
+    printLayoutWarnings(data.warnings);
     return data;
+  } catch (e) {
+    if (options.json) jsonError(e, editAgentHint(file, `htmldrop edit layout ${file} --json`));
+    throw e;
   }
-  printLayoutWarnings(data.warnings);
-  return data;
 }
 
 // The agent's voice in the conversation. After acting on a message, it replies
 // so the author sees what changed (and the live-reloaded page reflects it).
 export async function editReply(file, options = {}) {
-  const abs = assertHtmlFile(file);
+  let abs;
+  try {
+    abs = assertHtmlFile(file);
+  } catch (e) {
+    if (options.json) jsonError(e, editAgentHint(file, `htmldrop edit reply ${file} --text ... --json`));
+    throw e;
+  }
   const port = runningPort();
-  if (!port) { console.log('No edit server running. Run `htmldrop edit start` first.'); return; }
+  if (!port) {
+    const message = 'No edit server running. Run `htmldrop edit start` first.';
+    if (options.json) jsonError(new Error(message), editAgentHint(file, `htmldrop edit reply ${file} --text ... --json`));
+    console.log(message);
+    return;
+  }
   const { key } = sessionKeyFor(abs);
   try {
     await postJson(port, `/api/edit/${key}/reply`, { text: options.text });
+    if (options.json) {
+      const output = {
+        replied: true,
+        next_step: `Continue the loop: run \`htmldrop edit poll ${file} --json\` to keep listening.`,
+      };
+      console.log(JSON.stringify(output, null, 2));
+      return output;
+    }
     console.log('Replied in the edit conversation.');
   } catch (e) {
+    if (options.json) jsonError(e, editAgentHint(file, `htmldrop edit reply ${file} --text ... --json`));
     console.log(`Could not send reply: ${e.message}`);
   }
 }
@@ -200,16 +288,34 @@ export async function editReply(file, options = {}) {
 // card with the prompt + optional clickable options + a free-text note; the
 // author's answer arrives on the next `edit poll`. `--options` is a pipe-list.
 export async function editAsk(file, options = {}) {
-  const abs = assertHtmlFile(file);
-  const port = await ensureServerRunning();
-  await postJson(port, '/__edit/sessions', { file: abs });
+  let abs;
+  let port;
+  try {
+    abs = assertHtmlFile(file);
+    port = await ensureServerRunning();
+    await postJson(port, '/__edit/sessions', { file: abs });
+  } catch (e) {
+    if (options.json) jsonError(e, editAgentHint(file, `htmldrop edit ask ${file} --text ... --json`));
+    throw e;
+  }
   const { key } = sessionKeyFor(abs);
   const opts = (options.options || '').split('|').map((s) => s.trim()).filter(Boolean);
   try {
     await postJson(port, `/api/edit/${key}/question`, { text: options.text, options: opts });
+    if (options.json) {
+      const output = {
+        asked: true,
+        question: options.text,
+        options: opts,
+        next_step: `Now run \`htmldrop edit poll ${file} --json\` and wait for the author's answer.`,
+      };
+      console.log(JSON.stringify(output, null, 2));
+      return output;
+    }
     console.log(`Asked the author on the page${opts.length ? ` (options: ${opts.join(', ')})` : ''}.`);
     console.log(`Now poll for their answer:  htmldrop edit poll ${file} --json`);
   } catch (e) {
+    if (options.json) jsonError(e, editAgentHint(file, `htmldrop edit ask ${file} --text ... --json`));
     console.log(`Could not ask: ${e.message}`);
   }
 }

@@ -276,6 +276,7 @@ edit
   .command('reply <file>')
   .description('Reply into the edit conversation after acting on a message (for the agent)')
   .requiredOption('--text <text>', 'The reply text')
+  .option('--json', 'Output as JSON')
   .action(async (file, options) => {
     try {
       await editReply(file, options);
@@ -290,6 +291,7 @@ edit
   .description('Ask the author a question in the browser and get a structured answer (for agents)')
   .requiredOption('--text <text>', 'The question to ask')
   .option('--options <list>', 'Pipe-separated clickable options, e.g. "Yes|No|Both"')
+  .option('--json', 'Output as JSON')
   .action(async (file, options) => {
     try {
       await editAsk(file, options);
