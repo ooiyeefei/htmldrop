@@ -1,0 +1,11 @@
+sequenceDiagram
+    autonumber
+    actor A as You
+    participant DOC as Shareable link
+    actor B as Teammate
+    A->>DOC: push --feedback (share the link)
+    Note over DOC: reviewers comment — no account
+    B->>DOC: pull (get the editable source)
+    B->>B: edit & add a section
+    B->>DOC: push --feedback (same link)
+    Note over DOC: same link · comments intact

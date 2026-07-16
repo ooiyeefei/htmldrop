@@ -14,11 +14,20 @@ npm install -g @yeefeiooi/htmldrop
 
 (The installed command is `htmldrop`. Requires Node.js ≥ 18.)
 
+### Hand a doc off to a teammate — no git needed
+
+Publish a doc with feedback, and a teammate can pull the source, add to it, and publish back to the **same link** — the review thread stays intact.
+
+[![htmldrop collaborative hand-off flow: You push --feedback and share the link; reviewers comment with no account; a teammate pulls the source, edits and adds a section, then pushes --feedback back to the same link with comments intact](https://raw.githubusercontent.com/ooiyeefei/htmldrop/main/docs/assets/collab-flow.png)](https://yooi.surge.sh/htmldrop-v1.10.0.html)
+
+_Click the diagram for the interactive release note._
+
 ---
 
 ## Table of contents
 
 - [No account needed](#no-account-needed)
+- [Release notes](#release-notes)
 - [Setup](#setup)
 - [Command reference](#command-reference)
 - [Example walkthroughs](#example-walkthroughs)
@@ -46,6 +55,14 @@ Two more things are optional and bring-your-own — htmldrop stores **neither**:
 
 - **AI key** — only for `converge` / AI insights; billed by your own provider, used for a single request. See [Multi-provider AI](#multi-provider-ai).
 - **Doc password** — only for private shares; used to encrypt in memory, then discarded. See [Security model](#security-model).
+
+---
+
+## Release notes
+
+Each release ships a short, visual release note — published with htmldrop itself, so you can read it as a live page:
+
+- **v1.10.0** — playbooks, a one-command design starter kit, smarter edit-mode guidance, and `htmldrop pull` + shared team identity (hand a doc off to a teammate, no git). → **[Read the release note](https://yooi.surge.sh/htmldrop-v1.10.0.html)**
 
 ---
 
