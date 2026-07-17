@@ -4,6 +4,31 @@ All notable changes to this project are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/), and this project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [1.12.0] — 2026-07-17
+
+Password workflow + a clearer security guarantee. No change to the zero-knowledge
+model: the password is still stored nowhere.
+
+### Added
+
+- **`htmldrop push --generate-password`** — generates a memorable password (two
+  words + a number, via `node:crypto`) and prints it once. htmldrop still stores
+  it nowhere.
+- **A "save it now" notice** after publishing a password-protected doc: the URL,
+  the password (shown only when generated or passed as a flag value, never when
+  it came from a hidden prompt or env var), the zero-knowledge guarantee, and a
+  tip to pipe the password from your password manager
+  (`--password "$(op read ...)"`, `bw get`, `pass show`).
+
+### Docs
+
+- Reframed the security model as a positive **zero-knowledge guarantee** (the
+  password is stored nowhere by design, which is why a breach can't expose a
+  private doc, and why a forgotten password is unrecoverable).
+- Added a **"Need recoverable or managed access?"** section: that need is
+  identity/role-based access (a future tier), not stored passwords — storing
+  passwords would break the guarantee for every doc.
+
 ## [1.11.0] — 2026-07-17
 
 Gallery + list management: bulk delete and at-a-glance activity.
