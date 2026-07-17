@@ -4,6 +4,35 @@ All notable changes to this project are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/), and this project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [1.11.0] — 2026-07-17
+
+Gallery + list management: bulk delete and at-a-glance activity.
+
+### Added
+
+- **Bulk delete.** `htmldrop delete <file...>` removes several files at once,
+  regenerating the gallery and redeploying to Surge only once. A confirmation
+  prompt guards the destructive step (skip with `-y`/`--yes`; non-interactive
+  runs require `--yes`).
+- **`htmldrop delete --pick`** — an interactive terminal checkbox list to
+  select which published files to delete (arrow keys, space to toggle, enter to
+  confirm). No new dependencies.
+- **Activity metrics in `htmldrop list` and the gallery.** Each file now shows
+  when it was last pushed (relative time) and, for feedback-enabled docs, the
+  comment count and last-comment time. `list` reads these authenticated; the
+  gallery fetches public comment counts client-side and degrades gracefully for
+  private docs (no author key is ever exposed on the published page).
+- **Gallery selection helper.** The published gallery gains per-file checkboxes
+  and a "Delete selected" action that generates the exact `htmldrop delete ...`
+  command to run locally (a static page can't and shouldn't delete files
+  itself), with a copy button.
+
+### Docs
+
+- Added a deferred design proposal for opt-in, count-only view tracking
+  (`docs/plans/2026-07-17-view-tracking-proposal.md`) — not implemented;
+  last-modified and comment metrics ship now because they need no new infra.
+
 ## [1.10.0] — 2026-07-15
 
 Agent guardrails (Track A) + no-git collaborative editing (Track B). This release
