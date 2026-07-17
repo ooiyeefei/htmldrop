@@ -7,7 +7,7 @@ import { program } from 'commander';
 import { init } from '../src/init.js';
 import { push } from '../src/push.js';
 import { list } from '../src/list.js';
-import { deleteFile } from '../src/delete.js';
+import { deleteFiles } from '../src/delete.js';
 import { openFile } from '../src/index.js';
 import { authSetup, authSetupForce } from '../src/auth.js';
 import { feedbackPull } from '../src/feedback/pull.js';
@@ -75,11 +75,13 @@ program
   });
 
 program
-  .command('delete <file>')
-  .description('Remove a published file and redeploy')
-  .action(async (file) => {
+  .command('delete [files...]')
+  .description('Remove one or more published files and redeploy. Use --pick to choose interactively.')
+  .option('-y, --yes', 'Skip the confirmation prompt')
+  .option('--pick', 'Interactively select which files to delete')
+  .action(async (files, options) => {
     try {
-      await deleteFile(file);
+      await deleteFiles(files, options);
     } catch (err) {
       console.error(`Error: ${err.message}`);
       process.exit(1);
