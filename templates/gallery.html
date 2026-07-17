@@ -19,13 +19,29 @@
       padding: 2rem 1rem;
     }
 
+    button,
+    input {
+      font: inherit;
+    }
+
+    button:focus-visible,
+    input:focus-visible,
+    a:focus-visible {
+      outline: 2px solid #3b82f6;
+      outline-offset: 2px;
+    }
+
+    [hidden] {
+      display: none !important;
+    }
+
     .container {
       max-width: 720px;
       margin: 0 auto;
     }
 
     header {
-      margin-bottom: 2rem;
+      margin-bottom: 1rem;
       padding-bottom: 1rem;
       border-bottom: 1px solid #e2e8f0;
     }
@@ -50,41 +66,163 @@
       color: #94a3b8;
     }
 
+    .selection-toolbar {
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.75rem;
+      margin-bottom: 0.75rem;
+      padding: 0.625rem 0.75rem;
+      background: #fff;
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+    }
+
+    .selection-actions {
+      display: flex;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+    }
+
+    .button {
+      border: 1px solid #cbd5e1;
+      border-radius: 6px;
+      background: #fff;
+      color: #475569;
+      padding: 0.4rem 0.65rem;
+      font-size: 0.78rem;
+      font-weight: 500;
+      cursor: pointer;
+      transition: background 0.15s, border-color 0.15s;
+    }
+
+    .button:hover:not(:disabled) {
+      background: #f1f5f9;
+      border-color: #94a3b8;
+    }
+
+    .button:disabled {
+      cursor: not-allowed;
+      opacity: 0.5;
+    }
+
+    .delete-button {
+      border-color: #fecaca;
+      color: #991b1b;
+    }
+
+    .delete-button:hover:not(:disabled) {
+      background: #fef2f2;
+      border-color: #fca5a5;
+    }
+
+    .selection-count {
+      color: #64748b;
+      font-size: 0.78rem;
+      min-width: 5.5rem;
+    }
+
+    .command-panel {
+      margin-bottom: 0.75rem;
+      padding: 0.875rem;
+      border: 1px solid #bfdbfe;
+      border-radius: 8px;
+      background: #eff6ff;
+    }
+
+    .command-panel p {
+      color: #475569;
+      font-size: 0.8rem;
+      line-height: 1.45;
+    }
+
+    .command-row {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      margin-top: 0.625rem;
+    }
+
+    .command-row code {
+      display: block;
+      flex: 1;
+      min-width: 0;
+      overflow-wrap: anywhere;
+      padding: 0.55rem 0.65rem;
+      border: 1px solid #dbeafe;
+      border-radius: 6px;
+      background: #fff;
+      color: #1e3a8a;
+      font-size: 0.78rem;
+      user-select: all;
+    }
+
+    .copy-status {
+      display: block;
+      min-height: 1rem;
+      margin-top: 0.375rem;
+      color: #64748b;
+      font-size: 0.72rem;
+    }
+
     .grid {
       display: grid;
       gap: 0.75rem;
     }
 
     .card {
-      display: block;
+      display: flex;
+      align-items: flex-start;
+      gap: 0.75rem;
       background: #fff;
       border: 1px solid #e2e8f0;
       border-radius: 8px;
       padding: 1rem 1.25rem;
-      text-decoration: none;
       color: inherit;
       transition: border-color 0.15s, box-shadow 0.15s;
     }
 
-    .card:hover {
+    .card:hover,
+    .card:focus-within {
       border-color: #3b82f6;
       box-shadow: 0 2px 8px rgba(59, 130, 246, 0.1);
+    }
+
+    .card-select {
+      flex: 0 0 auto;
+      width: 1rem;
+      height: 1rem;
+      margin-top: 0.15rem;
+      accent-color: #3b82f6;
+      cursor: pointer;
+    }
+
+    .card-link {
+      display: block;
+      flex: 1;
+      min-width: 0;
+      text-decoration: none;
+      color: inherit;
     }
 
     .card-header {
       display: flex;
       align-items: center;
       justify-content: space-between;
+      gap: 0.75rem;
       margin-bottom: 0.5rem;
     }
 
     .card-title {
+      min-width: 0;
+      overflow-wrap: anywhere;
       font-weight: 500;
       font-size: 0.95rem;
       color: #1e293b;
     }
 
     .badge {
+      flex: 0 0 auto;
       font-size: 0.7rem;
       font-weight: 500;
       padding: 0.2rem 0.5rem;
@@ -105,7 +243,8 @@
 
     .card-meta {
       display: flex;
-      gap: 1rem;
+      flex-wrap: wrap;
+      gap: 0.35rem 1rem;
       font-size: 0.8rem;
       color: #94a3b8;
     }
@@ -130,13 +269,28 @@
         padding: 1rem 0.75rem;
       }
 
+      .selection-toolbar,
+      .command-row {
+        align-items: stretch;
+        flex-direction: column;
+      }
+
+      .selection-actions {
+        width: 100%;
+      }
+
+      .selection-toolbar > .button,
+      .command-row .button {
+        width: 100%;
+      }
+
       .card {
         padding: 0.875rem 1rem;
       }
     }
   </style>
 </head>
-<body>
+<body data-worker-url="{{WORKER_URL}}">
   <div class="container">
     <header>
       <h1>{{SUBDOMAIN}}</h1>
@@ -146,6 +300,24 @@
         <span>Updated {{LAST_UPDATED}}</span>
       </div>
     </header>
+
+    <div class="selection-toolbar" style="display:{{TOOLBAR_DISPLAY}}" aria-label="File selection tools">
+      <div class="selection-actions">
+        <button class="button" type="button" id="select-all">Select all</button>
+        <button class="button" type="button" id="clear-selection">Clear</button>
+        <span class="selection-count" id="selection-count" aria-live="polite">0 selected</span>
+      </div>
+      <button class="button delete-button" type="button" id="delete-selected" disabled>Delete selected</button>
+    </div>
+
+    <section class="command-panel" id="delete-command-panel" aria-live="polite" hidden>
+      <p><strong>Run this command locally.</strong> The published gallery cannot delete files; this protects the site from anyone who has its link.</p>
+      <div class="command-row">
+        <code id="delete-command" tabindex="-1"></code>
+        <button class="button" type="button" id="copy-command">Copy</button>
+      </div>
+      <span class="copy-status" id="copy-status"></span>
+    </section>
 
     <div class="grid">
       {{FILE_CARDS}}
@@ -159,5 +331,188 @@
       Powered by <a href="https://github.com/ooiyeefei/htmldrop" style="color: #64748b;">htmldrop</a> &amp; <a href="https://surge.sh" style="color: #64748b;">Surge</a>
     </footer>
   </div>
+
+  <script>
+    (() => {
+      'use strict';
+
+      try {
+        function formatRelativeTime(isoString) {
+          const timestamp = new Date(isoString).getTime();
+          if (!Number.isFinite(timestamp)) return 'unknown';
+
+          const deltaSeconds = (timestamp - Date.now()) / 1000;
+          const absoluteSeconds = Math.abs(deltaSeconds);
+          if (absoluteSeconds < 45) return 'just now';
+
+          const units = [
+            ['year', 365 * 24 * 60 * 60],
+            ['month', 30 * 24 * 60 * 60],
+            ['day', 24 * 60 * 60],
+            ['hour', 60 * 60],
+            ['minute', 60],
+            ['second', 1],
+          ];
+          const unitEntry = units.find((entry) => absoluteSeconds >= entry[1]);
+          const unit = unitEntry[0];
+          const amount = Math.max(1, Math.round(absoluteSeconds / unitEntry[1]));
+          const label = unit + (amount === 1 ? '' : 's');
+          return deltaSeconds < 0 ? `${amount} ${label} ago` : `in ${amount} ${label}`;
+        }
+
+        document.querySelectorAll('[data-relative-time]').forEach((element) => {
+          element.textContent = `Pushed ${formatRelativeTime(element.dataset.relativeTime)}`;
+        });
+
+        const cards = Array.from(document.querySelectorAll('.card'));
+        const workerUrl = document.body.dataset.workerUrl.replace(/\/+$/, '');
+
+        async function updateFeedbackMetric(card) {
+          const docId = card.dataset.docId;
+          const metric = card.querySelector('[data-feedback-metric]');
+          if (!docId || !metric || !workerUrl) return;
+
+          const controller = typeof AbortController === 'function' ? new AbortController() : null;
+          const timeout = controller ? setTimeout(() => controller.abort(), 4000) : null;
+
+          try {
+            // Public read only: never put an author key in this static page. Private
+            // docs reject this request and intentionally keep their neutral label.
+            const response = await fetch(
+              `${workerUrl}/api/feedback/${encodeURIComponent(docId)}`,
+              controller ? { signal: controller.signal } : {}
+            );
+            if (!response.ok) return;
+
+            const data = await response.json();
+            const items = Array.isArray(data && data.items) ? data.items : [];
+            const parsedCount = Number(data && data.count);
+            const count = Number.isFinite(parsedCount) && parsedCount >= 0 ? parsedCount : items.length;
+            const lastComment = items.reduce((latest, item) => {
+              const timestamp = new Date(item && item.createdAt).getTime();
+              if (!Number.isFinite(timestamp)) return latest;
+              if (!latest || timestamp > new Date(latest).getTime()) return item.createdAt;
+              return latest;
+            }, null);
+
+            metric.textContent = `${count} comment${count === 1 ? '' : 's'}`;
+            if (lastComment) {
+              metric.textContent += ` · last ${formatRelativeTime(lastComment)}`;
+              metric.title = `Last comment ${new Date(lastComment).toLocaleString('en-US')}`;
+            } else {
+              metric.textContent += ' · no comments yet';
+              metric.removeAttribute('title');
+            }
+          } catch {
+            // Network, CORS, timeout, private-doc, and malformed-response failures
+            // are non-fatal; the card keeps its neutral placeholder.
+          } finally {
+            if (timeout) clearTimeout(timeout);
+          }
+        }
+
+        cards.forEach((card) => {
+          void updateFeedbackMetric(card);
+        });
+
+        const checkboxes = Array.from(document.querySelectorAll('.card-select'));
+        const selectAllButton = document.getElementById('select-all');
+        const clearButton = document.getElementById('clear-selection');
+        const deleteButton = document.getElementById('delete-selected');
+        const selectionCount = document.getElementById('selection-count');
+        const commandPanel = document.getElementById('delete-command-panel');
+        const commandOutput = document.getElementById('delete-command');
+        const copyButton = document.getElementById('copy-command');
+        const copyStatus = document.getElementById('copy-status');
+
+        function selectedNames() {
+          return checkboxes.filter((checkbox) => checkbox.checked).map((checkbox) => checkbox.value);
+        }
+
+        function shellQuote(value) {
+          const singleQuote = String.fromCharCode(39);
+          const backslash = String.fromCharCode(92);
+          const escapedQuote = singleQuote + backslash + singleQuote + singleQuote;
+          return singleQuote + String(value).split(singleQuote).join(escapedQuote) + singleQuote;
+        }
+
+        function buildDeleteCommand(names) {
+          const args = names.map(shellQuote);
+          if (names.some((name) => String(name).startsWith('-'))) args.unshift('--');
+          return ['htmldrop', 'delete', ...args].join(' ');
+        }
+
+        function updateSelection() {
+          const names = selectedNames();
+          selectionCount.textContent = `${names.length} selected`;
+          deleteButton.disabled = names.length === 0;
+          clearButton.disabled = names.length === 0;
+          selectAllButton.disabled = checkboxes.length > 0 && names.length === checkboxes.length;
+
+          if (!commandPanel.hidden) {
+            if (names.length === 0) {
+              commandPanel.hidden = true;
+            } else {
+              commandOutput.textContent = buildDeleteCommand(names);
+            }
+            copyStatus.textContent = '';
+          }
+        }
+
+        checkboxes.forEach((checkbox) => {
+          checkbox.addEventListener('click', (event) => event.stopPropagation());
+          checkbox.addEventListener('change', updateSelection);
+        });
+
+        selectAllButton.addEventListener('click', () => {
+          checkboxes.forEach((checkbox) => {
+            checkbox.checked = true;
+          });
+          updateSelection();
+        });
+
+        clearButton.addEventListener('click', () => {
+          checkboxes.forEach((checkbox) => {
+            checkbox.checked = false;
+          });
+          updateSelection();
+        });
+
+        deleteButton.addEventListener('click', () => {
+          const names = selectedNames();
+          if (names.length === 0) return;
+          commandOutput.textContent = buildDeleteCommand(names);
+          commandPanel.hidden = false;
+          copyStatus.textContent = '';
+          commandOutput.focus({ preventScroll: true });
+        });
+
+        copyButton.addEventListener('click', async () => {
+          try {
+            if (!navigator.clipboard || !navigator.clipboard.writeText) {
+              throw new Error('Clipboard API unavailable');
+            }
+            await navigator.clipboard.writeText(commandOutput.textContent);
+            copyStatus.textContent = 'Command copied.';
+          } catch {
+            try {
+              const selection = window.getSelection();
+              const range = document.createRange();
+              range.selectNodeContents(commandOutput);
+              selection.removeAllRanges();
+              selection.addRange(range);
+              copyStatus.textContent = 'Copy unavailable — the command is selected for manual copy.';
+            } catch {
+              copyStatus.textContent = 'Copy unavailable — select the command and copy it manually.';
+            }
+          }
+        });
+
+        updateSelection();
+      } catch {
+        // Keep the static gallery navigable even in older or restricted browsers.
+      }
+    })();
+  </script>
 </body>
 </html>

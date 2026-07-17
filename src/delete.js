@@ -14,26 +14,35 @@ function getSurgeCommand() {
   }
 }
 
-export async function deleteFile(filename) {
+export async function deleteFiles(filenames) {
   const config = requireConfig();
   const siteDir = getSiteDir();
   const manifest = loadManifest();
+  const uniqueFilenames = [...new Set(filenames)];
+  if (uniqueFilenames.length === 0) {
+    throw new Error('At least one file is required.');
+  }
 
-  const fileIndex = manifest.files.findIndex((f) => f.name === filename);
-  if (fileIndex === -1) {
+  const missingFile = uniqueFilenames.find(
+    (filename) => !manifest.files.some((file) => file.name === filename)
+  );
+  if (missingFile) {
     throw new Error(
-      `File "${filename}" not found. Run \`htmldrop list\` to see published files.`
+      `File "${missingFile}" not found. Run \`htmldrop list\` to see published files.`
     );
   }
 
-  // Remove from site directory
-  const filePath = join(siteDir, filename);
-  if (existsSync(filePath)) {
-    unlinkSync(filePath);
+  // Validate the full selection before changing anything, then remove every file
+  // and deploy once so one invalid name cannot cause a predictable partial batch.
+  for (const filename of uniqueFilenames) {
+    const filePath = join(siteDir, filename);
+    if (existsSync(filePath)) {
+      unlinkSync(filePath);
+    }
   }
 
-  // Remove from manifest
-  manifest.files.splice(fileIndex, 1);
+  const selected = new Set(uniqueFilenames);
+  manifest.files = manifest.files.filter((file) => !selected.has(file.name));
   saveManifest(manifest);
 
   // Regenerate gallery
@@ -45,18 +54,23 @@ export async function deleteFile(filename) {
     writeFileSync(join(siteDir, 'index.html'), galleryHtml, 'utf-8');
   }
 
-  // Redeploy to remove the file from Surge
+  // Redeploy to remove the files from Surge
   const domain = `${config.subdomain}.surge.sh`;
   const surgeCmd = getSurgeCommand();
-  console.log(`Removing ${filename} and redeploying...`);
+  const noun = uniqueFilenames.length === 1 ? 'file was' : 'files were';
+  console.log(`Removing ${uniqueFilenames.join(', ')} and redeploying...`);
 
   try {
     const [cmd, ...pre] = surgeCmd.split(' ');
     execFileSync(cmd, [...pre, siteDir, '--domain', domain], { stdio: 'inherit' });
   } catch {
-    throw new Error('Surge deploy failed. The file was removed locally but may still be live.');
+    throw new Error(`Surge deploy failed. The ${noun} removed locally but may still be live.`);
   }
 
-  console.log(`\nDeleted: ${filename}`);
+  console.log(`\nDeleted: ${uniqueFilenames.join(', ')}`);
   console.log(`Remaining files: ${manifest.files.length}`);
+}
+
+export async function deleteFile(filename) {
+  return deleteFiles([filename]);
 }
