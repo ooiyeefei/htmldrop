@@ -10,8 +10,40 @@ import { loadManifest, saveManifest } from './manifest.js';
 import { injectFeedbackWidget } from './feedback/inject.js';
 import { getAuthorKey } from './auth.js';
 import { resolvePassword } from './prompt.js';
+import { generatePassphrase } from './passphrase.js';
 
 const DEFAULT_WORKER_URL = 'https://htmldrop-feedback.htmldrop.workers.dev';
+
+// Build the "save this password now" notice printed after a successful push of
+// a password-protected doc. Pure (no I/O) so it can be unit-tested without a
+// deploy. It is the one place the CLI ever shows a password, and only when the
+// user can reasonably re-read it: when WE generated it (--generate-password),
+// or when they passed it on the command line (already in shell history). A
+// password that arrived via hidden prompt or env var is deliberately kept
+// off-screen and is NOT echoed here.
+//
+//   source: 'generated' | 'flag' | 'hidden'
+export function passwordNotice({ url, password, source }) {
+  const showValue = source === 'generated' || source === 'flag';
+  const passwordLine = showValue
+    ? `Password: ${password}`
+    : 'Password: (entered privately via prompt or $HTMLDROP_PASSWORD, not echoed here)';
+
+  const guarantee =
+    '⚠ Save this password now — htmldrop is zero-knowledge and stores it nowhere, so a forgotten password cannot be recovered.';
+  const tip =
+    'Tip: pipe from your password manager, e.g.  htmldrop push file.html --password "$(op read op://vault/item/password)"  (also works with: bw get password <id>, pass show <name>).';
+
+  return [
+    '',
+    '  ----- Save this password -----',
+    `  URL:      ${url}`,
+    `  ${passwordLine}`,
+    '',
+    `  ${guarantee}`,
+    `  ${tip}`,
+  ].join('\n');
+}
 
 function getSurgeCommand() {
   try {
@@ -45,8 +77,29 @@ export async function push(file, options = {}) {
 
   // Read the file content
   let content = readFileSync(filePath, 'utf-8');
-  // Resolve the password (string from --password <pw>, env var, or hidden prompt)
-  const password = await resolvePassword(options.password);
+
+  // Resolve the password, honoring --generate-password.
+  //   passwordSource: 'generated' | 'flag' | 'hidden'
+  //     'generated' — we minted a memorable passphrase (--generate-password); safe to echo once below
+  //     'flag'      — an explicit --password <value> was passed (already in shell history); safe to echo
+  //     'hidden'    — password came from a hidden prompt or $HTMLDROP_PASSWORD (kept off-screen, never echoed)
+  // Zero-knowledge holds for EVERY source: the password lives only in memory
+  // for this push and is discarded after. htmldrop stores it nowhere.
+  let password;
+  let passwordSource;
+  if (options.generatePassword && typeof options.password === 'string' && options.password.length > 0) {
+    // Explicit value wins; never silently swap a password the user typed.
+    password = options.password;
+    passwordSource = 'flag';
+    console.log('Note: --generate-password ignored because --password <value> was given.');
+  } else if (options.generatePassword) {
+    password = generatePassphrase();
+    passwordSource = 'generated';
+    console.log('Generated a memorable password for this push (shown once below).');
+  } else {
+    password = await resolvePassword(options.password);
+    passwordSource = typeof options.password === 'string' && options.password.length > 0 ? 'flag' : 'hidden';
+  }
   let isEncrypted = Boolean(password);
 
   // Inject noindex meta tag if requested.
@@ -218,6 +271,7 @@ export async function push(file, options = {}) {
 
   if (isEncrypted) {
     console.log('(Password-protected — viewer must enter password to access content)');
+    console.log(passwordNotice({ url, password, source: passwordSource }));
   }
 
   // Open in browser if --open flag

@@ -49,6 +49,7 @@ program
   .command('push <file>')
   .description('Publish an HTML file')
   .option('-p, --password [password]', 'Password-protect the file. Omit the value to use $HTMLDROP_PASSWORD or a hidden prompt (keeps it out of shell history)')
+  .option('--generate-password', 'Generate a memorable password for this push and print it once (htmldrop still stores it nowhere)')
   .option('-n, --noindex', 'Block search engines and AI crawlers from indexing this file')
   .option('-f, --feedback', 'Enable inline feedback annotations for reviewers')
   .option('--new-doc', 'Force a fresh feedback doc/link instead of reusing the existing one')
