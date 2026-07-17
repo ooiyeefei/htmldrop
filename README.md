@@ -36,6 +36,7 @@ _Click the diagram for the interactive release note._
 - [Multi-provider AI (Anthropic / OpenAI / Gemini)](#multi-provider-ai)
 - [Architecture](#architecture)
 - [Security model](#security-model)
+- [Need recoverable or managed access?](#need-recoverable-or-managed-access)
 - [Self-hosting the feedback backend](#self-hosting-the-feedback-backend)
 - [Config](#config)
 
@@ -141,7 +142,21 @@ htmldrop push private-spec.html --password coral-sunset-42
 # → Published (AES-256-GCM encrypted). Share BOTH the URL and the password.
 ```
 
-The content is encrypted client-side; viewers must enter the password to decrypt it. htmldrop stores the password **nowhere** — save it yourself, because a forgotten password can't be recovered (just re-push with a new one). See [Security model](#security-model).
+The content is encrypted client-side before upload; viewers must enter the password to decrypt it in their browser. **htmldrop never stores the password** — not on disk, not on any server — it's held in memory just long enough to encrypt, then discarded. That's the guarantee no breach of Surge or our infrastructure can expose your doc; the direct consequence is that a forgotten password can't be recovered, so save it the moment you create it. Easiest path: let htmldrop make one and copy it into your manager:
+
+```bash
+htmldrop push private-spec.html --password --generate-password   # prints a memorable pw once
+```
+
+Or pipe it straight from your password manager so it never hits shell history:
+
+```bash
+htmldrop push private-spec.html --password "$(op read op://vault/item/password)"   # 1Password
+htmldrop push private-spec.html --password "$(bw get password <id>)"               # Bitwarden
+htmldrop push private-spec.html --password "$(pass show <name>)"                   # pass
+```
+
+Lost the password? Re-push the file with a new one. See [Security model](#security-model) and [Need recoverable or managed access?](#need-recoverable-or-managed-access).
 
 ### Example C — Collaborative review, end to end
 
@@ -372,9 +387,32 @@ Documents and feedback auto-expire after 90 days of inactivity.
 - **Author key** lives only in `~/.htmldrop/config.json` on your machine.
 - **LLM API key (bring-your-own):** in the dashboard it’s held in `sessionStorage` and cleared when you close the browser — never persisted to disk or stored on the server. The Worker uses it for the single request and forgets it.
 - **Password-protected shares** use **AES-256-GCM**, with the key derived from your password via **PBKDF2 (SHA-256, 600k iterations)** and a random salt/IV — authenticated encryption, computed client-side (the browser decrypts with built-in WebCrypto; the password is never sent to a server). Only the encrypted blob is uploaded (to Surge), so the plaintext never reaches Surge *or* the Worker.
-- **Your password is stored nowhere.** It's held in memory just long enough to encrypt the file at push time, then discarded — never written to `~/.htmldrop/config.json` (which holds only `subdomain`, `email`, `authorKey`), never uploaded, never sent to any server. Two consequences: (1) no breach of our infrastructure can expose a private doc, and (2) **a forgotten password can't be recovered** — there's nothing to recover it from; just re-push with a new one. You (or your agent) choose the password and are responsible for saving it (a password manager is ideal).
+- **Zero-knowledge by guarantee: your password is stored nowhere.** htmldrop never writes it to disk, to `~/.htmldrop/config.json` (which holds only `subdomain`, `email`, `authorKey`), or to any server — not ours, not Surge's. It's held in memory just long enough to encrypt the file at push time, then discarded. This is a deliberate guarantee, not a missing feature: it's the reason a breach of Surge, our Worker, or your local `~/.htmldrop` config can never expose a private doc — there is no password there to find. The direct consequence is that **a forgotten password can't be recovered**, because there's nothing to recover it from; re-push the file with a new one. That trade-off *is* the security property, so the workflow below is how you never pay it.
+- **Never lose a password — save it at the moment you create it.** Because it's unrecoverable, treat creation as the moment to store it:
+  - **Generate one** — `htmldrop push file.html --password --generate-password` prints a memorable password (two words + a number) once; copy it straight into your manager.
+  - **Pipe it from your password manager** so it never touches your shell history:
+    ```bash
+    htmldrop push file.html --password "$(op read op://vault/item/password)"   # 1Password CLI
+    htmldrop push file.html --password "$(bw get password <id>)"               # Bitwarden
+    htmldrop push file.html --password "$(pass show <name>)"                   # pass
+    ```
 - **Keep the password out of shell history:** use a bare `--password` flag to read from the `HTMLDROP_PASSWORD` env var, or be prompted with hidden input — instead of `--password <pw>` on the command line. Applies to both `push` and `fetch`.
 - **Caveat — comments are not encrypted.** A password protects the document *content* (on Surge), but *comments* are stored in plaintext on the Worker and readable by anyone who has the docId. For a private doc, comment confidentiality rests on the unguessable link, not the password.
+
+---
+
+## Need recoverable or managed access?
+
+htmldrop's zero-knowledge guarantee answers "can a breach leak my private doc?" — and the answer is final: the password is never stored, so it can't be stolen. The flip side is that a forgotten password can't be recovered. If *you* lose the password to your own doc, the fix is simple: re-push with a new one and re-share it.
+
+A different need — "the **organization** can always regain access, and we can **revoke a specific person**" — is *not* something stored passwords would solve. Storing passwords to enable recovery would break the zero-knowledge guarantee for *every* doc, and still wouldn't give per-person control. The right answer for that need is **identity / role-based access**: access granted by *who you are* (an account, an email allowlist, a role), re-grantable by an owner and revocable per person, without anyone sharing a secret.
+
+That is a deliberate future direction, **not implemented today**. The path is sketched in [`docs/plans/2026-05-25-password-capability-design.md`](docs/plans/2026-05-25-password-capability-design.md) (the password-as-capability model the Worker already speaks) and points toward capability/role-based access. Note the trade-off it implies: identity-based content access means the server can decrypt your doc on demand — which is exactly why it's a separate tier, not a free upgrade to the zero-knowledge model.
+
+**Which do you need today?**
+
+- A trusted team sharing one link + password out of band (a password manager, Slack, email) — today's model is sufficient and keeps the guarantee.
+- Per-person control ("only Jane can open it; remove Alex when they leave") and org-level recoverability — that's identity-based access, a future tier. For now, rotate the password (re-push) when the team changes.
 
 ---
 
