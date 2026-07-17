@@ -96,7 +96,7 @@ For AI converge you also need an LLM API key in your environment — see [Multi-
 | `htmldrop push <file> --feedback` | Publish with the annotation widget. `--new-doc` forces a fresh link. Combine with `--password` for a feedback-enabled *private* doc |
 | `htmldrop list` | List published files with their URLs |
 | `htmldrop open <file>` | Open a published file in the browser |
-| `htmldrop delete <file>` | Remove a file and redeploy |
+| `htmldrop delete <files...>` | Remove one or more files and redeploy once |
 | `htmldrop pull <url> [--password <p>] [--output <f>]` | Reconstruct clean, editable source from a published doc and re-link it to the same doc/link — the basis of the no-git collaborative loop |
 | `htmldrop playbook [id] [--json]` | Per-shape authoring guidance (diagram, comparison, input, plan, table, slides, explainer). No id lists all + the MUST-router rule |
 | `htmldrop design [--json]` | Print the design contract: source-priority rule, pinned+SRI CDN snippets, layout-safety CSS, theme-aware Mermaid re-render |
