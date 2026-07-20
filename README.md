@@ -62,6 +62,35 @@ Two more things are optional and bring-your-own — htmldrop stores **neither**:
 
 ## OpenAI Build Week: Codex + GPT-5.6
 
+### Prior work versus Build Week work
+
+htmldrop is not new. The first commit is 14 May 2026 and the first npm release was
+23 May, both well before the Submission Period opened on 13 July. Judging covers
+only what was added during the window, so here is the line.
+
+**Before the window:** publish an HTML file to a link, client-side encryption, the
+annotation widget, the feedback store, `converge`, and Converge Studio.
+
+**During the window** (13 July onward, 21 commits, about 5,000 insertions across 51
+files, three releases):
+
+- **v1.10.0** agent guardrails: `htmldrop playbook`, `htmldrop design` and its
+  design contract, the layout-overlap audit, the edit session registry, plus
+  `htmldrop pull` and shared team identity so a document can be handed to a
+  teammate without git.
+- **v1.11.0** bulk delete with an interactive picker, and gallery and list activity
+  metrics.
+- **v1.12.0** `--generate-password`, and the security model rewritten as an
+  explicit zero-knowledge guarantee.
+- The **OpenAI converge path moved from Chat Completions to the Responses API**
+  with `gpt-5.6-luna` and `store: false`.
+- The browser recording harness in [`scripts/demo/`](scripts/demo/), which drives
+  the walkthrough as one continuous take and derives its timings from the encoded
+  MP4 rather than from planned waits.
+
+Evidence: dated commit history in this repo, the three release tags, and Codex
+session `019f77c6-2406-7af0-93d4-bf5a7dc0c636`.
+
 ### Try it without installing anything
 
 A live document is already published, with a real review thread on it:
