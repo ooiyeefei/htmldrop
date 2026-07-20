@@ -144,21 +144,110 @@ Scope note: this is the CLI path. The Cloudflare Worker and Converge Studio stil
 use Chat Completions with the previous default model, so the migration covers the
 command below, not the dashboard.
 
+### Key decisions, and why they went the way they did
+
+The interesting parts of this project are the constraints it accepted, not the
+features it shipped.
+
+**converge proposes, it never decides.** The easy version of this product applies
+every comment and publishes. That version is worse, because the comments worth
+having are the ones reviewers disagree about. The system prompt asks the model to
+take the stronger argument when reviewers conflict, and to leave a genuine product
+trade-off alone rather than resolve it. In the recorded run it applied a
+measurable baseline and inverted a rollout order, and left the one trade-off
+nobody had evidence for untouched. `converge` also never publishes: it writes
+`<name>.converged.html` next to the original and stops, so a human reads the
+result before anyone else sees it.
+
+**The anchor matters more than the model.** Most of the work that makes
+convergence look intelligent happens before the request is built.
+`src/feedback/converge.js` flattens every comment into a labelled anchor line, and
+that rendering has five branches: a selected text range, a page-level comment, an
+area box with the text captured underneath it, an area box with only a CSS
+selector, and an area box with neither. The last branch is honest about its own
+limits and tells the model to infer the target from the comment wording. This is
+why a comment drawn as a box over a diagram can be acted on: the model receives
+the text sitting under that box plus the element it belongs to, rather than a
+coordinate it cannot interpret.
+
+**No SDKs.** Every provider is a raw `fetch` against its HTTP API. The install
+stays at three runtime dependencies, swapping a provider is one function, and
+nothing breaks when a vendor ships a major SDK version. The cost is writing the
+response parsing by hand, which is why the OpenAI reader takes `output_text` when
+it is present and otherwise walks `output[]` for `message` items and pulls the
+`output_text` parts out of their content arrays.
+
+**`gpt-5.6-luna` as the default rather than the flagship.** Convergence is a
+bounded, repeatable text-editing task with the whole document in the input. The
+cheap default is the honest one, and `--model` takes any GPT-5.6 model when a
+document needs more.
+
+**`store: false` on every request.** The document plus its review thread is the
+complete input, so there is no reason for a user's private document to be retained
+server side. This sits alongside the same decision made in the crypto: the
+password is used to encrypt in memory and then dropped, so it exists in no config
+file, on no host, and in no database.
+
 ### Where Codex accelerated the work
 
-Built in Codex session `019f77c6-2406-7af0-93d4-bf5a7dc0c636`:
+Codex session `019f77c6-2406-7af0-93d4-bf5a7dc0c636` covers the core build. The
+places it changed the shape of the work, rather than just typing faster:
 
-- Migrated the OpenAI path from Chat Completions to the Responses API, including
-  the `output_text` fallback that walks `output[].content[]` when the convenience
-  field is absent.
-- Authored the demo document and its Mermaid diagrams against the contract that
-  `htmldrop design` prints, then fixed the layout problems `htmldrop edit layout`
-  reported.
-- Drove the review thread end to end in a browser and inspected the generated HTML,
-  which is how the fence-stripping fix in `converge.js` was found: models wrap
-  output in a code fence even when told not to.
-- Produced the recorded walkthrough. Narration and the recording harness are in
-  [`docs/demo/`](docs/demo/) and [`scripts/demo/`](scripts/demo/).
+**Edit mode, the largest piece.** A loopback HTTP server, an SSE channel, a file
+watcher, a session store keyed by file path, and a request protocol an agent can
+sit inside: `edit poll` blocks until the author says something, `edit reply` posts
+back after the agent has acted, and `edit ask` pushes a question with clickable
+options into the page and waits for the answer on the next poll. Designing a
+protocol for an agent to be a participant rather than a caller took several
+iterations that would each have been an afternoon by hand.
+
+**A browser that reports its own layout defects.** The injected runtime audits the
+live render for clipped text, overlapping text, and elements overflowing their
+container, then posts each finding back with a severity, a CSS selector, and the
+offending text, so `edit poll` surfaces them to the agent as
+`[ERROR] [HIGH] overlapping-text`. The agent that authored the page gets told, in
+its own terms, exactly where the page it just wrote is broken. Closing that loop
+is the difference between an agent that generates HTML and one that can tell
+whether the HTML worked.
+
+**The Responses API migration.** Endpoint, request shape, and response parsing all
+changed at once, including the fallback walk described above.
+
+**Finding bugs by reading output rather than trusting it.** Driving a full review
+thread in a browser and then reading the generated HTML is how the fence-stripping
+fix in `converge.js` was found: models wrap a document in a code fence even when
+the instruction says not to. That defect is invisible if you only check that the
+call succeeded.
+
+**The crypto v2 envelope.** The CLI encrypts with `node:crypto` and the browser
+decrypts with WebCrypto, so the two have to stay byte compatible or a published
+document is simply unreadable. A later change had to derive a feedback access
+token from the same password without breaking documents already published. One
+PBKDF2 pass produces 64 bytes, and because PBKDF2 emits output block by block, the
+first 32 are identical to a plain 32-byte derivation, so older documents still
+decrypt with the same key.
+
+**The recording harness** in [`scripts/demo/`](scripts/demo/), which drives the
+walkthrough as one continuous browser take and derives every narration timestamp
+from the encoded MP4 rather than from planned waits. The first cut derived them
+from intent and the narration drifted out of sync with the picture.
+
+### What GPT-5.6 produced that is checkable
+
+Both artifacts are committed, so the input and the output can be read without
+running anything:
+
+- [`docs/demo/openai-build-week-collaboration.feedback.json`](docs/demo/openai-build-week-collaboration.feedback.json)
+  is a real review thread.
+- [`docs/demo/decision-brief.converged.html`](docs/demo/decision-brief.converged.html)
+  is what `gpt-5.6-luna` returned for the recorded run. Diff it against
+  [`docs/demo/decision-brief.html`](docs/demo/decision-brief.html) and the changes
+  are legible one by one: a vague success metric became a baseline of eighteen
+  clarification loops a week cut by half, a rollout order inverted because a
+  reviewer argued for it, a vague "a human owner" was narrowed to "the document
+  owner" after a reviewer asked who exactly, and one node inside a Mermaid diagram
+  was reworded because a reviewer drew a box over the picture and commented on it.
+  The open trade-off is untouched.
 
 Reproduce a convergence with a key that stays in your local environment:
 
