@@ -51,8 +51,37 @@ frozen, and only against the demo document.
 Recording a *new* demo for other purposes is fine as long as it uses a different
 filename, so it never touches `decision-brief.html` or its published link.
 
-After 6 August 2026 this whole section can be deleted, along with the guard in
-`stage.mjs`.
+### After 6 August 2026
+
+Three things to do once judging has ended, in this order:
+
+1. Delete this frozen-assets section and the date guard at the top of
+   `scripts/demo/stage.mjs`.
+2. Scrub commit `d46d13d` (`feat: edit mode`). Its **message body** names a
+   third-party tool on lines 24, 39 and 91, and that commit is an ancestor of
+   `origin/main`, so anyone who clones sees it in `git log`. The working tree and
+   the published npm package are already clean; only the message is not.
+
+   ```bash
+   # rewrites d46d13d and every commit after it, so a force-push is required
+   pip install git-filter-repo
+   git filter-repo --message-callback '
+     return message.replace(b"Lavish", b"the prior art").replace(b"lavish", b"the prior art")
+   '
+   git push --force origin main
+   ```
+
+   Deliberately not done before this date: rewriting changes the SHA of that
+   commit and every commit after it, and force-pushing while judges may have
+   cloned the repo breaks their copies and reads as tampering. The rules also
+   require the project to stay available for testing through the judging period.
+
+3. Re-check that nothing new has reintroduced a third-party name:
+
+   ```bash
+   git grep -il 'lavish' -- ':!node_modules'   # expect only .gitignore
+   git log --all --oneline -S'lavish' -i       # expect empty after the rewrite
+   ```
 
 ---
 
