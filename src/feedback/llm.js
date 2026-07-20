@@ -3,13 +3,15 @@
 
 export const DEFAULT_MODELS = {
   anthropic: 'claude-sonnet-4-6',
-  openai: 'gpt-5.4-mini',
+  // Convergence is a bounded, repeatable text-editing task. Luna keeps the
+  // default affordable while callers can still choose a larger GPT-5.6 model.
+  openai: 'gpt-5.6-luna',
   gemini: 'gemini-3.1-flash-lite',
 };
 
 const ENDPOINTS = {
   anthropic: 'https://api.anthropic.com/v1/messages',
-  openai: 'https://api.openai.com/v1/chat/completions',
+  openai: 'https://api.openai.com/v1/responses',
   // gemini endpoint includes the model + key, built per-call
 };
 
@@ -73,16 +75,23 @@ async function callOpenAI(apiKey, model, system, user, maxTokens) {
     },
     body: JSON.stringify({
       model,
-      max_tokens: maxTokens,
-      messages: [
-        { role: 'system', content: system },
-        { role: 'user', content: user },
-      ],
+      instructions: system,
+      input: user,
+      max_output_tokens: maxTokens,
+      // A converge request is stateless: the document and feedback are the
+      // complete context, so do not retain a customer's document by default.
+      store: false,
     }),
   });
   const data = await res.json();
   if (!res.ok) throw new Error(data?.error?.message || `OpenAI API error (${res.status})`);
-  return data?.choices?.[0]?.message?.content || '';
+  if (typeof data?.output_text === 'string') return data.output_text;
+  return (data?.output || [])
+    .filter((item) => item?.type === 'message')
+    .flatMap((item) => item?.content || [])
+    .filter((part) => part?.type === 'output_text')
+    .map((part) => part.text || '')
+    .join('');
 }
 
 async function callGemini(apiKey, model, system, user, maxTokens) {

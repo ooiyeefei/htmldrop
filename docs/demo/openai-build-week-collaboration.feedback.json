@@ -1,0 +1,62 @@
+{
+  "docId": "c4e27b54-4a55-46c9-aa9f-e30303035557",
+  "file": "openai-build-week-collaboration.html",
+  "pulledAt": "2026-07-19T02:29:43.471Z",
+  "count": 3,
+  "comments": [
+    {
+      "anchor": {
+        "type": "text_range",
+        "selectedText": "reduce “where is the latest version?” and clarification loops by 50% within 60 days of adoption."
+      },
+      "content": {
+        "type": "text",
+        "text": "This is measurable, but we need a baseline. Add the current weekly clarification-loop count so teams can see the improvement."
+      },
+      "author": {
+        "displayName": "Sam"
+      },
+      "parentId": null,
+      "id": "9554a759-f5ee-4e5a-8f97-167b0d3e6b9a",
+      "docId": "c4e27b54-4a55-46c9-aa9f-e30303035557",
+      "createdAt": "2026-07-19T02:29:40.134Z",
+      "resolved": false
+    },
+    {
+      "anchor": {
+        "type": "text_range",
+        "selectedText": "start with product and engineering planning documents, then expand to customer-facing proposals after two successful team cycles."
+      },
+      "content": {
+        "type": "text",
+        "text": "I would start with customer-facing proposals first because the decision trail is more visible there. Is there evidence product and engineering is the better first audience?"
+      },
+      "author": {
+        "displayName": "Sam"
+      },
+      "parentId": null,
+      "id": "2d103aea-f6d4-40bb-81ee-74259aed53c9",
+      "docId": "c4e27b54-4a55-46c9-aa9f-e30303035557",
+      "createdAt": "2026-07-19T02:29:41.243Z",
+      "resolved": false
+    },
+    {
+      "anchor": {
+        "type": "text_range",
+        "selectedText": "The collaboration loop"
+      },
+      "content": {
+        "type": "text",
+        "text": "The diagram explains the loop well. Add one line on how reviewers know their feedback was addressed after the next version is published."
+      },
+      "author": {
+        "displayName": "Sam"
+      },
+      "parentId": null,
+      "id": "80990668-c7a8-49b7-877d-a2110264af4f",
+      "docId": "c4e27b54-4a55-46c9-aa9f-e30303035557",
+      "createdAt": "2026-07-19T02:29:42.326Z",
+      "resolved": false
+    }
+  ]
+}

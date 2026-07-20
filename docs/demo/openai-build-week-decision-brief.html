@@ -1,0 +1,290 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Decision brief — agent-assisted team decisions</title>
+
+<!--
+  Built against `htmldrop design`: pinned CDN with SRI, the layout-safety block,
+  and Mermaid 11.16.0 for every diagram. Per `htmldrop playbook diagram`, no
+  node-and-arrow diagram is hand-built from nested divs.
+-->
+<link
+  rel="stylesheet"
+  href="https://cdn.jsdelivr.net/npm/modern-normalize@3.0.1/modern-normalize.min.css"
+  integrity="sha384-uo/9/s/Ns8DTg4kjkjex8GezUcgMlKD99gTqxvMkIsaG4lSUbeJ0dVELljipv94t"
+  crossorigin="anonymous"
+>
+<script
+  defer
+  src="https://cdn.jsdelivr.net/npm/mermaid@11.16.0/dist/mermaid.min.js"
+  integrity="sha384-T/0lMUdJpd2S1ZHtRiofG3htU3xPCrFVeAQ1UUE2TJwlEJSV5NUwn30kP28n238E"
+  crossorigin="anonymous"
+></script>
+
+<style>
+  /* --- layout safety (design contract §3) --- */
+  *,*::before,*::after{box-sizing:border-box}
+  html{overflow-x:hidden}
+  body{margin:0;min-width:0;overflow-x:hidden}
+  img,svg,video{max-width:100%;height:auto}
+  canvas,iframe,pre,code{max-width:100%}
+  pre{overflow:auto;white-space:pre-wrap}
+  .grid,.cards,[data-grid]{display:grid;grid-template-columns:repeat(auto-fit,minmax(0,1fr))}
+  .flex,.row,[data-flex]{display:flex;min-width:0}
+  .grid>*,.cards>*,.flex>*,.row>*,main,section,article,aside,header,footer{min-width:0}
+  p,li,figcaption,blockquote,td,th,.text,.copy,[data-text]{overflow-wrap:break-word}
+
+  :root{
+    --ink:#25231f; --muted:#6f6b61; --paper:#f7f4ed; --card:#fffdf8;
+    --line:#e4ddd0; --coral:#c8755b; --sage:#48685d; --deep:#102522;
+  }
+  body{background:var(--paper);color:var(--ink);font:16.5px/1.6 ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif}
+  main{max-width:940px;margin:0 auto;padding:76px 28px 110px}
+
+  .eyebrow{color:var(--coral);font-weight:700;letter-spacing:.11em;text-transform:uppercase;font-size:12px}
+  h1{max-width:790px;font:600 clamp(40px,7vw,70px)/1.03 Georgia,"Times New Roman",serif;letter-spacing:-.045em;margin:16px 0 24px}
+  h2{font:600 30px/1.15 Georgia,serif;margin:0 0 14px;letter-spacing:-.01em}
+  h3{font:600 19px/1.3 Georgia,serif;margin:0 0 8px}
+  .lede{max-width:700px;font-size:21.5px;color:#4b4943;margin:0}
+  .meta{display:flex;gap:10px;flex-wrap:wrap;margin:32px 0 46px}
+  .pill{border:1px solid var(--line);background:var(--card);border-radius:999px;padding:6px 12px;color:var(--muted);font-size:13px}
+
+  section{background:var(--card);border:1px solid var(--line);border-radius:20px;padding:34px;margin-top:22px;box-shadow:0 8px 30px #312c200f}
+  .callout{background:var(--card);border:1px solid var(--line);border-left:5px solid var(--coral);border-radius:14px;padding:18px 22px;margin-top:18px}
+  .decision{background:#eff4ef;border:1px solid #ceddd1;padding:20px 22px;border-radius:14px;margin-top:20px}
+  .footer{color:var(--muted);font-size:14px;margin-top:40px}
+  strong{color:var(--sage)}
+  ul{padding-left:22px;margin:12px 0 0}
+  li{margin:6px 0}
+
+  /* --- quote block for the pain statement --- */
+  .pain{border:0;background:var(--deep);color:#eaf5ef;border-radius:20px;padding:44px 40px;margin-top:22px;box-shadow:0 14px 44px #10252226}
+  .pain p{margin:0;font:600 clamp(23px,3.1vw,31px)/1.35 Georgia,serif;letter-spacing:-.02em;max-width:720px}
+  .pain span{display:block;margin-top:18px;color:#8fbcab;font-size:15px;font-weight:400;font-family:ui-sans-serif,system-ui,sans-serif}
+
+  /* --- the hero product mock --- */
+  .mock{overflow:hidden;border:1px solid #2a3e39;border-radius:18px;background:var(--deep);color:#edf7f1;margin:26px 0 14px;box-shadow:0 18px 50px #1025221f}
+  .mock-top{display:flex;align-items:center;gap:9px;padding:13px 16px;background:#17332e;font-size:12px;color:#a8c8bb}
+  .dot{width:9px;height:9px;border-radius:50%;background:#e99472;flex:none}
+  .dot:nth-child(2){background:#e8c471}.dot:nth-child(3){background:#82c29a}
+  .mock-body{display:grid;grid-template-columns:186px minmax(0,1fr);min-height:392px}
+  .mock-nav{padding:22px 16px;border-right:1px solid #315249;color:#afc9bd;font-size:13px}
+  .mock-nav b{display:block;color:#f1fbf5;font-size:14px;margin-bottom:20px;letter-spacing:.01em}
+  .mock-nav span{display:block;padding:9px 11px;margin:3px 0;border-radius:8px}
+  .mock-nav span.active{background:#30594e;color:#fff;font-weight:600}
+  .mock-main{padding:26px 28px}
+  .mock-main h3{font:600 30px/1.05 Georgia,serif;margin:0 0 8px;color:#fff}
+  .mock-main>p{color:#c5ddd3;margin:0 0 20px;max-width:520px}
+  .mini-grid{display:grid;grid-template-columns:1.3fr .7fr;gap:13px}
+  .mini-card{border:1px solid #3f665c;background:#18332d;border-radius:12px;padding:16px}
+  .mini-card small{display:block;color:#a9c6b9;font-size:11px;text-transform:uppercase;letter-spacing:.08em}
+  .mini-card strong{display:block;color:#fff;font-size:18px;margin:8px 0 4px}
+  .mini-card span{color:#b9d4c8;font-size:13.5px}
+  .progress{height:7px;background:#294a40;border-radius:999px;overflow:hidden;margin-top:14px}
+  .progress i{display:block;width:72%;height:100%;background:#e99472;border-radius:999px}
+  .evidence{display:grid;grid-template-columns:repeat(auto-fit,minmax(0,1fr));gap:10px;margin-top:13px}
+  .evidence div{border:1px solid #3f665c;border-radius:10px;padding:11px 13px;font-size:12.5px;color:#b9d4c8;background:#152e29}
+  .evidence b{display:block;color:#eafaf1;font-size:12.5px;margin-bottom:3px}
+
+  .reasoning{display:grid;grid-template-columns:repeat(auto-fit,minmax(0,1fr));gap:16px;margin-top:20px}
+  .reasoning div{border-top:2px solid var(--coral);padding-top:11px;font-size:14px;color:var(--muted)}
+  .reasoning strong{display:block;font-size:14px;color:var(--ink);margin-bottom:4px}
+
+  /* --- diagram mounts --- */
+  figure{margin:24px 0 0}
+  [data-mermaid-mount]{max-width:100%;display:flex;justify-content:center;min-height:150px}
+  [data-mermaid-mount] svg{max-width:100%;height:auto}
+  figcaption{color:var(--muted);font-size:13.5px;text-align:center;margin-top:12px}
+
+  @media(max-width:680px){
+    main{padding:44px 18px}
+    .mock-body,.mini-grid{grid-template-columns:minmax(0,1fr)}
+    .mock-nav{display:none}
+    .pain{padding:30px 24px}
+  }
+</style>
+</head>
+<body>
+<main>
+  <div class="eyebrow">Working proposal · Team collaboration</div>
+  <h1 id="title">When every teammate has an agent, how do we still reach one decision?</h1>
+  <p class="lede">We generate more proposals than ever and read fewer of them. This brief argues for one visual place where a team can understand, challenge, and converge — instead of trading polished documents that never answer each other.</p>
+  <div class="meta">
+    <span class="pill">Author: Maya</span>
+    <span class="pill">Status: seeking feedback</span>
+    <span class="pill">Draft 01</span>
+  </div>
+
+  <div class="pain" id="pain">
+    <p>“Everyone generates. Few truly read. Two confident documents end up talking past each other — V1, V2, V3, none of them converging.”</p>
+    <span>The cost is not writing time. It is the decision that never gets made.</span>
+  </div>
+
+  <section id="problem">
+    <h2>The problem</h2>
+    <p id="problem-body">Feedback arrives after the document has already forked. A teammate replies to an old version in chat; another returns a counter-proposal written with their own agent. The team then spends its time reconciling artifacts instead of resolving the actual decision.</p>
+    <div class="callout"><strong id="metric">Success metric:</strong> <span id="metric-text">reduce clarification loops and “where is the latest version?” messages, and make decisions faster.</span></div>
+  </section>
+
+  <section id="local">
+    <h2>First, make the idea visible — locally</h2>
+    <p>Before Maya shares anything, she works with her agent in local edit mode. A rough brief becomes a testable product concept with its evidence and its open trade-off — not a wall of markdown, and not a screenshot with no context.</p>
+
+    <div class="mock" id="mock">
+      <div class="mock-top"><i class="dot"></i><i class="dot"></i><i class="dot"></i><span>Decision Canvas · local concept</span></div>
+      <div class="mock-body">
+        <aside class="mock-nav">
+          <b>Northstar</b>
+          <span class="active">Decision brief</span>
+          <span>Evidence</span>
+          <span>Trade-offs</span>
+          <span>Team review</span>
+        </aside>
+        <div class="mock-main">
+          <h3>Launch with clarity.</h3>
+          <p>A compact workspace that turns a product decision into a visible brief, an evidence trail, and a review request.</p>
+          <div class="mini-grid">
+            <div class="mini-card">
+              <small>Decision confidence</small>
+              <strong>Ready for review</strong>
+              <span>3 assumptions have evidence; 1 is still open.</span>
+              <div class="progress"><i></i></div>
+            </div>
+            <div class="mini-card" id="tradeoff">
+              <small>Open trade-off</small>
+              <strong>Speed ↔ audit trail</strong>
+              <span>Needs an owner call.</span>
+            </div>
+          </div>
+          <div class="evidence">
+            <div><b>Support tickets</b>412 tagged “which version?”</div>
+            <div><b>Doc forks</b>3.2 per proposal, median</div>
+            <div><b>Time to decide</b>9.4 days, median</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="reasoning">
+      <div><strong>Why a visual mock?</strong>Teammates can challenge a real interaction instead of imagining one from prose.</div>
+      <div><strong>Why the rationale?</strong>The agent records assumptions and trade-offs beside the design, where they can be argued with.</div>
+      <div><strong>Why local first?</strong>The author iterates privately before a draft becomes a team artifact.</div>
+    </div>
+  </section>
+
+  <section id="loop">
+    <h2>The collaboration loop</h2>
+    <p>One shared HTML document becomes the place the conversation happens — and the place it resolves.</p>
+
+    <figure>
+      <script type="text/plain" id="loop-source">
+flowchart LR
+  A["Make it visual<br/>agent drafts the brief"] --> B["Discuss in context<br/>comments anchor to the claim"]
+  B --> C["Converge with an agent<br/>clear wins become edits"]
+  C --> D{"Genuine<br/>trade-off?"}
+  D -- "no" --> E["Same link updates<br/>thread stays intact"]
+  D -- "yes" --> F["Returned to a<br/>human owner"]
+  E --> B
+  F --> B
+      </script>
+      <div data-mermaid-mount id="loop-diagram" aria-label="The htmldrop collaboration loop"></div>
+      <figcaption>Clear feedback is applied. Real trade-offs are escalated, never silently resolved.</figcaption>
+    </figure>
+  </section>
+
+  <section id="architecture">
+    <h2>Where the human stays in the loop</h2>
+    <p>Agents do the drafting and the synthesis. The decision boundary is explicit and it belongs to a person.</p>
+
+    <figure>
+      <script type="text/plain" id="arch-source">
+flowchart LR
+  M(["Author<br/>owns the decision"]) --> AG["Author's agent<br/>drafts + revises HTML"]
+  AG --> ED["Local edit server<br/>127.0.0.1 · live reload"]
+  ED --> M
+  M --> PB["Published link<br/>encrypted · password-gated"]
+  PB --> S(["Reviewers<br/>no account, just the link"])
+  S --> FB["Anchored feedback<br/>text ranges + areas"]
+  FB --> CV["Converge<br/>GPT-5.6 Luna"]
+  CV -- "proposes, never decides" --> M
+
+  classDef human fill:#eff4ef,stroke:#48685d,stroke-width:2px,color:#25231f;
+  classDef agent fill:#fdf1ec,stroke:#c8755b,stroke-width:2px,color:#25231f;
+  classDef drop fill:#f3eee3,stroke:#9a9184,stroke-width:1.5px,color:#25231f;
+  class M,S human;
+  class AG,CV agent;
+  class ED,PB,FB drop;
+</script>
+      <div data-mermaid-mount id="arch-diagram" aria-label="Human and agent responsibilities around htmldrop"></div>
+      <figcaption>Green is human, coral is agent, sand is htmldrop. htmldrop never decides — it hosts the artifact, anchors the discussion, and hands synthesis back to an owner.</figcaption>
+    </figure>
+  </section>
+
+  <section id="rollout">
+    <h2>Proposed rollout</h2>
+    <p id="rollout-body"><strong>Rollout:</strong> start with customer-facing proposals, then expand to product and engineering planning documents after two successful cycles.</p>
+    <ul>
+      <li>Keep every comment anchored to the source claim, table, or diagram.</li>
+      <li>Use the agent to summarize agreement, disagreement, and missing evidence.</li>
+      <li>Require a human owner to make the final trade-off call.</li>
+    </ul>
+    <div class="decision"><strong>Open decision:</strong> Should the first rollout optimize for speed of consensus, or for a stronger audit trail of why a decision changed?</div>
+  </section>
+
+  <p class="footer">A fictional proposal, created to demonstrate htmldrop for the OpenAI Build Week Challenge.</p>
+</main>
+
+<script>
+  // Render every Mermaid source block into its mount. Kept theme-aware per the
+  // design contract: Mermaid never restyles an SVG it already drew, so a theme
+  // flip must re-render from the original source text.
+  (async () => {
+    const pairs = [
+      ['loop-source', 'loop-diagram'],
+      ['arch-source', 'arch-diagram'],
+    ];
+    const draw = async (theme) => {
+      // Mermaid only honours custom themeVariables under the 'base' theme;
+      // under 'default' it silently keeps its own palette.
+      const dark = theme === 'dark';
+      mermaid.initialize({
+        startOnLoad: false,
+        theme: 'base',
+        themeVariables: dark
+          ? {
+              fontFamily: 'ui-sans-serif, system-ui, sans-serif',
+              fontSize: '15px',
+              primaryColor: '#18332d', primaryTextColor: '#eafaf1', primaryBorderColor: '#e99472',
+              lineColor: '#8fbcab', secondaryColor: '#152e29', tertiaryColor: '#102522',
+              clusterBkg: '#152e29', clusterBorder: '#315249', textColor: '#eafaf1',
+            }
+          : {
+              fontFamily: 'ui-sans-serif, system-ui, sans-serif',
+              fontSize: '15px',
+              primaryColor: '#f3eee3', primaryTextColor: '#25231f', primaryBorderColor: '#c8755b',
+              lineColor: '#9a9184', secondaryColor: '#eff4ef', tertiaryColor: '#fffdf8',
+              clusterBkg: '#faf7f0', clusterBorder: '#e4ddd0', textColor: '#25231f',
+            },
+      });
+      for (const [srcId, mountId] of pairs) {
+        const src = document.getElementById(srcId);
+        const mount = document.getElementById(mountId);
+        if (!src || !mount) continue;
+        const { svg } = await mermaid.render(`${mountId}-svg`, src.textContent.trim());
+        mount.innerHTML = svg;
+      }
+    };
+
+    const media = window.matchMedia('(prefers-color-scheme: dark)');
+    const themeFor = () => (media.matches ? 'dark' : 'default');
+    const start = () => draw(themeFor()).catch((err) => console.error('[diagram]', err));
+
+    if (window.mermaid) start();
+    else window.addEventListener('load', start, { once: true });
+    media.addEventListener('change', start);
+  })();
+</script>
+</body>
+</html>

@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>htmldrop — closing card</title>
+<style>
+  *,*::before,*::after{box-sizing:border-box}
+  html,body{margin:0;height:100%}
+  body{
+    background:#102522; color:#eaf5ef;
+    font:16px/1.5 ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;
+    display:grid; place-items:center; overflow:hidden;
+  }
+  /* A soft coral bloom so the flat fill does not read as a dead frame. */
+  body::before{
+    content:''; position:fixed; inset:0;
+    background:radial-gradient(120% 90% at 78% 12%, #c8755b26 0%, transparent 58%);
+  }
+  main{position:relative; width:min(1080px,84vw); text-align:left}
+
+  .eyebrow{color:#e99472; font-weight:700; letter-spacing:.16em; text-transform:uppercase; font-size:15px}
+  .rule{width:88px; height:5px; background:#e8c471; margin:22px 0 26px; border-radius:2px}
+  h1{
+    margin:0 0 20px; max-width:900px;
+    font:600 clamp(46px,6.2vw,78px)/1.03 Georgia,"Times New Roman",serif;
+    letter-spacing:-.045em; color:#fff;
+  }
+  .lede{margin:0 0 34px; max-width:720px; font-size:23px; line-height:1.45; color:#b9d4c8}
+  .lede b{color:#eafaf1; font-weight:600}
+
+  .chips{display:flex; flex-wrap:wrap; gap:10px; margin-bottom:30px}
+  .chip{
+    border:1px solid #315249; background:#152e29; border-radius:999px;
+    padding:9px 15px; font-size:14.5px; color:#cfe6da;
+  }
+  .chip b{color:#fff; font-weight:600}
+
+  .test{
+    border-left:4px solid #e99472; background:#152e29a8; border-radius:0 12px 12px 0;
+    padding:16px 20px; max-width:760px;
+  }
+  .test small{
+    display:block; color:#8fbcab; font-size:12.5px; letter-spacing:.09em;
+    text-transform:uppercase; margin-bottom:8px;
+  }
+  .test code{
+    font:15.5px/1.7 ui-monospace,SFMono-Regular,Menlo,monospace; color:#eafaf1;
+    display:block; word-break:break-all;
+  }
+  .test code span{color:#e8c471}
+</style>
+</head>
+<body>
+<main>
+  <div class="eyebrow">OpenAI Build Week · Work &amp; Productivity</div>
+  <div class="rule"></div>
+
+  <h1>One link. One decision.</h1>
+
+  <p class="lede">
+    <b>htmldrop</b> — publish an HTML artifact as a shareable, password-protected link,
+    collect feedback anchored to the exact claim or diagram, and converge it with an agent.
+    The decision stays human.
+  </p>
+
+  <div class="chips">
+    <div class="chip">Built with <b>Codex</b> + <b>GPT&#8209;5.6</b></div>
+    <div class="chip"><b>MIT</b> open source</div>
+    <div class="chip"><b>npm i -g @yeefeiooi/htmldrop</b></div>
+    <div class="chip">github.com/<b>ooiyeefei/htmldrop</b></div>
+  </div>
+
+  <div class="test">
+    <small>Judges — open the document from this demo</small>
+    <code>https://yooi.surge.sh/decision-brief.html<br />password: <span>fern-ocean-10</span></code>
+  </div>
+</main>
+</body>
+</html>

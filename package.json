@@ -54,6 +54,7 @@
     }
   },
   "devDependencies": {
-    "@mermaid-js/mermaid-cli": "11.4.2"
+    "@mermaid-js/mermaid-cli": "11.4.2",
+    "playwright": "^1.61.1"
   }
 }

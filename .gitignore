@@ -22,3 +22,10 @@ test-fixtures/*
 # Verification screenshots (local scratch)
 uat-private-feedback-decrypted.png
 live-edit-delete-buttons.png
+
+# demo staging (contains a generated demo password)
+docs/demo/.demo-manifest.json
+docs/demo/.stage/
+
+# local scratch, never published
+.lavish/

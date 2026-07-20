@@ -27,6 +27,7 @@ _Click the diagram for the interactive release note._
 ## Table of contents
 
 - [No account needed](#no-account-needed)
+- [OpenAI Build Week: Codex + GPT-5.6](#openai-build-week-codex--gpt-56)
 - [Release notes](#release-notes)
 - [Setup](#setup)
 - [Command reference](#command-reference)
@@ -56,6 +57,99 @@ Two more things are optional and bring-your-own — htmldrop stores **neither**:
 
 - **AI key** — only for `converge` / AI insights; billed by your own provider, used for a single request. See [Multi-provider AI](#multi-provider-ai).
 - **Doc password** — only for private shares; used to encrypt in memory, then discarded. See [Security model](#security-model).
+
+---
+
+## OpenAI Build Week: Codex + GPT-5.6
+
+### Try it without installing anything
+
+A live document is already published, with a real review thread on it:
+
+- **Document:** <https://yooi.surge.sh/decision-brief.html>
+- **Password:** `fern-ocean-10`
+
+Open it, enter the password, and the page decrypts in your browser. Select any
+sentence and the comment box appears, so you can leave an anchored comment the way
+a reviewer would. Use the box toggle in the panel and you can comment on the
+diagram itself. Nothing is installed and no account is created.
+
+That page is the output of the loop below: an agent authored the HTML, htmldrop
+published it and anchored the feedback, and `converge` folded the settled comments
+back in through GPT-5.6.
+
+### Who does what
+
+htmldrop does not generate designs or diagrams. The division is deliberate and it
+is the main design decision in the project:
+
+| Step | Who does it |
+|---|---|
+| Author the HTML, including the Mermaid diagrams | the coding agent, working against `htmldrop design` |
+| Print the design contract, host, encrypt, anchor comments | htmldrop |
+| Read the thread and propose a revised HTML file | GPT-5.6 via `htmldrop converge` |
+| Accept, reject, or publish the revision | the human owner |
+
+`converge` proposes. It never publishes and it never decides. Feedback with an
+obvious fix gets folded in; a genuine product trade-off is left alone for the owner
+to settle.
+
+### How GPT-5.6 is called
+
+`htmldrop converge` posts to the OpenAI **Responses API** at
+`https://api.openai.com/v1/responses`, defaulting to `gpt-5.6-luna`, with no SDK
+(`src/feedback/llm.js`). Three choices worth calling out:
+
+- `store: false` on every request. The document plus its review thread is the
+  complete input, so there is no reason for a user's private document to be
+  retained server side.
+- `gpt-5.6-luna` as the default rather than a larger model. Convergence is a
+  bounded, repeatable text-editing task, so the cheap default is the honest one.
+  `--model` takes any GPT-5.6 model when a document needs more.
+- Each comment is flattened into an anchored line before it reaches the model
+  (`src/feedback/converge.js`), carrying the selected text, or the captured text
+  and CSS selector for an area box. That is what lets a comment drawn on top of a
+  diagram be acted on rather than guessed at.
+
+Scope note: this is the CLI path. The Cloudflare Worker and Converge Studio still
+use Chat Completions with the previous default model, so the migration covers the
+command below, not the dashboard.
+
+### Where Codex accelerated the work
+
+Built in Codex session `019f77c6-2406-7af0-93d4-bf5a7dc0c636`:
+
+- Migrated the OpenAI path from Chat Completions to the Responses API, including
+  the `output_text` fallback that walks `output[].content[]` when the convenience
+  field is absent.
+- Authored the demo document and its Mermaid diagrams against the contract that
+  `htmldrop design` prints, then fixed the layout problems `htmldrop edit layout`
+  reported.
+- Drove the review thread end to end in a browser and inspected the generated HTML,
+  which is how the fence-stripping fix in `converge.js` was found: models wrap
+  output in a code fence even when told not to.
+- Produced the recorded walkthrough. Narration and the recording harness are in
+  [`docs/demo/`](docs/demo/) and [`scripts/demo/`](scripts/demo/).
+
+Reproduce a convergence with a key that stays in your local environment:
+
+```bash
+git clone https://github.com/ooiyeefei/htmldrop && cd htmldrop && npm install
+OPENAI_API_KEY=... node bin/htmldrop.js converge docs/demo/openai-build-week-collaboration.html \
+  --provider openai --model gpt-5.6-luna
+```
+
+Add `--dry-run` to print the exact prompt and skip the API call entirely. The saved
+review thread is committed at
+[`docs/demo/openai-build-week-collaboration.feedback.json`](docs/demo/openai-build-week-collaboration.feedback.json),
+so you can read an input and its output without running anything.
+
+### Supported platforms
+
+htmldrop is a Node.js CLI with no native dependencies and runs anywhere Node 18 or
+newer runs. Developed and verified on macOS and Linux. Windows works under WSL;
+native Windows shells are untested. Published documents open in any modern browser,
+since the password gate uses built-in WebCrypto.
 
 ---
 
@@ -349,7 +443,7 @@ It’s symmetric: when your teammate publishes *their* doc, they’re the owner 
 | Provider | Default model | Approx. cost (in / out per 1M) |
 |---|---|---|
 | Anthropic | `claude-sonnet-4-6` | ~$3 / ~$15 |
-| OpenAI | `gpt-5.4-mini` | $0.75 / $4.50 |
+| OpenAI | `gpt-5.6-luna` (CLI) · `gpt-5.4-mini` (Worker/Studio) | See OpenAI pricing |
 | Gemini | `gemini-3.1-flash-lite` | $0.25 / $1.50 |
 
 ```bash
@@ -357,10 +451,14 @@ It’s symmetric: when your teammate publishes *their* doc, they’re the owner 
 ANTHROPIC_API_KEY=sk-ant-... htmldrop converge spec.html
 
 # Explicit override (e.g. flagship OpenAI for top quality):
-htmldrop converge spec.html --provider openai --model gpt-5.4 --api-key sk-...
+htmldrop converge spec.html --provider openai --model gpt-5.6-luna --api-key sk-...
 ```
 
 No SDKs are required — htmldrop calls each provider’s HTTP API directly.
+
+The OpenAI path uses the Responses API with `store: false`. See
+[OpenAI Build Week: Codex + GPT-5.6](#openai-build-week-codex--gpt-56) for how
+that path is wired and how to reproduce a run.
 
 ---
 
