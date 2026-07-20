@@ -441,7 +441,7 @@
   // Selection → comment input. Two behaviours, controlled by AUTO_OPEN:
   //   AUTO_OPEN (default): finishing a selection opens the comment input
   //     immediately, focused and ready — no "+ Comment" click. This is the fast,
-  //     lavish-like feel: highlight → type.
+  //     highlight then type, with no intermediate click.
   //   fallback: show a "+ Comment" tooltip the user clicks first. Kept as a mode
   //     because sometimes people select text just to read/copy, not to comment.
   var AUTO_OPEN = (function(){ var v = hdGet('htmldrop_autocomment'); return v === null || v === '1'; })();

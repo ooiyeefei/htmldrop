@@ -12,7 +12,7 @@
 //     sent) — this is the batch-hold flag, surfaced as the mode the user asked for
 //   * presence (idle / listening / working) + agent-reply notifications
 //   * live reload on file change, scroll preservation, layout QA, auto-heal
-//   * auto-open the comment input on text selection (lavish-like), and a
+//   * auto-open the comment input on text selection, and a
 //     View toggle for clean reading
 //
 // It lives in its own shadow root so the artifact's CSS can't touch it.
