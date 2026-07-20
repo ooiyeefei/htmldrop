@@ -11,6 +11,40 @@ import { execFileSync } from 'node:child_process';
 import { writeFileSync, copyFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
+// ---------------------------------------------------------------------------
+// FROZEN UNTIL 2026-08-06. See CLAUDE.md.
+//
+// This script publishes with --generate-password, so every run rotates the
+// password. The live document at yooi.surge.sh/decision-brief.html is under
+// hackathon judging until 5 August 2026, and its password is printed in the
+// README, spoken in the demo video, and rendered into the video's closing card.
+//
+// A single run invalidates all three at once, silently, with no error. The
+// closing card is baked into an encoded MP4, so recovering means re-recording
+// and re-narrating the whole video. That is why this refuses rather than warns.
+// ---------------------------------------------------------------------------
+const FREEZE_UNTIL = Date.parse('2026-08-06T00:00:00Z');
+if (Date.now() < FREEZE_UNTIL && process.env.HTMLDROP_UNFREEZE_DEMO !== 'i-accept-breaking-the-judged-demo') {
+  const days = Math.ceil((FREEZE_UNTIL - Date.now()) / 86400000);
+  console.error(`
+Refusing to run: the judged demo assets are frozen for another ${days} day(s).
+
+Running this rotates the password on https://yooi.surge.sh/decision-brief.html,
+which breaks, all at once and without any error:
+
+  - the password printed in README.md
+  - the password spoken in the demo video
+  - the closing card rendered into the encoded MP4
+  - the testing instructions submitted to Devpost
+
+The video cannot be corrected without re-recording it. See CLAUDE.md.
+
+If you are the repo owner and genuinely intend this, re-run with:
+  HTMLDROP_UNFREEZE_DEMO=i-accept-breaking-the-judged-demo node scripts/demo/stage.mjs
+`);
+  process.exit(1);
+}
+
 const root = resolve('.');
 const source = 'docs/demo/openai-build-week-decision-brief.html';
 // Push under a short, quotable name — it appears on screen in the terminal beat.
