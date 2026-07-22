@@ -4,6 +4,22 @@ All notable changes to this project are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/), and this project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+
+- **Light/dark theme toggle in the edit-mode control bar** (☀/☾). It stamps the
+  standard `data-theme` (+ `color-scheme`) on `:root` — the convention artifacts
+  already honor — and remembers the choice per user.
+
+### Fixed
+
+- **Edit mode keeps the theme you pick across live reloads.** A live reload
+  re-serves the raw artifact, which used to reset the page to its default (often
+  dark) and drop a light choice. The theme is now restored on `:root` before the
+  first paint, so it survives every reload instead of snapping back to the
+  artifact's default.
+
 ## [1.12.0] — 2026-07-17
 
 Password workflow + a clearer security guarantee. No change to the zero-knowledge

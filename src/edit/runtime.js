@@ -109,6 +109,7 @@ export function injectEditRuntime(html, { key, version = '0' }) {
       '<span class="seg"><button id="mLive" class="on">\\u25cf Live</button><button id="mAsync">Async</button></span>' +
       '<button class="ib" id="area" title="Comment on an area — click, then drag a box on the page">\\u25a2</button>' +
       '<button class="ib" id="feedToggle" title="Show/hide agent replies">\\u{1F4AC}</button>' +
+      '<button class="ib" id="theme" title="Toggle light / dark theme">\\u263E</button>' +
       '<button class="ib" id="view" title="Toggle view / annotate"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg></button>' +
     '</div>' +
     '<div class="hint" id="hint"></div>' +
@@ -247,6 +248,41 @@ export function injectEditRuntime(html, { key, version = '0' }) {
   shadow.getElementById('view').addEventListener('click', function () {
     document.documentElement.classList.toggle('htmldrop-view');
   });
+
+  // --- Theme toggle (light ⇄ dark), persisted across live reloads -----------
+  // The artifact owns its palette; we only stamp data-theme + color-scheme on
+  // :root (the design-contract convention its CSS already honors). The choice is
+  // saved to localStorage and re-applied pre-paint on every reload (head boot
+  // script in injectEditRuntime), so a live reload never snaps back to the
+  // artifact's default. Stored per-user (one key), not per-doc — a theme
+  // preference is about you, not the document.
+  var THEME_KEY = 'htmldrop_edit_theme';
+  var themeBtn = shadow.getElementById('theme');
+  function effectiveTheme() {
+    var t = document.documentElement.dataset.theme;
+    if (t === 'light' || t === 'dark') return t;
+    // No explicit choice yet — read what the artifact is actually showing.
+    return (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) ? 'dark' : 'light';
+  }
+  function syncThemeBtn(mode) {
+    // Show the icon for the theme the click will switch TO.
+    themeBtn.textContent = mode === 'dark' ? '\\u2600' : '\\u263E'; // \\u2600 = sun (\\u2192 light), \\u263E = moon (\\u2192 dark)
+    themeBtn.title = 'Switch to ' + (mode === 'dark' ? 'light' : 'dark') + ' theme';
+  }
+  function applyTheme(mode) {
+    var r = document.documentElement;
+    r.dataset.theme = mode;
+    r.style.colorScheme = mode;
+    try { localStorage.setItem(THEME_KEY, mode); } catch (e) {}
+    syncThemeBtn(mode);
+  }
+  // nextTheme(cur) — THE UX decision here. 2-state (light ⇄ dark) as asked. To
+  // give a way back to OS-following, make this a 3-state cycle whose third value
+  // clears the override: dark -> light -> 'system' (then applyTheme removes
+  // data-theme/color-scheme instead of setting them) -> dark.
+  function nextTheme(cur) { return cur === 'dark' ? 'light' : 'dark'; }
+  themeBtn.addEventListener('click', function () { applyTheme(nextTheme(effectiveTheme())); });
+  syncThemeBtn(effectiveTheme());
 
   // --- Layout QA ------------------------------------------------------------
   function cssPath(el) {
@@ -458,7 +494,25 @@ export function injectEditRuntime(html, { key, version = '0' }) {
 })();
 </script>`;
 
-  if (html.includes('</body>')) return html.replace('</body>', `${runtime}\n</body>`);
-  if (html.includes('</html>')) return html.replace('</html>', `${runtime}\n</html>`);
-  return html + `\n${runtime}`;
+  // Pre-paint theme restore. A live reload re-serves the RAW artifact, which
+  // re-inits to its own default (often dark) and drops whatever theme the author
+  // picked. We stamp the saved theme on <html> as the first thing in <head>, so
+  // [data-theme]/color-scheme styles resolve on the first painted frame — no dark
+  // flash, and the choice survives every reload. Mirrors the scroll-restore in
+  // the runtime below. (Artifacts that theme purely off @media prefers-color-
+  // scheme can't be overridden from JS; those parts keep following the OS. We
+  // drive data-theme + color-scheme, the design-contract convention.)
+  const themeBoot =
+    "<script>(function(){try{var t=localStorage.getItem('htmldrop_edit_theme');"
+    + "if(t==='light'||t==='dark'){var r=document.documentElement;"
+    + "r.dataset.theme=t;r.style.colorScheme=t;}}catch(e){}})();</script>";
+
+  let out = html;
+  if (/<head[^>]*>/i.test(out)) out = out.replace(/<head[^>]*>/i, (m) => `${m}\n${themeBoot}`);
+  else if (/<html[^>]*>/i.test(out)) out = out.replace(/<html[^>]*>/i, (m) => `${m}\n<head>${themeBoot}</head>`);
+  else out = `${themeBoot}\n${out}`;
+
+  if (out.includes('</body>')) return out.replace('</body>', `${runtime}\n</body>`);
+  if (out.includes('</html>')) return out.replace('</html>', `${runtime}\n</html>`);
+  return out + `\n${runtime}`;
 }
