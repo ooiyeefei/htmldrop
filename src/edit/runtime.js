@@ -67,6 +67,8 @@ export function injectEditRuntime(html, { key, version = '0' }) {
     '.ib { border: none; background: transparent; cursor: pointer; color: #9ca3af; border-radius: 6px;',
     '  width: 26px; height: 26px; font-size: 14px; display: flex; align-items: center; justify-content: center; }',
     '.ib:hover { background: #f3f4f6; color: #374151; }',
+    '.ib.pubib { background: #eef2ff; color: #4f46e5; }',
+    '.ib.pubib:hover { background: #e0e7ff; color: #4338ca; }',
     '.hint { padding: 0 12px 10px; font-size: 11px; line-height: 1.45; color: #6b7280; }',
     '.hint b { color: #111827; }',
     // agent reply feed (collapsible)
@@ -111,10 +113,12 @@ export function injectEditRuntime(html, { key, version = '0' }) {
       '<button class="ib" id="feedToggle" title="Show/hide agent replies">\\u{1F4AC}</button>' +
       '<button class="ib" id="theme" title="Toggle light / dark theme">\\u263E</button>' +
       '<button class="ib" id="view" title="Toggle view / annotate"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg></button>' +
+      '<button class="ib pubib" id="pub" title="Publish this document\\u2026">\\u{1F680}</button>' +
     '</div>' +
     '<div class="hint" id="hint"></div>' +
     '<div class="status" id="status"></div>' +
     '<div class="qcard" id="qcard"></div>' +
+    '<div class="qcard" id="pubcard"></div>' +
     '<div class="feed" id="feed"></div>';
   shadow.appendChild(bar);
 
@@ -126,6 +130,8 @@ export function injectEditRuntime(html, { key, version = '0' }) {
   var statusEl = shadow.getElementById('status');
   var feed = shadow.getElementById('feed');
   var qcard = shadow.getElementById('qcard');
+  var pub = shadow.getElementById('pub');
+  var pubcard = shadow.getElementById('pubcard');
 
   var agentPresence = 'waiting';
   var ended = false;
@@ -283,6 +289,43 @@ export function injectEditRuntime(html, { key, version = '0' }) {
   function nextTheme(cur) { return cur === 'dark' ? 'light' : 'dark'; }
   themeBtn.addEventListener('click', function () { applyTheme(nextTheme(effectiveTheme())); });
   syncThemeBtn(effectiveTheme());
+
+  // --- Publish (finish -> ask the agent to push it live) --------------------
+  // The browser can't run the push itself (no shell). This sends a publish
+  // REQUEST through the message channel; it lands on the agent's next edit poll,
+  // the agent runs the actual push and replies with the URL. The choices map to
+  // htmldrop's standard privacy levels (public / password-protected).
+  function renderPublish(show) {
+    pubcard.replaceChildren();
+    if (!show) { pubcard.classList.remove('show'); syncBarHeight(); return; }
+    var lab = document.createElement('div'); lab.className = 'qlabel'; lab.textContent = 'Publish';
+    var txt = document.createElement('div'); txt.className = 'qtext';
+    txt.textContent = 'Done editing? Ask the agent to publish this \\u2014 choose how people get in:';
+    var opts = document.createElement('div'); opts.className = 'qopts';
+    function option(label, instruction) {
+      var b = document.createElement('button'); b.className = 'qopt'; b.textContent = label;
+      b.addEventListener('click', function () {
+        fetch(WORKER + '/api/edit/' + KEY + '/message', {
+          method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ text: instruction })
+        }).then(function (r) { return r.json().catch(function () { return {}; }); })
+          .then(function (res) {
+            renderPublish(false);
+            flashStatus(res && res.delivered
+              ? 'Publish request sent \\u2014 the agent is pushing it and will reply with the link.'
+              : 'Publish request queued \\u2014 it reaches the agent on its next edit poll, then it pushes and replies.');
+          })
+          .catch(function () { flashStatus('Couldn\\u2019t send the publish request \\u2014 try again.'); });
+      });
+      return b;
+    }
+    opts.appendChild(option('Public link',
+      'The author finished editing and wants to PUBLISH this document as a PUBLIC link. Run htmldrop push for this file (public, no password), then reply with the URL.'));
+    opts.appendChild(option('Password-protected',
+      'The author finished editing and wants to PUBLISH this document PASSWORD-PROTECTED (private). Run htmldrop push with --generate-password for this file, then reply with the URL and the generated password.'));
+    pubcard.appendChild(lab); pubcard.appendChild(txt); pubcard.appendChild(opts);
+    pubcard.classList.add('show'); syncBarHeight();
+  }
+  pub.addEventListener('click', function () { renderPublish(!pubcard.classList.contains('show')); });
 
   // --- Layout QA ------------------------------------------------------------
   function cssPath(el) {
