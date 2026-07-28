@@ -4,6 +4,26 @@ All notable changes to this project are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/), and this project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [1.14.0] — 2026-07-28
+
+Edit-mode UX: decisions that actually reach the agent, and a one-click publish.
+
+### Added
+
+- **Publish from the edit-mode control bar.** A 🚀 button lets the author, when
+  done, request a publish and pick the privacy level (public or
+  password-protected). The browser can't run the push itself, so it sends the
+  agent a publish request on its next `edit poll`; the agent runs `htmldrop push`
+  and replies with the link.
+
+### Changed
+
+- **In-artifact decision forms deliver on submit.** The `input` playbook's
+  question cards used to keep the answer in local-only state that never reached
+  anyone ("queued"). They now post the choice through the feedback channel — the
+  same path a comment uses — so it wakes the agent's `edit poll` live in edit
+  mode, and lands as a pullable comment when published.
+
 ## [1.13.0] — 2026-07-22
 
 ### Added
