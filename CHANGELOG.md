@@ -4,6 +4,18 @@ All notable changes to this project are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/), and this project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [1.14.1] — 2026-07-28
+
+### Fixed
+
+- **Edit-mode control bar decluttered.** Removed the redundant area-box button
+  from the bar (the comments panel already carries its own area toggle), and
+  widened the bar so the Live/Async toggle no longer clips to "Asy…".
+- **The comments reopen pill no longer covers the edit bar.** When the comments
+  panel is closed, its reopen button now drops below the bar instead of
+  overlapping it (it respects the bar's clearance in edit mode, and stays at the
+  top-right corner on published docs, which have no bar).
+
 ## [1.14.0] — 2026-07-28
 
 Edit-mode UX: decisions that actually reach the agent, and a one-click publish.
