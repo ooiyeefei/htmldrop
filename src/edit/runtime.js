@@ -51,7 +51,7 @@ export function injectEditRuntime(html, { key, version = '0' }) {
   style.textContent = [
     ':host { all: initial; }',
     '* { box-sizing: border-box; }',
-    ".bar { position: fixed; top: 12px; right: 12px; z-index: 999992; width: 360px; max-width: calc(100vw - 24px);",
+    ".bar { position: fixed; top: 12px; right: 12px; z-index: 999992; width: 400px; max-width: calc(100vw - 24px);",
     "  background: #fff; border: 1px solid #e5e7eb; border-radius: 12px; box-shadow: 0 6px 24px rgba(0,0,0,.10);",
     "  font-family: -apple-system,BlinkMacSystemFont,'Segoe UI',Inter,system-ui,sans-serif; font-size: 13px; color: #111827; overflow: hidden; }",
     '.row1 { display: flex; align-items: center; gap: 10px; padding: 10px 12px; }',
@@ -60,7 +60,7 @@ export function injectEditRuntime(html, { key, version = '0' }) {
     '.dt { width: 8px; height: 8px; border-radius: 50%; background: #9ca3af; transition: background .2s; }',
     '.spacer { margin-left: auto; }',
     // Live/Async segmented toggle
-    '.seg { display: inline-flex; border: 1px solid #e5e7eb; border-radius: 999px; overflow: hidden; }',
+    '.seg { display: inline-flex; flex-shrink: 0; border: 1px solid #e5e7eb; border-radius: 999px; overflow: hidden; }',
     '.seg button { border: none; background: #fff; color: #6b7280; font: inherit; font-size: 11px; font-weight: 600;',
     '  padding: 5px 11px; cursor: pointer; }',
     '.seg button.on { background: #6366f1; color: #fff; }',
@@ -109,7 +109,6 @@ export function injectEditRuntime(html, { key, version = '0' }) {
       '<span class="pr"><span class="dt" id="dt"></span><span id="pl">idle</span></span>' +
       '<span class="spacer"></span>' +
       '<span class="seg"><button id="mLive" class="on">\\u25cf Live</button><button id="mAsync">Async</button></span>' +
-      '<button class="ib" id="area" title="Comment on an area — click, then drag a box on the page">\\u25a2</button>' +
       '<button class="ib" id="feedToggle" title="Show/hide agent replies">\\u{1F4AC}</button>' +
       '<button class="ib" id="theme" title="Toggle light / dark theme">\\u263E</button>' +
       '<button class="ib" id="view" title="Toggle view / annotate"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg></button>' +
@@ -208,16 +207,8 @@ export function injectEditRuntime(html, { key, version = '0' }) {
   mLive.addEventListener('click', function () { setMode(true); });
   mAsync.addEventListener('click', function () { setMode(false); });
 
-  // --- area-box button (drives the widget's area mode across the shadow boundary)
-  var areaBtn = shadow.getElementById('area');
-  areaBtn.addEventListener('click', function () { window.postMessage({ type: 'htmldrop:area' }, '*'); });
-  // Reflect the widget's area on/off state on the button.
-  window.addEventListener('message', function (e) {
-    if (e.source === window && e.data && e.data.type === 'htmldrop:areaState') {
-      areaBtn.style.background = e.data.on ? '#6366f1' : '';
-      areaBtn.style.color = e.data.on ? '#fff' : '';
-    }
-  });
+  // (The area-box button was removed from the bar: the comment panel already has
+  // its own area toggle, so a bar proxy was a redundant, crowding duplicate.)
 
   // --- agent reply feed -----------------------------------------------------
   // The agent's replies (via edit reply) show here so the human sees responses
