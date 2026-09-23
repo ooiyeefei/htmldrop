@@ -1,6 +1,7 @@
 import { basename } from 'node:path';
 import { loadManifest } from '../manifest.js';
 import { extractDocId, resolveAccessHeaders } from './read.js';
+import { newEditToken, saveEditToken } from './tokens.js';
 
 const DEFAULT_WORKER_URL = 'https://htmldrop-feedback.htmldrop.workers.dev';
 
@@ -49,6 +50,9 @@ export async function feedbackAdd(file, options = {}) {
     content: { type: 'text', text: options.text.trim() },
     author: { displayName },
     parentId: options.parentId || null,
+    // Same per-comment secret the browser widget sends. The worker keeps only its
+    // hash; we keep the token locally so `feedback edit` / `feedback delete` work.
+    editToken: newEditToken(),
   };
 
   // Gated doc -> derive the access token from --password; open doc -> no token
@@ -67,6 +71,7 @@ export async function feedbackAdd(file, options = {}) {
   }
 
   const data = await res.json();
+  saveEditToken(data.id, docId, body.editToken);
   console.log(`Comment added to ${target} by "${displayName}".`);
   if (options.on) {
     console.log(`  Anchored to: "${options.on.slice(0, 60)}"`);

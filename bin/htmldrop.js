@@ -13,6 +13,7 @@ import { authSetup, authSetupForce } from '../src/auth.js';
 import { feedbackPull } from '../src/feedback/pull.js';
 import { feedbackRead } from '../src/feedback/read.js';
 import { feedbackAdd } from '../src/feedback/add.js';
+import { feedbackEdit, feedbackDeleteOne } from '../src/feedback/modify.js';
 import { fetchDoc } from '../src/fetch.js';
 import { playbook } from '../src/playbook.js';
 import { design } from '../src/design.js';
@@ -201,6 +202,37 @@ feedback
   .action(async (file, options) => {
     try {
       await feedbackAdd(file, options);
+    } catch (err) {
+      console.error(`Error: ${err.message}`);
+      process.exit(1);
+    }
+  });
+
+const PW_OPT = ['-p, --password [password]', 'Password for a protected doc (its feedback is gated). Omit the value to use $HTMLDROP_PASSWORD or a hidden prompt'];
+
+feedback
+  .command('edit <commentId>')
+  .description('Edit the text of a comment you posted from this machine with `feedback add`')
+  .requiredOption('--text <text>', 'The new comment text')
+  .option('--doc-id <idOrUrl>', 'Doc the comment belongs to (defaults to the one saved with the comment)')
+  .option(...PW_OPT)
+  .action(async (commentId, options) => {
+    try {
+      await feedbackEdit(commentId, options);
+    } catch (err) {
+      console.error(`Error: ${err.message}`);
+      process.exit(1);
+    }
+  });
+
+feedback
+  .command('delete <commentId>')
+  .description('Delete one comment you posted from this machine (a top-level comment takes its replies with it)')
+  .option('--doc-id <idOrUrl>', 'Doc the comment belongs to (defaults to the one saved with the comment)')
+  .option(...PW_OPT)
+  .action(async (commentId, options) => {
+    try {
+      await feedbackDeleteOne(commentId, options);
     } catch (err) {
       console.error(`Error: ${err.message}`);
       process.exit(1);

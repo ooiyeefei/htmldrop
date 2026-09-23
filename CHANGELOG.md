@@ -4,6 +4,16 @@ All notable changes to this project are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/), and this project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [1.15.0] — 2026-09-23
+
+### Added
+
+- **Comments posted from the CLI stay editable.** `feedback add` now sends a
+  per-comment edit token, as the browser widget does, and saves it in
+  `~/.htmldrop/feedback-tokens.json` (mode 600). New `feedback edit <commentId>
+  --text ...` and `feedback delete <commentId>` use it. Comments posted by
+  earlier versions have no token and can only be removed by the document owner.
+
 ## [1.14.1] — 2026-07-28
 
 ### Fixed
