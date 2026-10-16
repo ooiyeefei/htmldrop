@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-export const AnchorSchema = z.object({
+const LegacyAnchorSchema = z.object({
   type: z.enum(['text_range', 'element_rect', 'page_level']),
   selector: z.string().optional(),
   startOffset: z.number().optional(),
@@ -18,6 +18,17 @@ export const AnchorSchema = z.object({
     h: z.number(),
   }).optional(),
 });
+
+// Shape identifiers are structured data; they are never executable selectors.
+export const DiagramShapeAnchorSchema = z.object({
+  type: z.literal('diagram_shape'),
+  documentId: z.string().uuid(),
+  diagramId: z.string().uuid(),
+  shapeId: z.string().min(1).max(128).regex(/^[A-Za-z0-9_-]+$/),
+  revisionId: z.string().uuid(),
+}).strict();
+
+export const AnchorSchema = z.union([LegacyAnchorSchema, DiagramShapeAnchorSchema]);
 
 export const ContentSchema = z.object({
   type: z.enum(['text', 'voice', 'text+voice']),

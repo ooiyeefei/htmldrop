@@ -1,0 +1,10 @@
+Excalidraw v0.18.1 font metadata and license notices
+Source: https://raw.githubusercontent.com/excalidraw/excalidraw/v0.18.1/packages/excalidraw/fonts/Nunito/index.ts
+
+
+
+Embedded font name-table notices:
+
+Copyright 2014 The Nunito Project Authors (https://github.com/googlefonts/nunito)
+
+https://scripts.sil.org/OFL
