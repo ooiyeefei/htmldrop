@@ -34,6 +34,9 @@ jobs:
             .scratch/m1-uat/run-*/*-failure.json
             .scratch/m2-uat/run-*/*.png
             .scratch/m2-uat/run-*/*-failure.json
+            .scratch/m2-uat/run-*/browser-final.json
+            .scratch/m2-uat/run-*/hosted-network.json
+            .scratch/m2-uat/run-*/mermaid-save-response.json
           if-no-files-found: ignore
           retention-days: 7
       - run: npm pack --dry-run

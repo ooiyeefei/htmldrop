@@ -349,10 +349,64 @@ test('bundled canvas drawing, selected-shape threads, review and conflict retain
     assert.ok(imported.elements.some(el => el.type === 'text' && el.text === 'Client'));
     assert.ok(imported.elements.some(el => el.type === 'arrow'));
     await ui.getByLabel('Diagram title').fill('Imported Mermaid acceptance');
-    await ui.getByRole('button', { name: 'Save diagram', exact: true }).click();
-    await eventually(() => status().textContent().then(text => text.includes('Diagram saved.')), 'Imported Mermaid diagram did not save');
-    const diagrams = (await json(origin, root)).data.diagrams;
-    assert.ok(diagrams.some(diagram => diagram.title === 'Imported Mermaid acceptance'));
+    const sourceBefore = await readFile(file, 'utf8');
+    const { parseDocument } = await import('../src/diagrams/document.js');
+    const before = parseDocument(sourceBefore);
+    // Delay the real post-save listing response until the save's filesystem
+    // notification reaches the editor. Its status message can replace the
+    // transient save acknowledgement; accepted source is the success contract.
+    await ui.locator('body').evaluate(() => {
+      window.__htmldropUatSourceNotifications = 0;
+      window.__htmldropUatSourceObserver = event => {
+        if (event.origin === location.origin && event.source === parent && event.data?.type === 'htmldrop:diagram-source-changed') window.__htmldropUatSourceNotifications += 1;
+      };
+      addEventListener('message', window.__htmldropUatSourceObserver);
+    });
+    let finishRefresh, responseRecord, requestBody, acceptedDiagram, notificationError;
+    const refreshFinished = new Promise(resolve => { finishRefresh = resolve; });
+    const holdRefresh = async route => {
+      if (route.request().method() !== 'GET') { await route.continue(); return; }
+      const response = await route.fetch();
+      try {
+        await eventually(() => ui.locator('body').evaluate(() => window.__htmldropUatSourceNotifications > 0), 'Own-save source notification did not arrive');
+      } catch (error) { notificationError = error.message; }
+      await route.fulfill({ response });
+      finishRefresh();
+    };
+    await page.route(origin + root, holdRefresh);
+    try {
+      const responsePending = page.waitForResponse(response => response.url() === origin + root && response.request().method() === 'POST');
+      await ui.getByRole('button', { name: 'Save diagram', exact: true }).click();
+      const response = await responsePending;
+      requestBody = response.request().postDataJSON();
+      responseRecord = { status: response.status(), body: await response.json() };
+      assert.equal(responseRecord.status, 201, JSON.stringify(responseRecord.body));
+      acceptedDiagram = responseRecord.body;
+      assert.equal(acceptedDiagram.title, 'Imported Mermaid acceptance');
+      assert.deepEqual(acceptedDiagram.scene.elements, imported.elements, 'Save changed imported native shapes or geometry');
+      await refreshFinished;
+      assert.equal(notificationError, undefined);
+      const persisted = parseDocument(await readFile(file, 'utf8'));
+      const embedded = persisted.diagrams.find(diagram => diagram.diagramId === acceptedDiagram.diagramId);
+      assert.ok(embedded, 'Accepted Mermaid diagram is missing from authoritative source');
+      assert.equal(embedded.revisionId, acceptedDiagram.revisionId);
+      assert.deepEqual(embedded.scene, acceptedDiagram.scene);
+      assert.equal(embedded.svg, acceptedDiagram.svg);
+      for (const prior of before.diagrams) {
+        const retained = persisted.diagrams.find(diagram => diagram.diagramId === prior.diagramId);
+        assert.equal(retained?.revisionId, prior.revisionId, 'Import changed a previous diagram revision');
+        assert.deepEqual(retained?.scene, prior.scene, 'Import overwrote a previous diagram');
+      }
+      const diagrams = (await json(origin, root)).data.diagrams;
+      assert.ok(diagrams.some(diagram => diagram.diagramId === acceptedDiagram.diagramId && diagram.revisionId === acceptedDiagram.revisionId));
+      await eventually(() => ui.getByLabel('Choose diagram').inputValue().then(value => value === acceptedDiagram.diagramId), 'Editor did not adopt the accepted Mermaid diagram');
+      await eventually(() => ui.locator('.toolbar').evaluate(element => !element.inert), 'Mermaid save did not release the editor');
+      assert.equal(await ui.getByRole('button', { name: 'Save diagram', exact: true }).isDisabled(), true, 'Accepted Mermaid scene remained unsaved');
+    } finally {
+      await writeFile(join(fixture, 'mermaid-save-response.json'), JSON.stringify({ status: await status().textContent(), notificationError, sourceNotifications: await ui.locator('body').evaluate(() => window.__htmldropUatSourceNotifications), response: responseRecord, request: requestBody, diagramId: acceptedDiagram?.diagramId, sourceBefore, sourceAfter: await readFile(file, 'utf8') }, null, 2));
+      await ui.locator('body').evaluate(() => { removeEventListener('message', window.__htmldropUatSourceObserver); delete window.__htmldropUatSourceObserver; delete window.__htmldropUatSourceNotifications; });
+      await page.unroute(origin + root, holdRefresh);
+    }
     await ui.getByLabel('Choose diagram').selectOption(id);
     await eventually(() => ui.getByLabel('Diagram title').inputValue().then(title => title === 'Browser-drawn architecture'), 'Original diagram did not reopen after import');
   });
