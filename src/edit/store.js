@@ -22,6 +22,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, writeFileSync, readdirSync, realpathSync } from 'node:fs';
 import { join } from 'node:path';
 import { getConfigDir, ensureConfigDir } from '../config.js';
+import { reconcileLayout } from './layout.js';
 
 // All edit-mode state lives beside the rest of htmldrop's config, under a
 // dedicated subdir so it never collides with the Surge staging `site/` dir.
@@ -216,26 +217,69 @@ export function pendingCount(key) {
 }
 
 // --- Layout QA ---------------------------------------------------------------
-// The widget's auditor measures the RENDERED page (overflow / clipped /
-// overlapping text) and posts the current warning set here. It's state, not an
-// event stream — it always reflects the latest render — so we overwrite rather
-// than append. Stored with the docHash it was measured against so a stale audit
-// (from a pre-edit render) can be told apart from the current one.
-export function setLayout(key, warnings, docHash) {
+// Keep the latest warning snapshot for existing clients, plus durable findings.
+// A request being queued/delivered never resolves a finding: a complete rendered
+// check at the same viewport must verify its absence.
+export function setLayout(key, warnings, docHash, meta = {}) {
   const s = readSessionFile(key);
   if (!s) return null;
-  s.layout = {
-    warnings: Array.isArray(warnings) ? warnings.slice(0, 100) : [],
-    docHash: docHash || undefined,
-    at: new Date().toISOString(),
-  };
+  s.layout = reconcileLayout(s.layout, warnings, docHash, meta);
   writeSessionFile(s);
   return s.layout;
 }
 
 export function getLayout(key) {
   const s = readSessionFile(key);
-  return (s && s.layout) || { warnings: [], at: null };
+  return (s && s.layout) || { warnings: [], issues: [], complete: false, at: null };
+}
+
+export function invalidateLayout(key) {
+  const s = readSessionFile(key);
+  if (!s?.layout) return null;
+  s.layout.complete = false;
+  s.layout.reason = 'Source changed; recheck the rendered page';
+  for (const issue of s.layout.issues || []) {
+    if (issue.status !== 'resolved') issue.status = 'unverified';
+  }
+  writeSessionFile(s);
+  return s.layout;
+}
+
+export function queueLayoutIssues(key, ids, context = {}) {
+  const s = readSessionFile(key);
+  if (!s) return null;
+  const selected = (s.layout?.issues || []).filter((issue) =>
+    Array.isArray(ids) && ids.includes(issue.id) &&
+    ['open', 'unverified'].includes(issue.status) && !issue.pendingRepair).slice(0, 20);
+  if (!selected.length) return { issues: s.layout?.issues || [], queued: 0, message: null };
+  const text = 'Please fix these measured layout issues in the source HTML. Recheck the same viewport after editing; sending this request does not resolve them.\n' + selected.map((issue) =>
+    `- [${issue.id}] ${issue.severity || 'warning'} ${issue.kind} at ${issue.selector}: ${issue.detail} (viewport ${issue.viewport.width}×${issue.viewport.height}, source ${issue.sourceHash || 'unknown'})`).join('\n');
+  const message = addUserMessage(key, { text, context: { ...context, type: 'layout_issues', ids: selected.map((i) => i.id) } });
+  // addUserMessage persists chat/queue; re-read before writing lifecycle state.
+  const updated = readSessionFile(key);
+  for (const issue of updated.layout.issues) {
+    if (!selected.some((i) => i.id === issue.id)) continue;
+    issue.status = 'queued';
+    issue.pendingRepair = true;
+    issue.queuedAt = message.at;
+    issue.messageId = message.id;
+  }
+  writeSessionFile(updated);
+  return { issues: updated.layout.issues, queued: selected.length, message };
+}
+
+export function ignoreLayoutIssue(key, id, reason) {
+  if (typeof reason !== 'string' || !reason.trim()) return null;
+  const s = readSessionFile(key);
+  const issue = s?.layout?.issues?.find((i) => i.id === id);
+  if (!issue) return null;
+  issue.status = 'ignored';
+  issue.ignoreReason = reason.trim().slice(0, 1000);
+  issue.ignoredSourceHash = issue.sourceHash;
+  issue.ignoredRenderRevision = issue.renderRevision || issue.sourceHash;
+  issue.ignoredAt = new Date().toISOString();
+  writeSessionFile(s);
+  return issue;
 }
 
 // --- Agent → user question (reverse channel, dynamic UI) ---------------------
@@ -266,7 +310,7 @@ export function getQuestion(key) {
 // The browser posts the user's answer to the pending question: a chosen option
 // and/or a free-text note. Clears the question (it's answered) and stashes the
 // answer for the poll to pick up.
-export function answerQuestion(key, { choice, text } = {}) {
+export function answerQuestion(key, { choice, text, context } = {}) {
   const s = readSessionFile(key);
   if (!s || !s.question) return null;
   const answer = {
@@ -274,6 +318,7 @@ export function answerQuestion(key, { choice, text } = {}) {
     question: s.question.text,
     choice: choice != null ? String(choice) : undefined,
     text: text != null ? String(text) : undefined,
+    context: context || undefined,
     at: new Date().toISOString(),
   };
   s.answer = answer;
@@ -373,7 +418,8 @@ export function addComment(key, body) {
     // sends a per-browser editToken; the agent/CLI/curl posts don't — so "no
     // editToken" is a reliable signal for an agent-authored comment. An explicit
     // body.agent flag also forces it.
-    agent: (body.agent || !body.editToken) ? true : undefined,
+    agent: body.context?.actor === 'reviewer' ? false : (body.agent || !body.editToken) ? true : undefined,
+    context: body.context || undefined,
   };
   session.comments = [...(session.comments || []), item];
   writeSessionFile(session);

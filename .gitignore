@@ -29,6 +29,9 @@ docs/demo/.stage/
 
 # local scratch, never published
 .lavish/
+.scratch/
+.worktrees/
+.agent-sessions/
 
 # demo video renders, published to YouTube instead
 artifacts/

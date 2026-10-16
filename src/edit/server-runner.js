@@ -25,7 +25,7 @@ try {
   // EADDRINUSE (or any bind error on the stable port) → take any free port.
   srv = await startServer({ port: 0, idleTimeoutMs: timeout });
 }
-writeServerInfo({ port: srv.port, pid: process.pid, startedAt: Date.now() });
+writeServerInfo({ port: srv.port, pid: process.pid, startedAt: Date.now(), agentToken: srv.agentToken });
 
 // The server resolves `done` when it shuts down (idle timeout or explicit
 // /shutdown). Clean up the discovery file so stale info never misleads a client.

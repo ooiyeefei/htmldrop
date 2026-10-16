@@ -4,6 +4,7 @@ import open from 'open';
 import { decryptHtml } from './encrypt.js';
 import { loadManifest, saveManifest } from './manifest.js';
 import { resolvePassword } from './prompt.js';
+import { readHistoryConfig, stripHistoryWidget, importHistory } from './history/index.js';
 
 // Matches the blob stored by templates/password-gate.html:
 //   var encryptedContent = "....";
@@ -75,16 +76,18 @@ export function reconstructSource(html, password) {
     pageHtml = decrypted;
   }
 
+  const history = readHistoryConfig(pageHtml);
   const config = parseFeedbackConfig(pageHtml);
   if (!config) {
-    return { cleanHtml: pageHtml, docId: undefined, workerUrl: undefined, wasGated };
+    return { cleanHtml: stripHistoryWidget(pageHtml), docId: undefined, workerUrl: undefined, wasGated, history };
   }
 
   return {
-    cleanHtml: stripInjectedFeedbackBlock(pageHtml, config.start),
+    cleanHtml: stripHistoryWidget(stripInjectedFeedbackBlock(pageHtml, config.start)),
     docId: config.docId,
     workerUrl: config.workerUrl,
     wasGated,
+    history,
   };
 }
 
@@ -118,7 +121,7 @@ function resolveOutputPath(outputFile) {
   return outPath;
 }
 
-function recordPulledDoc({ name, url, cleanHtml, docId, workerUrl, wasGated }) {
+function recordPulledDoc({ name, url, cleanHtml, docId, workerUrl, wasGated, history }) {
   const manifest = loadManifest();
   if (!Array.isArray(manifest.files)) {
     manifest.files = [];
@@ -133,10 +136,14 @@ function recordPulledDoc({ name, url, cleanHtml, docId, workerUrl, wasGated }) {
     size: Buffer.byteLength(cleanHtml, 'utf8'),
     encrypted: wasGated,
     noindex: existing.noindex || false,
-    feedback: true,
+    feedback: Boolean(docId),
     docId,
     pulledFrom: url,
   };
+  if (history) {
+    entry.historyId = history.id;
+    entry.historyVersion = history.version;
+  }
 
   if (workerUrl !== undefined) {
     entry.workerUrl = workerUrl;
@@ -172,12 +179,13 @@ export async function pull(url, options = {}) {
 
   const outputFile = options.output || defaultOutputFromUrl(url);
   const outPath = resolveOutputPath(outputFile);
+  const history = reconstructed.history ? importHistory(reconstructed.history) : null;
   writeFileSync(outPath, reconstructed.cleanHtml, 'utf-8');
 
   const name = basename(outPath);
   console.log(`Wrote ${Buffer.byteLength(reconstructed.cleanHtml, 'utf8')} bytes to ${outputFile}`);
 
-  if (reconstructed.docId) {
+  if (reconstructed.docId || history) {
     recordPulledDoc({
       name,
       url,
@@ -185,10 +193,12 @@ export async function pull(url, options = {}) {
       docId: reconstructed.docId,
       workerUrl: reconstructed.workerUrl,
       wasGated: reconstructed.wasGated,
+      history,
     });
-    console.log(`Linked ${name} to feedback doc ${reconstructed.docId} (same review thread).`);
+    if (reconstructed.docId) console.log(`Linked ${name} to feedback doc ${reconstructed.docId} (same review thread).`);
+    if (history) console.log(`Retained document history through version ${history.version}.`);
   } else {
-    console.warn('Warning: no htmldrop feedback config was found; saved the HTML as-is and skipped relinking.');
+    console.warn('No document history or feedback identity found; saved the source without relinking.');
   }
 
   console.log('\nNext steps:');

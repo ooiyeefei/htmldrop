@@ -17,7 +17,7 @@
 //
 // It lives in its own shadow root so the artifact's CSS can't touch it.
 
-export function injectEditRuntime(html, { key, version = '0' }) {
+export function injectEditRuntime(html, { key, version = '0', sourceHash = '', renderRevision = sourceHash, reviewer = false }) {
   const keyJson = JSON.stringify(String(key));
   const verJson = JSON.stringify(String(version));
   const runtime = `<style id="htmldrop-edit-style">
@@ -29,6 +29,9 @@ export function injectEditRuntime(html, { key, version = '0' }) {
 <script>
 (function () {
   var KEY = ${keyJson};
+  var SOURCE_HASH = ${JSON.stringify(sourceHash)};
+  var RENDER_REVISION = ${JSON.stringify(renderRevision)};
+  var IS_REVIEWER = ${JSON.stringify(!!reviewer)};
   var BUILT_VERSION = ${verJson}; // version this runtime was served from
   var SCROLL_KEY = 'htmldrop_edit_scroll:' + KEY;
   var WORKER = ''; // same-origin
@@ -74,6 +77,9 @@ export function injectEditRuntime(html, { key, version = '0' }) {
     // agent reply feed (collapsible)
     '.feed { border-top: 1px solid #f3f4f6; max-height: 40vh; overflow-y: auto; padding: 8px 12px; display: none; }',
     '.feed.show { display: block; }',
+    '.inbox { border-top:1px solid #e5e7eb; padding:12px; max-height:50vh; overflow:auto; }',
+    '.issue { padding:10px 0; border-bottom:1px solid #e5e7eb; } .issue p { margin:5px 0; overflow-wrap:anywhere; }',
+    '.inbox button { cursor:pointer; margin:3px; padding:5px; } .inbox input { max-width:100%; }',
     '.msg { margin-bottom: 8px; }',
     '.msg .who { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: #9ca3af; margin-bottom: 2px; }',
     '.msg.a .who { color: #4f46e5; }',
@@ -97,7 +103,9 @@ export function injectEditRuntime(html, { key, version = '0' }) {
     '.qsend { width: 100%; margin-top: 8px; background: #6d28d9; color: #fff; border: none; border-radius: 8px;',
     '  padding: 8px 12px; font: inherit; font-size: 12px; font-weight: 600; cursor: pointer; }',
     '.qsend:hover { background: #5b21b6; } .qsend:disabled { opacity: .5; cursor: not-allowed; }',
-    '@media (max-width: 768px) { .bar { top: auto; bottom: 12px; right: 12px; left: 12px; width: auto; } }'
+    // The mobile comment composer occupies the bottom 55vh. Keep edit controls
+    // above that sheet, and scroll expanded cards within their own bounded area.
+    '@media (max-width: 768px) { .bar { top: 12px; bottom: auto; right: 12px; left: 12px; width: auto; max-height: 35vh; max-height: 35dvh; overflow-y: auto; } .inbox { max-height: none; overflow: visible; } }'
   ].join('\\n');
   shadow.appendChild(style);
 
@@ -115,7 +123,9 @@ export function injectEditRuntime(html, { key, version = '0' }) {
       '<button class="ib pubib" id="pub" title="Publish this document\\u2026">\\u{1F680}</button>' +
     '</div>' +
     '<div class="hint" id="hint"></div>' +
-    '<div class="status" id="status"></div>' +
+    '<div class="status" id="status" role="status"></div>' +
+    '<div class="hint"><button id="inboxToggle" aria-expanded="false" aria-controls="inbox">Layout inbox (checking…)</button></div>' +
+    '<section class="inbox" id="inbox" aria-label="Layout issue inbox" hidden></section>' +
     '<div class="qcard" id="qcard"></div>' +
     '<div class="qcard" id="pubcard"></div>' +
     '<div class="feed" id="feed"></div>';
@@ -131,6 +141,7 @@ export function injectEditRuntime(html, { key, version = '0' }) {
   var qcard = shadow.getElementById('qcard');
   var pub = shadow.getElementById('pub');
   var pubcard = shadow.getElementById('pubcard');
+  if (IS_REVIEWER) pub.remove();
 
   var agentPresence = 'waiting';
   var ended = false;
@@ -288,6 +299,7 @@ export function injectEditRuntime(html, { key, version = '0' }) {
   // htmldrop's standard privacy levels (public / password-protected).
   function renderPublish(show) {
     pubcard.replaceChildren();
+    if (IS_REVIEWER) { pubcard.classList.remove('show'); return; }
     if (!show) { pubcard.classList.remove('show'); syncBarHeight(); return; }
     var lab = document.createElement('div'); lab.className = 'qlabel'; lab.textContent = 'Publish';
     var txt = document.createElement('div'); txt.className = 'qtext';
@@ -297,7 +309,7 @@ export function injectEditRuntime(html, { key, version = '0' }) {
       var b = document.createElement('button'); b.className = 'qopt'; b.textContent = label;
       b.addEventListener('click', function () {
         fetch(WORKER + '/api/edit/' + KEY + '/message', {
-          method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ text: instruction })
+          method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ text: instruction, context: { type: 'publish' } })
         }).then(function (r) { return r.json().catch(function () { return {}; }); })
           .then(function (res) {
             renderPublish(false);
@@ -316,7 +328,7 @@ export function injectEditRuntime(html, { key, version = '0' }) {
     pubcard.appendChild(lab); pubcard.appendChild(txt); pubcard.appendChild(opts);
     pubcard.classList.add('show'); syncBarHeight();
   }
-  pub.addEventListener('click', function () { renderPublish(!pubcard.classList.contains('show')); });
+  if (!IS_REVIEWER) pub.addEventListener('click', function () { renderPublish(!pubcard.classList.contains('show')); });
 
   // --- Layout QA ------------------------------------------------------------
   function cssPath(el) {
@@ -324,7 +336,7 @@ export function injectEditRuntime(html, { key, version = '0' }) {
     var parts = [], n = el, depth = 0;
     while (n && n !== document.body && n.tagName && depth < 6) {
       var part = n.tagName.toLowerCase();
-      if (n.id) { parts.unshift('#' + n.id); return parts.join(' > '); }
+      if (n.id) { parts.unshift('#' + CSS.escape(n.id)); return parts.join(' > '); }
       var p = n.parentElement;
       if (p) { var same = Array.prototype.filter.call(p.children, function (c) { return c.tagName === n.tagName; }); if (same.length > 1) part += ':nth-of-type(' + (same.indexOf(n) + 1) + ')'; }
       parts.unshift(part); n = p; depth++;
@@ -389,7 +401,7 @@ export function injectEditRuntime(html, { key, version = '0' }) {
     if (document.documentElement.scrollWidth > docW + 2)
       out.push(layoutWarning('page-overflow', 'html', 'Page scrolls horizontally: content is ' + (document.documentElement.scrollWidth - docW) + 'px wider than the viewport (' + docW + 'px).', '', 'high'));
     var all = document.body ? document.body.querySelectorAll('*') : [], seen = 0;
-    var textCandidates = [];
+    var textCandidates = [], limited = false;
     for (var i = 0; i < all.length && seen < 4000; i++) {
       var el = all[i]; seen++;
       if (host.contains(el) || (el.closest && el.closest('#htmldrop-edit-host'))) continue;
@@ -412,25 +424,108 @@ export function injectEditRuntime(html, { key, version = '0' }) {
           out.push(layoutWarning('overlapping-text', candidate.selector, 'Text overlaps ' + prev.selector + ' by about ' + Math.round(overlap.width) + '×' + Math.round(overlap.height) + 'px; this often means stacked duplicate text or hidden animation frames are visible.', candidate.text, 'high'));
           break;
         }
+        if (textCandidates.length > 30) limited = true;
         textCandidates.push(candidate);
         if (textCandidates.length > 80) textCandidates.shift();
       }
       if (out.length >= 60) break;
     }
-    return out;
+    return { warnings: out, complete: !limited && i >= all.length && out.length < 60 && seen < 4000 };
   }
   var layoutTimer;
+  var inbox = shadow.getElementById('inbox');
+  var inboxToggle = shadow.getElementById('inboxToggle');
+  var layoutState = { issues: [], complete: false };
+  var selectedIssues = new Set();
+  inboxToggle.addEventListener('click', function () {
+    inbox.hidden = !inbox.hidden;
+    inboxToggle.setAttribute('aria-expanded', String(!inbox.hidden));
+    syncBarHeight();
+  });
+  function layoutRequest(path, body) {
+    return fetch(WORKER + '/api/edit/' + KEY + '/layout' + path, body ? {
+      method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body)
+    } : {}).then(function (r) { if (!r.ok) throw new Error('Layout request failed'); return r.json(); });
+  }
+  function refreshInbox() {
+    return layoutRequest('').then(function (data) { renderInbox(data.layout || data); });
+  }
+  function renderInbox(data) {
+    layoutState = data;
+    var issues = data.issues || [];
+    var active = issues.filter(function (i) { return i.status !== 'resolved' && i.status !== 'ignored'; });
+    inboxToggle.textContent = 'Layout inbox (' + active.length + ')' + (data.complete && data.sourceHash === SOURCE_HASH && data.renderRevision === RENDER_REVISION ? '' : ' · unverified');
+    inbox.replaceChildren();
+    var summary = document.createElement('p');
+    summary.textContent = data.complete && data.sourceHash === SOURCE_HASH && data.renderRevision === RENDER_REVISION
+      ? 'Checked ' + data.viewport.width + ' × ' + data.viewport.height + ' (' + data.viewport.bucket + '). Other viewports may still need checking.'
+      : 'Layout check incomplete or out of date. Outstanding issues remain unverified.' + (data.reason ? ' ' + data.reason : '');
+    inbox.appendChild(summary);
+    function button(label, action, parent) {
+      var b = document.createElement('button'); b.textContent = label; b.addEventListener('click', action); (parent || inbox).appendChild(b); return b;
+    }
+    button('Recheck this viewport', runAudit);
+    button('Queue selected fixes', function () {
+      layoutRequest('/queue', { ids: Array.from(selectedIssues) }).then(function (r) {
+        selectedIssues.clear();
+        flashStatus(!r.queued ? 'No new fixes queued. Select an outstanding issue first.' : r.delivered ? 'Fix request delivered. Recheck after the edit to verify resolution.' : 'Fix request queued for the agent. It is not resolved yet.');
+        return refreshInbox();
+      }).catch(function () { flashStatus('Could not queue fixes. Try again.'); });
+    });
+    issues.forEach(function (issue) {
+      var row = document.createElement('div'); row.className = 'issue';
+      var title = document.createElement('label');
+      var check = document.createElement('input'); check.type = 'checkbox'; check.checked = selectedIssues.has(issue.id);
+      check.disabled = issue.status === 'resolved' || issue.status === 'ignored' || issue.pendingRepair || issue.status === 'queued';
+      check.addEventListener('change', function () { if (check.checked) selectedIssues.add(issue.id); else selectedIssues.delete(issue.id); });
+      title.appendChild(check); title.appendChild(document.createTextNode((issue.severity || 'warning') + ' · ' + issue.kind + ' · ' + issue.status)); row.appendChild(title);
+      var detail = document.createElement('p'); detail.textContent = issue.detail; row.appendChild(detail);
+      var target = document.createElement('p'); target.textContent = issue.selector + ' · ' + issue.viewport.width + ' × ' + issue.viewport.height; row.appendChild(target);
+      if (issue.ignoreReason) { var why = document.createElement('p'); why.textContent = 'Ignored: ' + issue.ignoreReason; row.appendChild(why); }
+      button('Show target', function () {
+        var el; try { el = document.querySelector(issue.selector); } catch (_) {}
+        if (!el) { flashStatus('Target no longer exists. Recheck the layout.'); return; }
+        el.scrollIntoView({ block: 'center', behavior: 'smooth' });
+        var before = el.style.outline; el.style.outline = '3px solid #f59e0b';
+        var tabindex = el.getAttribute('tabindex'); el.setAttribute('tabindex', '-1'); el.focus({ preventScroll: true });
+        setTimeout(function () { el.style.outline = before; if (tabindex === null) el.removeAttribute('tabindex'); else el.setAttribute('tabindex', tabindex); }, 2500);
+      }, row);
+      if (issue.status !== 'ignored' && issue.status !== 'resolved') {
+        var reason = document.createElement('input'); reason.placeholder = 'Reason for ignoring'; reason.setAttribute('aria-label', 'Reason for ignoring ' + issue.kind); row.appendChild(reason);
+        button('Ignore', function () {
+          if (!reason.value.trim()) { reason.focus(); return; }
+          layoutRequest('/ignore', { id: issue.id, reason: reason.value }).then(refreshInbox).catch(function () { flashStatus('Could not ignore issue. Try again.'); });
+        }, row);
+      }
+      inbox.appendChild(row);
+    });
+    syncBarHeight();
+  }
+  var auditGeneration = 0;
   function runAudit() {
+    var generation = ++auditGeneration;
     clearTimeout(layoutTimer);
     layoutTimer = setTimeout(function () {
-      var warnings; try { warnings = auditLayout(); } catch (e) { return; }
-      var docHash = null;
-      try { var h = document.getElementById('htmldrop-widget-host'); docHash = h && h.dataset ? h.dataset.docHash : null; } catch (e) {}
-      fetch(WORKER + '/api/edit/' + KEY + '/layout', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ warnings: warnings, docHash: docHash }) }).catch(function () {});
+      var viewport = { width: window.innerWidth, height: window.innerHeight, dpr: window.devicePixelRatio || 1 };
+      var result = { warnings: [], complete: false }, reason;
+      var ready = document.readyState === 'complete' && !document.hidden && (!document.fonts || document.fonts.status === 'loaded') && Array.prototype.every.call(document.images, function (img) { return img.complete && img.naturalWidth > 0; });
+      try { result = auditLayout(); if (!ready) { result.complete = false; reason = 'Page, fonts or images are not ready, or tab is hidden'; } }
+      catch (e) { reason = 'Layout audit failed'; result.complete = false; }
+      if (generation !== auditGeneration) return;
+      layoutRequest('', { warnings: result.warnings, docHash: SOURCE_HASH, sourceHash: SOURCE_HASH, renderRevision: RENDER_REVISION, viewport: viewport, complete: result.complete, reason: reason })
+        .then(function (data) { if (generation === auditGeneration) renderInbox(data.layout || data); })
+        .catch(function () { inboxToggle.textContent = 'Layout inbox · check unavailable'; flashStatus('Layout check could not be saved. Recheck when the server is available.'); });
     }, 350);
   }
   window.addEventListener('load', runAudit);
   window.addEventListener('resize', runAudit);
+  document.addEventListener('visibilitychange', runAudit);
+  document.addEventListener('load', function (event) { if (event.target.tagName === 'IMG') runAudit(); }, true);
+  document.addEventListener('error', function (event) { if (event.target.tagName === 'IMG') runAudit(); }, true);
+  if (document.fonts && document.fonts.addEventListener) document.fonts.addEventListener('loadingdone', runAudit);
+  if (document.fonts) document.fonts.ready.then(runAudit);
+  refreshInbox().catch(function () {});
+  runAudit();
 
   // --- agent → user question (dynamic card) ---------------------------------
   // Renders the agent-sent spec into a card: prompt + option buttons (chosen
@@ -501,7 +596,7 @@ export function injectEditRuntime(html, { key, version = '0' }) {
   // upgraded code updates open tabs instead of leaving them on stale UI.
   var sawOutage = false, reloading = false;
   setInterval(function () {
-    fetch('/health', { cache: 'no-store' }).then(function (r) {
+    fetch(IS_REVIEWER ? WORKER + '/api/edit/' + KEY + '/health' : '/health', { cache: 'no-store' }).then(function (r) {
       if (!r.ok) return;
       if (sawOutage) { location.reload(); return; }
       if (statusEl.dataset.sticky === '1') { statusEl.dataset.sticky = ''; statusEl.style.display = 'none'; }

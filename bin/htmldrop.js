@@ -23,7 +23,7 @@ import { feedbackClear } from '../src/feedback/clear.js';
 import { converge } from '../src/feedback/converge.js';
 import { identityExport, identityImport } from '../src/identity.js';
 import { studio } from '../src/studio.js';
-import { editStart, editLs, editPoll, editReply, editAsk, editLayout, editEnd, editStop } from '../src/edit/index.js';
+import { editStart, editLs, editPoll, editReply, editAsk, editLayout, editShare, editUnshare, editEnd, editStop } from '../src/edit/index.js';
 
 const pkg = JSON.parse(
   readFileSync(join(dirname(fileURLToPath(import.meta.url)), '../package.json'), 'utf-8')
@@ -53,7 +53,7 @@ program
   .option('--generate-password', 'Generate a memorable password for this push and print it once (htmldrop still stores it nowhere)')
   .option('-n, --noindex', 'Block search engines and AI crawlers from indexing this file')
   .option('-f, --feedback', 'Enable inline feedback annotations for reviewers')
-  .option('--new-doc', 'Force a fresh feedback doc/link instead of reusing the existing one')
+  .option('--new-doc', 'Start fresh document history and a fresh feedback link instead of reusing the existing identity')
   .option('-o, --open', 'Open the URL in browser after deploy')
   .action(async (file, options) => {
     try {
@@ -296,6 +296,28 @@ program
 const edit = program
   .command('edit')
   .description('Local live edit mode — annotate + iterate on an HTML file before publishing (no Surge)');
+
+edit
+  .command('share <file>')
+  .description('Create an expiring private review gateway behind your HTTPS proxy')
+  .requiredOption('--origin <url>', 'Exact external HTTPS origin, e.g. https://host.tailnet.ts.net:8443')
+  .option('--port <port>', 'Loopback gateway port (0 chooses a free port)', '7392')
+  .option('--expires <minutes>', 'Review lifetime in minutes, maximum 10080', '60')
+  .option('--open', 'Open the review link after configuring the proxy')
+  .option('--json', 'Output gateway and one-time review link as JSON')
+  .action(async (file, options) => {
+    try { await editShare(file, options); }
+    catch (err) { console.error(`Error: ${err.message}`); process.exit(1); }
+  });
+
+edit
+  .command('unshare <file>')
+  .description('Revoke the private review link and disconnect its browsers')
+  .option('--json', 'Output revocation status as JSON')
+  .action(async (file, options) => {
+    try { await editUnshare(file, options); }
+    catch (err) { console.error(`Error: ${err.message}`); process.exit(1); }
+  });
 
 edit
   .command('start <file>')

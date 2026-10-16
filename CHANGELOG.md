@@ -4,6 +4,26 @@ All notable changes to this project are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/), and this project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [1.16.0] — 2026-10-16
+
+### Added
+
+- Automatic publish history independent of `--feedback`, with previous-version previews and readable-text redlines. Private revisions remain individually encrypted; `pull` retains the history for subsequent publishes.
+- `edit share` and `edit unshare`: expiring private session gateways behind an exact HTTPS origin, one-use browser links, authenticated live updates and reviewer provenance. Agent controls retain a separate private local credential.
+- A visible layout inbox with target highlighting, queued fixes, reasoned ignores and verified resolution against the current HTML/dependencies and exact viewport.
+- Safe declared sibling assets, attachment MIME/download handling, dependency reload and single-file publication preflight. `HTMLDROP_CONFIG_DIR` supports isolated profiles.
+
+### Fixed
+
+- Reject hidden/credential files, undeclared assets, traversal and symlinks rather than exposing the artifact directory wholesale.
+- Preserve independent layout evidence across viewport sizes and reject stale reports after dependency changes.
+- Restore staged files after deployment failures, avoiding accidental publication in a later push.
+- Stop serving cached public HTML when a document becomes password-protected.
+
+### Validation
+
+- Adds security, publication/privacy, source hand-off and browser acceptance regressions, plus Node 20/22 CI. Excalidraw and MCP remain scoped to milestone 2.
+
 ## [1.15.0] — 2026-09-23
 
 ### Added

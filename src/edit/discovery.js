@@ -4,7 +4,7 @@
 // A tiny discovery file (port + pid) under the config dir, minus the session
 // data (that lives per-file in store.js).
 
-import { existsSync, readFileSync, writeFileSync, unlinkSync } from 'node:fs';
+import { existsSync, readFileSync, writeFileSync, unlinkSync, chmodSync } from 'node:fs';
 import { join } from 'node:path';
 import { getConfigDir } from '../config.js';
 import { ensureEditDir } from './store.js';
@@ -22,6 +22,7 @@ export function readServerInfo() {
 export function writeServerInfo(info) {
   ensureEditDir();
   writeFileSync(serverFile(), JSON.stringify(info, null, 2) + '\n', { encoding: 'utf-8', mode: 0o600 });
+  chmodSync(serverFile(), 0o600);
 }
 
 export function removeServerInfo() {
