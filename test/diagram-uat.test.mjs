@@ -34,6 +34,15 @@ async function eventually(fn, message, timeout = 15000) {
   do { try { const result = await fn(); if (result) return result; } catch (error) { last = error; } await new Promise(resolve => setTimeout(resolve, 80)); } while (Date.now() < end);
   throw new Error(`${message}${last ? `: ${last.message}` : ''}`);
 }
+// CSP can reject a request before Playwright's routing callback observes it.
+// Count browser attempts independently, including requests from editor iframes.
+function recordExternalAttempts(context, origin, attempts) {
+  context.on('request', request => {
+    const url = new URL(request.url());
+    if (['http:', 'https:'].includes(url.protocol) && url.origin !== origin && !attempts.includes(url.href)) attempts.push(url.href);
+  });
+}
+
 async function freePort() {
   const probe = createServer();
   await new Promise((ok, fail) => { probe.once('error', fail); probe.listen(0, '127.0.0.1', ok); });
@@ -233,8 +242,9 @@ test('bundled canvas drawing, selected-shape threads, review and conflict retain
   const page = await context.newPage();
   page.on('dialog', dialog => dialog.accept());
   page.setDefaultTimeout(15000);
-  t.after(async () => { if (!page.isClosed()) { await page.screenshot({ path: join(fixture, 'browser-final.png'), fullPage: true }).catch(() => {}); await writeFile(join(fixture, 'browser-final.json'), JSON.stringify({ errors, external, apiResponses, frames: await Promise.all(page.frames().map(async frame => ({ url: frame.url(), text: await frame.locator('body').innerText().catch(() => '') }))) }, null, 2)); } await cleanup(); });
-  const external = [], errors = [], requests = [], apiResponses = [];
+  t.after(async () => { if (!page.isClosed()) { await page.screenshot({ path: join(fixture, 'browser-final.png'), fullPage: true }).catch(() => {}); await writeFile(join(fixture, 'browser-final.json'), JSON.stringify({ errors, external, externalAttempts, apiResponses, frames: await Promise.all(page.frames().map(async frame => ({ url: frame.url(), text: await frame.locator('body').innerText().catch(() => '') }))) }, null, 2)); } await cleanup(); });
+  const external = [], externalAttempts = [], errors = [], requests = [], apiResponses = [];
+  recordExternalAttempts(context, origin, externalAttempts);
   page.on('response', async response => { if (response.url().includes('/api/edit/') && response.request().method() === 'POST') apiResponses.push({url:response.url(),status:response.status(),body:await response.text().catch(()=>'')}); });
   await context.route('**/*', async route => {
     const url = new URL(route.request().url());
@@ -352,6 +362,7 @@ test('bundled canvas drawing, selected-shape threads, review and conflict retain
     const { startRemoteGateway } = await import('../src/edit/remote.js');
     gateway = await startRemoteGateway({ port, publicOrigin: remoteOrigin, sessionKey: key, backendPort: server.port });
     const reviewer = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
+    recordExternalAttempts(reviewer, remoteOrigin, externalAttempts);
     await reviewer.route('**/*', async route => { const url = new URL(route.request().url()); if (url.origin === remoteOrigin || !['http:', 'https:'].includes(url.protocol)) await route.continue(); else { external.push(url.href); await route.abort(); } });
     const review = await reviewer.newPage();
     review.on('dialog', dialog => dialog.accept());
@@ -420,7 +431,8 @@ test('bundled canvas drawing, selected-shape threads, review and conflict retain
       await page.screenshot({ path: join(fixture, 'stale-conflict-draft-preserved.png'), fullPage: true });
     } finally { release(); await page.unroute(`${origin}${path}/save`); }
   });
-  assert.deepEqual(external, [], 'Bundled editor attempted outbound network requests');
+  assert.deepEqual(external, [], 'Bundled editor sent outbound requests past CSP');
+  assert.deepEqual(externalAttempts, [], 'Bundled editor attempted outbound requests, including requests blocked by CSP');
   assert.deepEqual(errors, [], 'Browser runtime errors');
   t.diagnostic(`Real Chromium canvas evidence: ${fixture}`);
 });
@@ -437,7 +449,8 @@ test('plain published figure fits mobile and hosted widget creates, replies and 
   const { injectFeedbackWidget } = await import('../src/feedback/inject.js');
   browser = await chromium.launch({ headless: true });
   const context = await browser.newContext({ viewport: { width: 390, height: 844 } });
-  const page = await context.newPage(), external = [], errors = [];
+  const page = await context.newPage(), external = [], externalAttempts = [], errors = [];
+  recordExternalAttempts(context, origin, externalAttempts);
   page.setDefaultTimeout(10000);
   page.on('pageerror', error => errors.push(error.message));
   await page.route(`${origin}/published.html`, async route => route.fulfill({ contentType: 'text/html', body: injectFeedbackWidget(await readFile(file, 'utf8'), { docId: key, workerUrl: origin }) }));
@@ -482,7 +495,9 @@ test('plain published figure fits mobile and hosted widget creates, replies and 
   await thread.locator(':scope > .hd-text').click();
   assert.equal(await page.locator('.hd-diagram-shape-highlight').count(), 0, 'Removed shape comment highlighted a different live target');
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
+  await writeFile(join(fixture, 'hosted-network.json'), JSON.stringify({ external, externalAttempts, errors }, null, 2));
   assert.deepEqual(external, []);
+  assert.deepEqual(externalAttempts, [], 'Hosted widget attempted an outbound request');
   assert.deepEqual(errors, []);
   t.diagnostic(`Published widget and 390px preview evidence: ${fixture}`);
 });
