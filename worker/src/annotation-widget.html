@@ -757,7 +757,7 @@
     showAreaPopover(left, top, h, rect, captured);
   });
 
-  async function submitReply(parentItem, replyText) {
+  async function submitReply(parentItem, replyText, onSaved) {
     const name = userName || 'Anonymous';
     const body = {
       anchor: parentItem.anchor || { type: 'page_level' },
@@ -777,6 +777,7 @@
       if (!res.ok) throw new Error('HTTP ' + res.status);
       const data = await res.json().catch(() => null);
       if (data && data.id) rememberMine(data.id);
+      if (onSaved) onSaved();
       await loadComments();
     } catch(e) {
       hdToastFail('Reply didn’t save — the page may have lost the local server. Reload and try again.');
@@ -800,17 +801,18 @@
 
   // PATCH own comment text. Same edit-token authorization as delete; the worker
   // stamps editedAt, which renders as "· edited".
-  async function editComment(item, newText) {
+  async function editComment(item, newText, onSaved) {
     var headers = { 'Content-Type': 'application/json', 'X-HTMLDrop-Edit-Token': HD_EDIT_TOKEN };
     if (HD_ACCESS) headers['X-HTMLDrop-Access'] = HD_ACCESS;
     try {
-      await fetch((config.workerUrl || '') + '/api/feedback/' + config.docId + '/' + item.id, {
-        method: 'PATCH',
-        headers: headers,
+      const res = await fetch((config.workerUrl || '') + '/api/feedback/' + config.docId + '/' + item.id, {
+        method: 'PATCH', headers: headers,
         body: JSON.stringify({ content: { type: 'text', text: newText } }),
       });
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      if (onSaved) onSaved();
       await loadComments();
-    } catch(e) { /* silent fail */ }
+    } catch(e) { hdToastFail('Edit did not save. Your draft is kept for retry.'); throw e; }
   }
 
   // Swap the comment's text for an inline textarea + Save/Cancel.
@@ -821,7 +823,8 @@
     btn.addEventListener('click', (e) => {
       e.stopPropagation();
       if (textEl.querySelector('textarea')) return; // already editing
-      const original = (item.content && item.content.text) || '';
+      const latestItem = comments.find((comment) => comment.id === item.id) || item;
+      const original = latestItem.content?.text || '';
       textEl.replaceChildren();
       const ta = document.createElement('textarea');
       ta.className = 'hd-edit-area';
@@ -834,16 +837,27 @@
       saveBtn.textContent = 'Save';
       saveBtn.addEventListener('click', async (ev) => {
         ev.stopPropagation();
-        const t = ta.value.trim();
-        if (!t || t === original) { textEl.textContent = original; return; }
+        const submittedValue = ta.value;
+        const t = submittedValue.trim();
+        const latestText = (comments.find((comment) => comment.id === item.id) || item).content?.text || '';
+        if (!t || t === latestText) { textEl.textContent = latestText; return; }
         saveBtn.disabled = true;
         saveBtn.textContent = '...';
-        await editComment(item, t);
+        try {
+          await editComment(item, t, () => {
+            if (textEl.contains(ta) && ta.value === submittedValue) textEl.textContent = t;
+          });
+          saveBtn.disabled = false; saveBtn.textContent = 'Save';
+        }
+        catch (e) { saveBtn.disabled = false; saveBtn.textContent = 'Retry'; }
       });
       const cancelBtn = document.createElement('button');
       cancelBtn.className = 'hd-popover-cancel';
       cancelBtn.textContent = 'Cancel';
-      cancelBtn.addEventListener('click', (ev) => { ev.stopPropagation(); textEl.textContent = original; });
+      cancelBtn.addEventListener('click', (ev) => {
+        ev.stopPropagation();
+        textEl.textContent = (comments.find((comment) => comment.id === item.id) || item).content?.text || '';
+      });
       row.append(saveBtn, cancelBtn);
       textEl.append(ta, row);
       ta.focus();
@@ -1082,19 +1096,24 @@
     });
   }
 
+  let commentsLoadGeneration = 0;
   async function loadComments() {
+    const generation = ++commentsLoadGeneration;
     var headers = {};
     if (HD_ACCESS) headers['X-HTMLDrop-Access'] = HD_ACCESS;
     try {
-      const res = await fetch((config.workerUrl || '') + '/api/feedback/' + config.docId, { headers: headers });
+      const res = await fetch((config.workerUrl || '') + '/api/feedback/' + config.docId, { headers: headers, cache: 'no-store' });
+      if (!res.ok) throw new Error('HTTP ' + res.status);
       const data = await res.json();
+      if (generation !== commentsLoadGeneration) return;
       comments = data.items || [];
       computeAnchorStatus();
       renderPanel();
       highlightAnchors();
       renderAreaBoxes();
-    } catch(e) { comments = []; renderPanel(); }
+    } catch(e) { /* Keep the last successful comments and every unsent draft. */ }
   }
+  window.addEventListener('htmldrop:feedback-refresh', () => { loadComments(); });
 
   // Re-draw saved area-annotation boxes over the document (light-DOM overlay).
   function renderAreaBoxes() {
@@ -1173,6 +1192,20 @@
   }
 
   function renderPanel() {
+    // Reuse composing DOM nodes so text, IME state, selections and event handlers
+    // survive an incoming agent reply. Refresh the surrounding thread normally.
+    const composeDraft = panel.querySelector('.hd-compose');
+    const focused = shadow.activeElement;
+    const selection = focused && typeof focused.selectionStart === 'number'
+      ? [focused.selectionStart, focused.selectionEnd, focused.selectionDirection] : null;
+    const previousList = panel.querySelector('.hd-list');
+    const previousScroll = previousList ? previousList.scrollTop : 0;
+    const drafts = Array.from(panel.querySelectorAll('[data-comment-id]')).map((row) => ({
+      row, id: row.dataset.commentId,
+      reply: row.querySelector(':scope > .hd-reply-input'),
+      text: row.querySelector(':scope > .hd-text:has(textarea)'),
+      edit: row.querySelector(':scope > .hd-edit-btn'),
+    })).filter((draft) => draft.reply || draft.text);
     panel.replaceChildren();
 
     // Header
@@ -1246,14 +1279,15 @@
     submitBtn.className = 'hd-compose-submit';
     submitBtn.textContent = 'Comment';
     submitBtn.addEventListener('click', async () => {
-      const text = textarea.value.trim();
+      const submittedValue = textarea.value;
+      const text = submittedValue.trim();
       if (!text) return;
       // Nudge for a name; if they opt to add one, abort (text stays in the box).
       if (!(await promptNameIfNeeded(nameInput))) return;
       submitBtn.disabled = true;
       try {
         await submitComment(null, null, text);
-        textarea.value = ''; // clear only on success
+        if (textarea.value === submittedValue) textarea.value = ''; // keep text typed while sending
       } catch (e) { /* failed: toast shown, text kept in the box for retry */ }
       submitBtn.disabled = false;
     });
@@ -1263,7 +1297,27 @@
     });
     composeActions.append(nameInput, submitBtn);
     compose.append(textarea, composeActions);
-    panel.appendChild(compose);
+    panel.appendChild(composeDraft || compose);
+    const rows = Array.from(list.querySelectorAll('[data-comment-id]'));
+    for (const draft of drafts) {
+      const next = rows.find((row) => row.dataset.commentId === draft.id);
+      if (!next) {
+        // A concurrent deletion must not erase a draft the reviewer is writing.
+        list.appendChild(draft.row);
+        continue;
+      }
+      if (draft.reply) next.appendChild(draft.reply);
+      if (draft.text) {
+        next.querySelector(':scope > .hd-text').replaceWith(draft.text);
+        const nextEdit = next.querySelector(':scope > .hd-edit-btn');
+        if (nextEdit && draft.edit) nextEdit.replaceWith(draft.edit);
+      }
+    }
+    list.scrollTop = previousScroll;
+    if (focused && panel.contains(focused)) {
+      focused.focus({ preventScroll: true });
+      if (selection) try { focused.setSelectionRange(...selection); } catch (e) {}
+    }
   }
 
   // Shared reply composer used by BOTH the top-level Reply button and each
@@ -1285,12 +1339,14 @@
     sendBtn.textContent = 'Reply';
     sendBtn.addEventListener('click', async (ev) => {
       ev.stopPropagation();
-      const t = input.value.trim();
+      const submittedValue = input.value;
+      const t = submittedValue.trim();
       if (!t) return;
       if (!(await promptNameIfNeeded(input))) return; // nudge for a name first
       sendBtn.disabled = true;
       try {
-        await submitReply(parentItem, t);
+        await submitReply(parentItem, t, () => { if (input.value === submittedValue) wrap.remove(); });
+        sendBtn.disabled = false; sendBtn.textContent = 'Reply';
       } catch (e) { sendBtn.disabled = false; sendBtn.textContent = 'Retry'; } // keep the text
     });
     // Cmd/Ctrl+Enter sends (Enter alone = newline) — consistent with the comment
@@ -1410,6 +1466,7 @@
       childReplies.forEach(reply => {
         const r = document.createElement('div');
         r.className = 'hd-reply-item';
+        r.dataset.commentId = reply.id;
         const rHeader = document.createElement('div');
         rHeader.className = 'hd-comment-header';
         const rAvatar = document.createElement('div');

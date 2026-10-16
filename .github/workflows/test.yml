@@ -25,4 +25,13 @@ jobs:
       - run: npm ci --prefix worker
       - run: npx playwright install --with-deps chromium
       - run: npm test
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: browser-uat-node-${{ matrix.node }}
+          path: |
+            .scratch/m1-uat/run-*/*.png
+            .scratch/m1-uat/run-*/*-failure.json
+          if-no-files-found: ignore
+          retention-days: 7
       - run: npm pack --dry-run

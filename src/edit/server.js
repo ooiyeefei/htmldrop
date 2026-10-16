@@ -376,6 +376,8 @@ export async function startServer({ host = '127.0.0.1', port = 0, idleTimeoutMs 
     res.writeHead(200, { 'content-type': 'text/event-stream', 'cache-control': 'no-store', 'x-accel-buffering': 'no', connection: 'keep-alive' });
     res.write(`event: presence\ndata: ${JSON.stringify({ state: presenceOf(key) })}\n\n`);
     res.write(`event: chat\ndata: ${JSON.stringify(store.getChat(key))}\n\n`);
+    // Reconnects must refresh feedback changed while the stream was offline.
+    res.write('event: feedback\ndata: {}\n\n');
     // Replay any already-pending question so a freshly-loaded/reloaded tab shows it.
     const q0 = store.getQuestion(key);
     if (q0) res.write(`event: question\ndata: ${JSON.stringify({ question: q0 })}\n\n`);
@@ -384,12 +386,14 @@ export async function startServer({ host = '127.0.0.1', port = 0, idleTimeoutMs 
     const onReload = (k) => { if (k === key && !res.writableEnded) res.write('event: reload\ndata: {}\n\n'); };
     const onPresence = (k, state) => { if (k === key && !res.writableEnded) res.write(`event: presence\ndata: ${JSON.stringify({ state })}\n\n`); };
     const onChat = (k) => { if (k === key && !res.writableEnded) res.write(`event: chat\ndata: ${JSON.stringify(store.getChat(key))}\n\n`); };
+    const onFeedback = (k) => { if (k === key && !res.writableEnded) res.write('event: feedback\ndata: {}\n\n'); };
     const onEnded = (k) => { if (k === key && !res.writableEnded) res.write('event: ended\ndata: {}\n\n'); };
     const onHold = (k, on) => { if (k === key && !res.writableEnded) res.write(`event: hold\ndata: ${JSON.stringify({ hold: on })}\n\n`); };
     const onQuestion = (k) => { if (k === key && !res.writableEnded) res.write(`event: question\ndata: ${JSON.stringify({ question: store.getQuestion(key) })}\n\n`); };
     events.on('reload', onReload);
     events.on('presence', onPresence);
     events.on('chat', onChat);
+    events.on('feedback', onFeedback);
     events.on('ended', onEnded);
     events.on('hold', onHold);
     events.on('question', onQuestion);
@@ -401,6 +405,7 @@ export async function startServer({ host = '127.0.0.1', port = 0, idleTimeoutMs 
       events.off('reload', onReload);
       events.off('presence', onPresence);
       events.off('chat', onChat);
+      events.off('feedback', onFeedback);
       events.off('ended', onEnded);
       events.off('hold', onHold);
       events.off('question', onQuestion);
@@ -559,6 +564,7 @@ export async function startServer({ host = '127.0.0.1', port = 0, idleTimeoutMs 
       if ((m = path.match(/^\/__edit\/([a-f0-9]{16})\/import$/)) && method === 'POST') {
         const body = reviewerInput(req, await readJsonBody(req));
         const r = store.importComments(m[1], body.comments || []);
+        events.emit('feedback', m[1]);
         sendJson(res, 200, r);
         return;
       }

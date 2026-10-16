@@ -571,6 +571,9 @@ export function injectEditRuntime(html, { key, version = '0', sourceHash = '', r
   // --- SSE ------------------------------------------------------------------
   try {
     var es = new EventSource('/__edit/events/' + KEY);
+    es.addEventListener('feedback', function () {
+      window.dispatchEvent(new CustomEvent('htmldrop:feedback-refresh'));
+    });
     es.addEventListener('chat', function (e) {
       try { var chat = JSON.parse(e.data).chat || []; renderFeed(chat);
         // auto-reveal the feed when a new agent reply arrives

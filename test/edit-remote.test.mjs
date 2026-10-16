@@ -193,6 +193,32 @@ test('private review has session authority while agent control remains local', a
       } finally { sse.close(); }
     });
 
+    await t.test('threaded reply changes reach SSE after the original comment read has settled', async () => {
+      const browser = { ...remote, cookie };
+      const sse = await stream(review.port, `/__edit/events/${key}`, browser);
+      try {
+        await until(() => sse.text.includes('event: chat'));
+        const added = await call(review.port, `/api/feedback/${key}`, { ...browser, method: 'POST', body: {
+          content: { type: 'text', text: 'A settled reviewer comment' }, editToken: 'settled-owner',
+        } });
+        assert.equal(added.status, 201);
+        const original = await call(review.port, `/api/feedback/${key}`, browser);
+        assert.equal(original.data.items.find(item => item.id === added.data.id).parentId, null);
+        assert.ok(!original.data.items.some(item => item.parentId === added.data.id));
+        const beforeReply = sse.text;
+        const replied = await call(server.port, `/api/feedback/${key}/${added.data.id}/reply`, { ...agent, method: 'POST', body: {
+          content: { type: 'text', text: 'A later agent reply' }, author: { displayName: 'Agent' }, agent: true,
+        } });
+        assert.equal(replied.status, 201);
+        await until(() => sse.text.slice(beforeReply.length).includes('event: feedback'));
+        const refreshed = await call(review.port, `/api/feedback/${key}`, browser);
+        assert.equal(refreshed.data.items.find(item => item.id === replied.data.id).content.text, 'A later agent reply');
+        const reconnected = await stream(review.port, `/__edit/events/${key}`, browser);
+        try { await until(() => reconnected.text.includes('event: feedback')); }
+        finally { reconnected.close(); }
+      } finally { sse.close(); }
+    });
+
     await t.test('concurrent reads cannot invalidate a freshly posted complete layout audit', async () => {
       const { computeArtifactRevision } = await import('../src/edit/assets.js');
       const browser = { ...remote, cookie };

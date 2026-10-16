@@ -195,9 +195,58 @@ test('actual browser edit and private reviewer UAT', { timeout: 120000 }, async 
     const port = await freePort(), remoteOrigin = `http://127.0.0.1:${port}`;
     gateway = await startRemoteGateway({ port, publicOrigin: remoteOrigin, sessionKey: key, backendPort: server.port });
     const reviewer = await browser.newContext({ viewport: { width: 1280, height: 800 } });
-    const review = await reviewer.newPage(), remoteErrors = [];
+    const review = await reviewer.newPage(), remoteErrors = [], browserTrace = [];
+    await review.exposeFunction('__recordUatEvent', event => browserTrace.push({ at: Date.now(), ...event }));
+    await review.addInitScript(() => {
+      const NativeEventSource = window.EventSource;
+      window.EventSource = class extends NativeEventSource {
+        constructor(url, options) {
+          super(url, options);
+          for (const type of ['open', 'error', 'presence', 'chat', 'feedback', 'reload', 'ended', 'hold', 'question']) {
+            this.addEventListener(type, event => { window.__recordUatEvent({ kind: 'sse', type, path: new URL(url, location.href).pathname, data: event.data || null }).catch(() => {}); });
+          }
+        }
+      };
+    });
+    review.on('response', async response => {
+      const url = new URL(response.url());
+      if (!url.pathname.startsWith('/api/feedback/')) return;
+      const record = { at: Date.now(), kind: 'feedback-response', method: response.request().method(), path: url.pathname, status: response.status() };
+      try { record.data = await response.json(); } catch (error) { record.error = error.message; }
+      browserTrace.push(record);
+    });
+    review.on('requestfailed', request => browserTrace.push({ at: Date.now(), kind: 'requestfailed', method: request.method(), path: new URL(request.url()).pathname, error: request.failure()?.errorText }));
     review.on('pageerror', e => remoteErrors.push(e.message));
     const remoteBar = review.locator('#htmldrop-edit-host'), widget = review.locator('#htmldrop-widget-host');
+    const replyVisible = text => review.evaluate(expected => {
+      const sections = document.getElementById('htmldrop-widget-host')?.shadowRoot?.querySelectorAll('.hd-reply-section') || [];
+      return [...sections].some(section => section.textContent.includes(expected) && section.checkVisibility());
+    }, text);
+    async function delayedSave(method, routePath, send, changeDraft, expectedStatus) {
+      let response, routed = false, routeError;
+      let release;
+      const pending = new Promise(resolve => { release = resolve; });
+      const handler = async route => {
+        if (route.request().method() !== method) { await route.continue(); return; }
+        try {
+          response = await route.fetch();
+          await pending;
+          await route.fulfill({ response });
+          routed = true;
+        } catch (error) { routeError = error; }
+      };
+      await review.route(remoteOrigin + routePath, handler);
+      try {
+        await send();
+        await eventually(() => response || routeError, `${method} save did not reach the response barrier`);
+        if (routeError) throw routeError;
+        assert.equal(response.status(), expectedStatus);
+        await changeDraft();
+        release();
+        await eventually(() => routed || routeError, `${method} saved response was not released`);
+        if (routeError) throw routeError;
+      } finally { release(); await review.unroute(remoteOrigin + routePath, handler); }
+    }
     try {
       assert.equal((await reviewer.request.get(remoteOrigin + path)).status(), 401);
       const secondFile = join(fixture, 'other.html'); await writeFile(secondFile, '<html><body>Unshared</body></html>');
@@ -220,12 +269,61 @@ test('actual browser edit and private reviewer UAT', { timeout: 120000 }, async 
       const comment = delivered.data.newComments.find(c => c.content.text === 'Please confirm this reviewer comment.');
       assert.ok(comment); assert.equal(comment.context.actor, 'reviewer'); assert.equal(comment.agent, false);
       assert.match(delivered.data.authorityNote, /review-only/);
-      await getJson(origin, `/api/feedback/${key}/${comment.id}/reply`, { token, method: 'POST', body: { content: { type: 'text', text: 'Confirmed in the local agent reply.' }, author: { displayName: 'Agent' }, agent: true } });
-      await eventually(() => widget.locator('.hd-reply-section').textContent().then(text => text.includes('Confirmed in the local agent reply.')), 'Reviewer did not see threaded reply via SSE');
+      // Finish the reviewer's own POST/refresh before replying. Otherwise a fast
+      // agent reply can enter that GET snapshot and conceal a missing SSE refresh.
+      await eventually(() => browserTrace.some(event => event.kind === 'feedback-response' && event.method === 'GET' && event.data?.items?.some(item => item.id === comment.id)), 'Reviewer own-comment refresh did not complete');
+      await eventually(() => review.evaluate(id => !!document.getElementById('htmldrop-widget-host')?.shadowRoot?.querySelector(`.hd-comment[data-comment-id="${id}"]`), comment.id), 'Reviewer own comment did not render');
+      await widget.locator('.hd-compose textarea').fill('Unsent second review note.');
+      await widget.getByPlaceholder('Display name').fill('Draft reviewer name');
+      assert.equal(await replyVisible('Confirmed in the local agent reply.'), false);
+      const agentReply = await getJson(origin, `/api/feedback/${key}/${comment.id}/reply`, { token, method: 'POST', body: { content: { type: 'text', text: 'Confirmed in the local agent reply.' }, author: { displayName: 'Agent' }, agent: true } });
+      assert.equal(agentReply.status, 201);
+      browserTrace.push({ at: Date.now(), kind: 'agent-reply', status: agentReply.status, data: agentReply.data });
+      await eventually(() => replyVisible('Confirmed in the local agent reply.'), 'Reviewer did not see threaded reply via SSE');
+      assert.equal(await widget.locator('.hd-compose textarea').inputValue(), 'Unsent second review note.', 'Incoming feedback discarded the unsent main comment');
+      assert.equal(await widget.getByPlaceholder('Display name').inputValue(), 'Draft reviewer name', 'Incoming feedback discarded the uncommitted display name');
+      await widget.locator('.hd-compose textarea').fill('');
       await widget.locator('.hd-comment').first().getByRole('button', { name: 'Reply', exact: true }).first().click();
       await widget.getByPlaceholder('Reply…', { exact: true }).fill('Reviewer follow-up saved.');
+      assert.equal((await getJson(origin, `/api/feedback/${key}/${comment.id}/reply`, { token, method: 'POST', body: { content: { type: 'text', text: 'Second agent message while composing a follow-up.' }, author: { displayName: 'Agent' }, agent: true } })).status, 201);
+      await eventually(() => replyVisible('Second agent message while composing a follow-up.'), 'Second agent reply did not appear while reviewer was composing');
+      assert.equal(await widget.getByPlaceholder('Reply…', { exact: true }).inputValue(), 'Reviewer follow-up saved.', 'Incoming feedback discarded the unsent threaded reply');
       await widget.locator('.hd-reply-input').getByRole('button', { name: 'Reply', exact: true }).click();
-      await eventually(() => widget.locator('.hd-reply-section').textContent().then(text => text.includes('Reviewer follow-up saved.')), 'Reviewer threaded follow-up missing');
+      await eventually(() => replyVisible('Reviewer follow-up saved.'), 'Reviewer threaded follow-up missing');
+
+      // Save acknowledgements must not erase text typed after the submission.
+      // Hold real upstream responses so both backend writes and SSE refreshes
+      // occur while the user is already composing the next draft.
+      await widget.locator('.hd-compose textarea').fill('Main comment submitted before response.');
+      await delayedSave('POST', `/api/feedback/${key}`,
+        () => widget.locator('.hd-compose-submit').click(),
+        () => widget.locator('.hd-compose textarea').fill('Main draft typed while response pending.'), 201);
+      await eventually(() => widget.locator('.hd-compose-submit').isEnabled(), 'Main comment button remained disabled after save');
+      assert.equal(await widget.locator('.hd-compose textarea').inputValue(), 'Main draft typed while response pending.', 'Main save acknowledgement erased the newer draft');
+      assert.ok((await getJson(origin, `/api/feedback/${key}`)).data.items.some(item => item.content.text === 'Main comment submitted before response.'));
+      await widget.locator('.hd-compose textarea').fill('');
+
+      const ownComment = widget.locator(`.hd-comment[data-comment-id="${comment.id}"]`);
+      await eventually(() => ownComment.locator(':scope > .hd-reply-input').count().then(count => count === 0), 'Previous submitted reply composer did not close');
+      await ownComment.locator(':scope > .hd-reply-btn').click();
+      await ownComment.locator('.hd-reply-input textarea').fill('Reply submitted before response.');
+      await delayedSave('POST', `/api/feedback/${key}/${comment.id}/reply`,
+        () => ownComment.locator('.hd-reply-input button').click(),
+        () => ownComment.locator('.hd-reply-input textarea').fill('Reply draft typed while response pending.'), 201);
+      await eventually(() => ownComment.locator('.hd-reply-input button').isEnabled(), 'Reply button remained disabled after save');
+      assert.equal(await ownComment.locator('.hd-reply-input textarea').inputValue(), 'Reply draft typed while response pending.', 'Reply save acknowledgement erased the newer draft');
+      assert.ok((await getJson(origin, `/api/feedback/${key}`)).data.items.some(item => item.parentId === comment.id && item.content.text === 'Reply submitted before response.'));
+      await ownComment.locator(':scope > .hd-reply-btn').click();
+
+      await ownComment.locator(':scope > .hd-edit-btn').click();
+      await ownComment.locator('.hd-edit-area').fill('Inline edit submitted before response.');
+      await delayedSave('PATCH', `/api/feedback/${key}/${comment.id}`,
+        () => ownComment.locator('.hd-edit-actions .hd-popover-submit').click(),
+        () => ownComment.locator('.hd-edit-area').fill('Inline edit draft typed while response pending.'), 200);
+      await eventually(() => ownComment.locator('.hd-edit-actions .hd-popover-submit').isEnabled(), 'Inline edit Save remained disabled after save');
+      assert.equal(await ownComment.locator('.hd-edit-area').inputValue(), 'Inline edit draft typed while response pending.', 'Inline edit acknowledgement erased the newer draft');
+      assert.equal((await getJson(origin, `/api/feedback/${key}`)).data.items.find(item => item.id === comment.id).content.text, 'Inline edit submitted before response.');
+      await ownComment.locator('.hd-edit-actions .hd-popover-cancel').click();
       const blocked = [
         ['GET', '/__edit/sessions'], ['POST', '/__edit/sessions'], ['GET', `/api/poll?file=${encodeURIComponent(file)}`],
         ['POST', `/api/edit/${key}/reply`], ['POST', `/api/edit/${key}/question`], ['POST', `/__edit/${key}/end`],
@@ -241,10 +339,10 @@ test('actual browser edit and private reviewer UAT', { timeout: 120000 }, async 
       const changed = (await readFile(file, 'utf8')).replace(/(?:Original|Repaired) source/, 'Reviewer source reload');
       await writeFile(file, changed);
       await eventually(() => review.locator('#revision').textContent().then(text => text === 'Reviewer source reload'), 'Reviewer SSE source reload missing');
-      await eventually(() => widget.locator('.hd-reply-section').textContent().then(text => text.includes('Reviewer follow-up saved.')), 'Reviewer comments did not persist after reload');
+      await eventually(() => replyVisible('Reviewer follow-up saved.'), 'Reviewer comments did not persist after reload');
       await writeFile(join(fixture, 'site.css'), initialCss.replace('rgb(20,80,110)', 'rgb(30,100,60)'));
       await eventually(() => review.locator('h1').evaluate(el => getComputedStyle(el).color === 'rgb(30, 100, 60)'), 'Reviewer dependency CSS SSE reload missing');
-      await eventually(() => widget.locator('.hd-reply-section').textContent().then(text => text.includes('Reviewer follow-up saved.')), 'Reviewer comments did not persist after dependency reload');
+      await eventually(() => replyVisible('Reviewer follow-up saved.'), 'Reviewer comments did not persist after dependency reload');
       assert.equal(await remoteBar.locator('#pub').count(), 0);
       assert.deepEqual(remoteErrors, []);
       await eventually(() => remoteBar.locator('#inboxToggle').textContent().then(text => !text.includes('unverified') && !text.includes('checking')), 'Reviewer browser did not complete its current layout check');
@@ -255,6 +353,17 @@ test('actual browser edit and private reviewer UAT', { timeout: 120000 }, async 
       await reuse.getByText('This review link has expired or was already used.', { exact: false }).waitFor();
       assert.equal((await clean.request.get(remoteOrigin + path)).status(), 401);
       await clean.close();
+    } catch (error) {
+      const evidence = await Promise.allSettled([
+        getJson(origin, `/api/feedback/${key}`),
+        review.evaluate(() => {
+          const root = document.getElementById('htmldrop-widget-host')?.shadowRoot;
+          return { url: location.origin + location.pathname, ready: document.readyState, visibility: document.visibilityState, widgetHtml: root?.innerHTML, widgetText: root?.textContent, renderedComments: [...(root?.querySelectorAll('.hd-comment') || [])].map(node => ({ id: node.dataset.commentId, text: node.innerText, visible: node.checkVisibility() })), renderedReplySections: [...(root?.querySelectorAll('.hd-reply-section') || [])].map(node => ({ text: node.innerText, visible: node.checkVisibility() })), editHtml: document.getElementById('htmldrop-edit-host')?.shadowRoot?.innerHTML };
+        }),
+        review.screenshot({ path: join(fixture, 'reviewer-failure.png'), fullPage: true }),
+      ]);
+      await writeFile(join(fixture, 'reviewer-failure.json'), JSON.stringify({ error: error.message, remoteErrors, browserTrace, comments: evidence[0].status === 'fulfilled' ? evidence[0].value : String(evidence[0].reason), browser: evidence[1].status === 'fulfilled' ? evidence[1].value : String(evidence[1].reason) }, null, 2));
+      throw error;
     } finally { await reviewer.close(); }
   });
   t.diagnostic(`Evidence: ${fixture}`);

@@ -19,6 +19,7 @@ All notable changes to this project are documented here. The format is based on
 - Preserve independent layout evidence across viewport sizes and reject stale reports after dependency changes.
 - Restore staged files after deployment failures, avoiding accidental publication in a later push.
 - Stop serving cached public HTML when a document becomes password-protected.
+- Refresh reviewer comments and agent replies live, including after reconnect, while preserving unsent drafts.
 
 ### Validation
 
