@@ -263,9 +263,28 @@ test('bundled canvas drawing, selected-shape threads, review and conflict retain
     await frame.getByLabel('Choose diagram').selectOption(id);
     await frame.locator('.excalidraw canvas.interactive').first().waitFor();
     await eventually(() => frame.getByRole('status').textContent().then(text => text.includes('Diagram ready')), 'Canvas did not finish opening');
+    await editorReady(frame);
     return frame;
   };
+  async function editorReady(frame) {
+    await eventually(() => frame.locator('body').evaluate(() => ['.toolbar', '.workspace'].every(selector => {
+      const element = document.querySelector(selector);
+      return element && !element.inert;
+    })), 'Editor did not release its toolbar and canvas');
+  }
+  async function selectShape(target, frame, point, shapeId) {
+    await editorReady(frame);
+    const canvas = frame.locator('.excalidraw canvas.interactive');
+    const box = await canvas.boundingBox();
+    await canvas.click({ position: { x: box.width - 120, y: 100 } });
+    await target.keyboard.press('Escape');
+    await eventually(() => frame.getByText(/^Selected shape:/).count().then(count => count === 0), 'Canvas selection did not clear');
+    await target.keyboard.press('v');
+    await target.mouse.click(point.x, point.y);
+    await eventually(() => frame.getByText(`Selected shape: ${shapeId}`, { exact: true }).count().then(Boolean), 'Intended saved shape was not selected');
+  }
   async function draw(target, frame, xOffset = 0) {
+    await editorReady(frame);
     const canvas = frame.locator('.excalidraw canvas.interactive').first();
     const box = await canvas.boundingBox();
     assert.ok(box && box.width > 300 && box.height > 200, 'Real canvas must have a usable viewport');
@@ -299,19 +318,21 @@ test('bundled canvas drawing, selected-shape threads, review and conflict retain
     const native = JSON.parse(draft.bytes.toString());
     assert.ok(native.elements.some(el => el.id === createdShapeId && el.type === 'rectangle' && el.width > 100 && el.height > 70));
     assert.ok(native.elements.some(el => el.type === 'text' && el.text === 'Native acceptance text'));
+    const saveResponse = page.waitForResponse(response => response.url() === `${origin}${path}/save` && response.request().method() === 'POST');
     await ui.getByRole('button', { name: 'Save diagram', exact: true }).click();
-    await eventually(() => status().textContent().then(text => text.includes('Diagram saved.')), 'Save did not acknowledge browser edit');
+    assert.equal((await saveResponse).status(), 200, 'Native canvas save did not succeed');
     const accepted = await read(); savedRevision = accepted.revisionId;
+    assert.deepEqual(accepted.scene.elements, native.elements, 'Native save changed the drawn shapes or text');
     assert.ok(accepted.scene.elements.some(el => el.id === createdShapeId && !el.isDeleted));
     assert.match(accepted.svg, /<path|<rect/);
     assert.match(accepted.svg, /Native acceptance text/);
     assert.ok(!accepted.svg.includes('First accepted preview'), 'Saved SVG was the seed preview rather than real canvas rendering');
-    await page.mouse.click(rectanglePoint.x, rectanglePoint.y);
-    await eventually(() => ui.getByText(`Selected shape: ${createdShapeId}`, { exact: true }).count().then(Boolean), 'Saved shape could not be selected for comment');
+    await selectShape(page, ui, rectanglePoint, createdShapeId);
     await ui.getByLabel('Your name', { exact: true }).fill('Canvas reviewer');
     await ui.getByLabel('Shape comment', { exact: true }).fill('Please keep this component visible.');
+    const commentResponse = page.waitForResponse(response => response.url() === `${origin}${path}/comments` && response.request().method() === 'POST');
     await ui.getByRole('button', { name: 'Comment on shape', exact: true }).click();
-    await eventually(() => status().textContent().then(text => text.includes('Shape comment saved.')), 'Shape comment did not save');
+    assert.equal((await commentResponse).status(), 201, 'Selected-shape comment did not save');
     const comments = (await json(origin, `${path}/comments`)).data.items;
     const comment = comments.find(c => (c.text || c.content?.text) === 'Please keep this component visible.');
     assert.ok(comment); rootCommentId = comment.id;
@@ -319,10 +340,36 @@ test('bundled canvas drawing, selected-shape threads, review and conflict retain
     assert.equal(comment.anchor.revisionId, savedRevision);
     const record = ui.locator('.record').filter({ hasText: 'Please keep this component visible.' });
     await record.getByLabel('Reply to shape comment').fill('Confirmed; this stays in the diagram.');
-    await record.getByRole('button', { name: 'Reply', exact: true }).click();
-    await record.getByText('Confirmed; this stays in the diagram.', { exact: false }).waitFor();
-    await page.mouse.click(lastDrawPoint.x, lastDrawPoint.y);
+    // The actual reply can arrive via SSE before its POST acknowledges and
+    // releases the canvas. Hold that response to exercise this ordering.
+    let releaseReply, finishReply, replyArrived = false, replyError;
+    const replyFinished = new Promise(resolve => { finishReply = resolve; });
+    const replyBarrier = new Promise(resolve => { releaseReply = resolve; });
+    const replyPath = `${origin}/api/feedback/${key}/${comment.id}/reply`;
+    const holdReply = async route => {
+      replyArrived = true;
+      try { const response = await route.fetch(); await replyBarrier; await route.fulfill({ response }); }
+      catch (error) { replyError = error.message; }
+      finally { finishReply(); }
+    };
+    await page.route(replyPath, holdReply);
+    try {
+      await record.getByRole('button', { name: 'Reply', exact: true }).click();
+      await record.getByText('Confirmed; this stays in the diagram.', { exact: false }).waitFor();
+      assert.equal(await ui.locator('.workspace').evaluate(element => element.inert), true, 'Reply visibility must not imply editable canvas');
+    } finally {
+      releaseReply();
+      if (replyArrived) await replyFinished;
+      await page.unroute(replyPath, holdReply);
+    }
+    assert.equal(replyError, undefined);
+    await selectShape(page, ui, rectanglePoint, createdShapeId);
     await page.keyboard.press('Delete');
+    const afterDelete = JSON.parse((await downloadBytes(page, () => ui.getByRole('button', { name: 'Export JSON', exact: true }).click())).bytes.toString());
+    assert.equal(afterDelete.elements.some(element => element.id === createdShapeId && !element.isDeleted), false, 'Native canvas still contains the shape after Delete');
+    assert.ok(afterDelete.elements.some(element => element.id === 'uat-stable-shape' && !element.isDeleted), 'Delete removed another component');
+    assert.ok(afterDelete.elements.some(element => element.type === 'text' && element.text === 'Native acceptance text'), 'Delete removed the unrelated text');
+    await editorReady(ui);
     await ui.getByRole('button', { name: 'Save diagram', exact: true }).click();
     await eventually(() => read().then(doc => doc.revisionId !== savedRevision && !doc.scene.elements.some(el => el.id === createdShapeId && !el.isDeleted)), 'Deleting a selected canvas shape was not saved');
     await page.screenshot({ path: join(fixture, 'canvas-comment-reply.png'), fullPage: true });
@@ -344,6 +391,7 @@ test('bundled canvas drawing, selected-shape threads, review and conflict retain
     await eventually(() => status().textContent().then(text => text.includes('Mermaid imported')), 'Bundled Mermaid conversion failed');
     await eventually(() => previousCanvas.evaluate(element => !element.isConnected), 'Imported diagram did not mount a new native canvas');
     await ui.locator('.excalidraw canvas.interactive').waitFor();
+    await editorReady(ui);
     const imported = JSON.parse((await downloadBytes(page, () => ui.getByRole('button', { name: 'Export JSON', exact: true }).click())).bytes.toString());
     await writeFile(join(fixture,'mermaid-native-export.json'), JSON.stringify(imported,null,2));
     assert.ok(imported.elements.some(el => el.type === 'text' && el.text === 'Client'));
@@ -409,6 +457,7 @@ test('bundled canvas drawing, selected-shape threads, review and conflict retain
     }
     await ui.getByLabel('Choose diagram').selectOption(id);
     await eventually(() => ui.getByLabel('Diagram title').inputValue().then(title => title === 'Browser-drawn architecture'), 'Original diagram did not reopen after import');
+    await editorReady(ui);
   });
 
   await t.test('private reviewer edits real canvas and proposes; owner accepts then rejects a separate candidate', async () => {
@@ -459,6 +508,7 @@ test('bundled canvas drawing, selected-shape threads, review and conflict retain
   });
 
   await t.test('external source conflict yields 409, preserves accepted bytes and downloadable unsaved draft', async () => {
+    await editorReady(ui);
     await ui.getByLabel('Diagram title').fill('Unsaved conflict draft');
     const expectedDraft = JSON.parse((await downloadBytes(page, () => ui.getByRole('button', { name: 'Export JSON', exact: true }).click())).bytes.toString());
     let release, observedStatus;
