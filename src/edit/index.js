@@ -13,7 +13,7 @@
 import { existsSync, statSync } from 'node:fs';
 import { resolve, extname, basename } from 'node:path';
 import open from 'open';
-import { ensureServerRunning, runningPort, postJson, getJson, pollFeedback } from './client.js';
+import { ensureServerRunning, runningPort, postJson, getJson, deleteJson, pollFeedback } from './client.js';
 import { listSessions, pendingCount, sessionKeyFor, undeliveredComments } from './store.js';
 import { feedbackPull } from '../feedback/pull.js';
 import { loadManifest } from '../manifest.js';
@@ -40,11 +40,11 @@ export async function editStart(file, options = {}) {
   if (options.withFeedback) await importPublishedFeedback(port, key, abs);
   else hintPublishedFeedback(abs);
 
-  console.log(`\nChat with the agent in the left panel; read/annotate comments on the right.`);
+  console.log(`\nSelect text or an area to comment. Use the edit bar to see replies and layout issues.`);
   console.log(`For the agent to listen, it runs (and keeps re-running):`);
   console.log(`  htmldrop edit poll ${file} --json      # blocks until you send a message`);
   console.log(`  htmldrop edit reply ${file} --text ... # agent replies after editing`);
-  console.log(`\nThe page live-reloads whenever the file changes. Stop with \`htmldrop edit stop\`.\n`);
+  console.log(`\nThe page live-reloads when the HTML or a declared dependency changes. Stop with \`htmldrop edit stop\`.\n`);
 
   if (options.open !== false) {
     try { await open(url); } catch { /* headless / no browser — the URL above still works */ }
@@ -166,6 +166,14 @@ function layoutNextStep(warnings = []) {
   return hasBlockingLayoutWarnings(warnings)
     ? 'Fix these error-severity (level:error) findings before involving the human; warnings may ship with a note.'
     : 'No blocking layout issues — safe to proceed.';
+}
+
+function layoutStatusNextStep(data = {}) {
+  if (!data.at) return 'Open the page in a browser to measure its layout.';
+  if (!data.complete) return 'The layout check is incomplete or stale. Open the current page and use Recheck in the layout inbox.';
+  const unresolved = (data.issues || []).filter((issue) => !['resolved', 'ignored'].includes(issue.status));
+  if (unresolved.length) return `Review ${unresolved.length} unresolved layout issue(s), including findings from other viewport sizes.`;
+  return layoutNextStep(data.warnings || []);
 }
 
 function pollNextStep(file, data = {}) {
@@ -295,20 +303,60 @@ export async function editLayout(file, options = {}) {
     const { key } = sessionKeyFor(abs);
     const data = await getJson(port, `/api/edit/${key}/layout`);
     if (options.json) {
-      const output = { ...(data || {}), next_step: layoutNextStep(data?.warnings || []) };
+      const output = { ...(data || {}), next_step: layoutStatusNextStep(data) };
       console.log(JSON.stringify(output, null, 2));
       return output;
     }
-    if (!data.warnings?.length) {
-      console.log(data.at ? 'No layout issues detected in the current render.' : 'No layout audit yet — open the page in the browser first so it can be measured.');
-      return data;
-    }
+    console.log(layoutStatusNextStep(data));
+    if (data.issues?.length) console.log(`History: ${data.issues.filter(i => i.status === 'resolved').length} resolved, ${data.issues.filter(i => i.status === 'ignored').length} ignored.`);
     printLayoutWarnings(data.warnings);
     return data;
   } catch (e) {
     if (options.json) jsonError(e, editAgentHint(file, `htmldrop edit layout ${file} --json`));
     throw e;
   }
+}
+
+// The private reviewer gateway is a separate listener. Agent controls never
+// travel through it; the caller supplies the exact HTTPS origin of its proxy.
+export async function editShare(file, options = {}) {
+  const abs = assertHtmlFile(file);
+  const port = await ensureServerRunning();
+  const { key } = await postJson(port, '/__edit/sessions', { file: abs });
+  const gatewayPort = Number(options.port ?? 7392);
+  const minutes = Number(options.expires ?? 60);
+  if (!Number.isInteger(gatewayPort) || gatewayPort < 0 || gatewayPort > 65535) throw new Error('Gateway port must be an integer from 0 to 65535.');
+  if (!Number.isFinite(minutes) || minutes <= 0 || minutes > 10080) throw new Error('Expiry must be between 0 and 10080 minutes (seven days).');
+  const result = await postJson(port, `/__edit/${key}/share`, {
+    publicOrigin: options.origin, port: gatewayPort, ttlMs: minutes * 60 * 1000,
+  });
+  if (options.json) console.log(JSON.stringify(result, null, 2));
+  else {
+    const external = new URL(result.origin);
+    console.log(`Private review gateway for ${file}:`);
+    console.log(`  Proxy target: http://127.0.0.1:${result.port}`);
+    console.log(`  Review link: ${result.url}`);
+    console.log(`  Expires: ${new Date(result.expiresAt).toISOString()}`);
+    console.log(`Use a private HTTPS proxy that preserves Host. For Tailscale Serve:`);
+    console.log(`  tailscale serve --bg --https=${external.port || 443} http://127.0.0.1:${result.port}`);
+    console.log('The review link opens once in a browser; that browser keeps access until expiry or revocation.');
+    console.log(`Revoke access: htmldrop edit unshare ${file}`);
+  }
+  if (options.open === true) {
+    try { await open(result.url); } catch { /* link is also printed */ }
+  }
+  return result;
+}
+
+export async function editUnshare(file, options = {}) {
+  const abs = assertHtmlFile(file);
+  const port = runningPort();
+  if (!port) throw new Error('No edit server running.');
+  const { key } = sessionKeyFor(abs);
+  const result = await deleteJson(port, `/__edit/${key}/share`);
+  if (options.json) console.log(JSON.stringify(result, null, 2));
+  else console.log(`Revoked private review access for ${file}.`);
+  return result;
 }
 
 // The agent's voice in the conversation. After acting on a message, it replies

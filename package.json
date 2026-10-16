@@ -1,6 +1,6 @@
 {
   "name": "@yeefeiooi/htmldrop",
-  "version": "1.15.0",
+  "version": "1.16.0",
   "description": "Publish HTML files and get shareable links via Surge.sh",
   "type": "module",
   "repository": {
@@ -26,7 +26,7 @@
     "node": ">=18"
   },
   "scripts": {
-    "test": "echo \"No tests yet\" && exit 0",
+    "test": "node --test test/*.test.mjs && node test-fixtures/crypto-roundtrip.test.mjs && node test-fixtures/access-token.test.mjs",
     "diagrams": "mmdc -i docs/diagrams/collab-flow.mmd -o docs/assets/collab-flow.svg -c docs/diagrams/theme.json -p docs/diagrams/puppeteer.json -b transparent && mmdc -i docs/diagrams/collab-flow.mmd -o docs/assets/collab-flow.png -c docs/diagrams/theme.json -p docs/diagrams/puppeteer.json -b white -s 2"
   },
   "keywords": [

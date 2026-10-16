@@ -6,7 +6,9 @@ htmldrop has three modes:
 
 1. **Simple share** — publish any HTML file and get a public (or password-protected) link, hosted free on [Surge.sh](https://surge.sh).
 2. **Collaborative feedback + converge** — publish with an embedded annotation widget so reviewers can highlight text and comment (no account needed), then pull that feedback and let an LLM synthesize an improved version.
-3. **Edit mode** — a local, real-time loop to refine a page *with your AI agent* before you publish it. No hosting, no link; it runs entirely on `127.0.0.1`.
+3. **Edit mode** — a local, real-time loop to refine a page *with your AI agent* before publishing. It runs on `127.0.0.1` by default; an optional private review gateway lets another device join through your HTTPS proxy.
+
+Every publish includes **document history**, whether feedback is enabled or not. Readers can open **History**, view an earlier version, and compare added and removed text. History begins with publishes made using this version; past content that was never saved cannot be reconstructed.
 
 ```
 npm install -g @yeefeiooi/htmldrop
@@ -485,7 +487,51 @@ The agent can also **ask you** a question mid-loop — `htmldrop edit ask report
 - **Author-facing & separate.** Sessions live under `~/.htmldrop/edit/`, keyed by file path — never mixed into a published thread. Edit mode is for **you** to firm the doc up with an agent; when ready, `htmldrop push --feedback` shares it for external review as usual.
 - **Reliable.** A stable local port keeps an open tab alive across restarts; a failed save shows a retry toast (and keeps your text) rather than losing it; sessions persist on disk.
 
-The local server binds loopback only, rejects non-loopback `Host`/`Origin` (guarding against DNS-rebinding and CSRF from other sites you have open), serves only `.html`/`.htm`, and self-shuts after 30 minutes idle.
+The author/agent server binds loopback, validates exact browser origins, and requires a private local credential for agent controls. It opens `.html`/`.htm` entrypoints and serves safe, declared sibling assets. Its default port is 7391, with an available-port fallback. It shuts down after 30 idle minutes; active private shares keep it alive until their expiry.
+
+### Files beside the page
+
+Relative HTML/CSS references work during editing: images, stylesheets, fonts and download attachments such as Excel files. Only declared dependencies are served; hidden files, credential/config paths, symlinks, undeclared files and paths outside the page folder are rejected. HTML and dependency saves trigger a reload, including when a missing declared file is created. Dynamic JavaScript imports/fetches are not discovered by the static HTML/CSS scanner.
+
+Publishing still ships a single HTML file. A preflight rejects local asset references, missing files, blocked paths and incomplete scans before deployment. Embed the required assets in the HTML first; assets working in edit mode do not imply they will be uploaded. External HTTPS and data URLs are left intact.
+
+### Layout inbox
+
+The edit bar's **Layout inbox** lists overflow, clipped-text and overlap findings. Select a finding to highlight its target, queue fixes for the agent, or ignore it with a reason. Sending a fix request does not resolve it: a complete check of the current HTML and dependencies at the same viewport must verify that it disappeared. Changes and incomplete checks keep findings unverified. Findings at different viewport sizes remain separate.
+
+`htmldrop edit layout report.html --json` returns the latest audit and issue lifecycle. It does not launch a browser; use **Recheck this viewport** on the open page. Zero warnings from a complete scan applies only to the detector's checks at that viewport.
+
+### Private review from another device
+
+Start an expiring gateway for one file behind an existing private HTTPS proxy:
+
+```bash
+htmldrop edit share report.html --origin https://your-host.your-tailnet.ts.net:8443
+# The command prints its actual loopback proxy port and a one-use review link.
+tailscale serve --bg --https=8443 http://127.0.0.1:7392
+htmldrop edit unshare report.html
+```
+
+Use the printed proxy port if it differs from 7392. Choose an unused HTTPS port so existing proxy services remain intact. The proxy must preserve the configured external Host; the application does not trust arbitrary forwarding headers. `share` configures the local gateway only, not Tailscale or its access policy. Use Tailscale Serve for private tailnet access; publishing remains the path for public review.
+
+The review link opens once and creates an HttpOnly browser-session cookie. Its default lifetime is 60 minutes (`--expires <minutes>`, maximum seven days); revocation disconnects streams immediately. `--port 0` selects a free gateway port, and `--json` returns connection details. Reviewers can comment and request changes, but cannot register other files, enumerate sessions, poll/reply as the agent, publish, or shut down the server. Agent-delivered inputs identify remote reviewers explicitly. Imported artifact scripts have the same reviewer scope as their page; do not open untrusted artifacts in an author session.
+
+### Automatic publish history
+
+No history flag is needed:
+
+```bash
+htmldrop push report.html              # history, without feedback
+htmldrop push report.html --feedback   # the same history, with comments
+```
+
+Unchanged source is deduplicated. Content or protection changes create a revision. A stable history identity survives feedback toggles and `pull`; `--new-doc` intentionally starts a fresh history. Local history archives live in `~/.htmldrop/history/` outside the deployed site, and the page carries its version records for later viewing and hand-off. A missing older archive is reported as an unavailable gap rather than silently resetting the sequence.
+
+**Private history stays encrypted.** Earlier private revisions retain the password used when they were published; changing today's password does not unlock old revisions. Going public does not decrypt private history. Previous-version previews disable scripts and external resources; redlines compare readable text, including additions and deletions, rather than arbitrary formatting or script changes. A failed deploy restores local staging and does not advance the manifest/history.
+
+For an existing feedback link, password protection is registered before deploying its new page, including when feedback is turned off. If deployment then fails, that remote review link stays protected and its previous password capability may stop working. Retry the same push to synchronize it; the CLI reports this partial transition explicitly. It never automatically reopens private access to recover a failed deploy.
+
+For isolated profiles or test servers, set `HTMLDROP_CONFIG_DIR` to an explicit state directory; the default remains `~/.htmldrop`. Excalidraw editing, shape comments and MCP are planned together for milestone 2 and are not included in this release.
 
 ---
 

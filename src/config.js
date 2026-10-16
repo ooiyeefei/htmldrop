@@ -1,8 +1,12 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 
-const CONFIG_DIR = join(homedir(), '.htmldrop');
+// Explicit isolated profiles are useful for CI and independent edit servers.
+// Never change HOME to redirect this application's state.
+const CONFIG_DIR = process.env.HTMLDROP_CONFIG_DIR
+  ? resolve(process.env.HTMLDROP_CONFIG_DIR)
+  : join(homedir(), '.htmldrop');
 const CONFIG_FILE = join(CONFIG_DIR, 'config.json');
 const SITE_DIR = join(CONFIG_DIR, 'site');
 

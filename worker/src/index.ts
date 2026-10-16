@@ -84,6 +84,15 @@ export default {
       const docMatch = path.match(/^\/doc\/([a-zA-Z0-9_-]+)$/);
       if (docMatch && request.method === 'GET') {
         const docId = docMatch[1];
+        // A former public document may still have an older plaintext snapshot.
+        // Password-protected content is served only by its encrypted published
+        // page, never by this public HTML route, even for an authenticated owner.
+        if (await getAccessRecord(env, docId)) {
+          return new Response('This document is password-protected. Open its original published link.', {
+            status: 403,
+            headers: { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'no-store' },
+          });
+        }
         const html = await getDocContent(env, docId);
         if (!html) {
           return new Response('<html><body><h1>404 — Document not found</h1></body></html>', {
@@ -121,6 +130,9 @@ export default {
         const isOwner = await authorizeOwner(env, authHeader, docId);
         if (!isOwner) {
           return json({ error: 'Unauthorized — only the document author can upload content' }, 403, corsHeaders);
+        }
+        if (await getAccessRecord(env, docId)) {
+          return json({ error: 'Password-protected documents cannot store plaintext HTML here' }, 409, corsHeaders);
         }
         const html = await request.text();
         if (!html) {
@@ -413,6 +425,10 @@ async function handleRegister(request: Request, env: Env, docId: string, headers
     // Set-once owner: a different key already owns this docId. Nothing was written.
     return json({ error: 'Document already owned by a different key' }, 409, headers);
   }
+
+  // Remove the old public snapshot when the owner enables password protection.
+  // The /doc route independently checks access in case deletion is delayed.
+  if (body?.accessHash && body?.salt) await env.FEEDBACK.delete(`content:${docId}`);
 
   // Store optional published URL
   if (body?.url) {
