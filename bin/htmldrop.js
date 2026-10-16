@@ -35,6 +35,21 @@ program
   .version(pkg.version);
 
 program
+  .command('mcp')
+  .description('Serve diagram tools over local stdio for one registered HTML artifact')
+  .requiredOption('--artifact <file>', 'HTML file already registered with htmldrop edit start')
+  .option('--role <role>', 'reviewer or owner', 'reviewer')
+  .action(async (options) => {
+    try {
+      const { startMcp } = await import('../src/mcp/index.js');
+      await startMcp(options);
+    } catch (err) {
+      console.error(`Error: ${err.message}`);
+      process.exitCode = 1;
+    }
+  });
+
+program
   .command('init')
   .description('Set up htmldrop (login to Surge and pick a subdomain)')
   .action(async () => {

@@ -582,6 +582,7 @@ export function injectEditRuntime(html, { key, version = '0', sourceHash = '', r
     });
     es.addEventListener('presence', function (e) { try { setState(JSON.parse(e.data).state); } catch (_) {} });
     es.addEventListener('reload', function () {
+      if (window.__htmldropDiagramEditorOpen) { window.dispatchEvent(new CustomEvent('htmldrop:diagram-source-changed')); return; }
       try { sessionStorage.setItem(SCROLL_KEY, String(window.scrollY || window.pageYOffset || 0)); } catch (e) {}
       location.reload();
     });
@@ -601,10 +602,11 @@ export function injectEditRuntime(html, { key, version = '0', sourceHash = '', r
   setInterval(function () {
     fetch(IS_REVIEWER ? WORKER + '/api/edit/' + KEY + '/health' : '/health', { cache: 'no-store' }).then(function (r) {
       if (!r.ok) return;
-      if (sawOutage) { location.reload(); return; }
+      if (sawOutage) { if (window.__htmldropDiagramEditorOpen) { window.dispatchEvent(new CustomEvent('htmldrop:diagram-source-changed')); return; } location.reload(); return; }
       if (statusEl.dataset.sticky === '1') { statusEl.dataset.sticky = ''; statusEl.style.display = 'none'; }
       return r.json().then(function (h) {
         if (h && h.version && h.version !== BUILT_VERSION && !reloading) {
+          if (window.__htmldropDiagramEditorOpen) { window.dispatchEvent(new CustomEvent('htmldrop:diagram-source-changed')); return; }
           reloading = true;
           try { sessionStorage.setItem(SCROLL_KEY, String(window.scrollY || window.pageYOffset || 0)); } catch (e) {}
           location.reload();

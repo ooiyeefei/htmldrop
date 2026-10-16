@@ -37,6 +37,10 @@ import { injectEditRuntime } from './runtime.js';
 import * as store from './store.js';
 import { serveEditAsset, scanArtifactDependencies, computeArtifactRevision } from './assets.js';
 import { startRemoteGateway } from './remote.js';
+import { createDiagramService } from '../diagrams/service.js';
+import { getConfigDir } from '../config.js';
+import { createDiagramRoutes, diagramActor } from './diagrams.js';
+import { serveEditorAsset, injectDiagramLauncher } from './editor-assets.js';
 
 const HEARTBEAT_MS = 15000;
 const DEFAULT_IDLE_MS = 30 * 60 * 1000;
@@ -127,13 +131,18 @@ function osNotify(title, message) {
 function readJsonBody(req, limit = 2 * 1024 * 1024) {
   return new Promise((resolve2, reject) => {
     let size = 0;
+    let exceeded = false;
     const chunks = [];
     req.on('data', (c) => {
       size += c.length;
-      if (size > limit) { reject(new Error('payload too large')); req.destroy(); return; }
+      if (size > limit) {
+        if (!exceeded) { exceeded = true; chunks.length = 0; reject(Object.assign(new Error('Payload too large'), { statusCode: 413 })); }
+        return;
+      }
       chunks.push(c);
     });
     req.on('end', () => {
+      if (exceeded) return;
       if (!chunks.length) return resolve2({});
       try { resolve2(JSON.parse(Buffer.concat(chunks).toString('utf-8'))); }
       catch (e) { reject(e); }
@@ -149,6 +158,7 @@ export async function startServer({ host = '127.0.0.1', port = 0, idleTimeoutMs 
   const gatewayEpochs = new Map();
   const events = new EventEmitter();
   events.setMaxListeners(0);
+  const diagrams = createDiagramRoutes({ service: createDiagramService({ getSession: store.getSession, configDir: getConfigDir() }), store, events, readJsonBody, sendJson });
   const watchers = new Map();      // key -> fs.FSWatcher
   const sseClients = new Set();    // res objects
   const activePolls = new Map();   // key -> open poll count  (presence: listening)
@@ -426,6 +436,7 @@ export async function startServer({ host = '127.0.0.1', port = 0, idleTimeoutMs 
     if (previousLayout.sourceHash && (previousLayout.sourceHash !== hash || previousLayout.renderRevision !== revision.renderRevision || !revision.complete)) store.invalidateLayout(key);
     html = injectFeedbackWidget(html, { docId: key, workerUrl: '' });
     html = injectEditRuntime(html, { key, version: PKG_VERSION, sourceHash: hash, renderRevision: revision.renderRevision || '', reviewer: req.headers['x-htmldrop-reviewer'] === '1' });
+    html = injectDiagramLauncher(html, { key, reviewer: req.headers['x-htmldrop-reviewer'] === '1' });
     res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' });
     res.end(html);
   }
@@ -505,6 +516,13 @@ export async function startServer({ host = '127.0.0.1', port = 0, idleTimeoutMs 
       if (path === '/api/poll' && method === 'GET') { handlePoll(req, res, url.searchParams); return; }
 
       let m;
+      if (await diagrams.handle(req, res, url)) return;
+      // Editor files are package assets, never arbitrary artifact siblings.
+      if ((m = path.match(/^\/s\/([a-f0-9]{16})\/__editor(?:\/(.*))?$/)) && method === 'GET') {
+        const session = store.getSession(m[1]);
+        if (!session || session.status === 'ended') { sendJson(res, 404, { error: 'Active session not found' }); return; }
+        await serveEditorAsset(req, res, { key: m[1], assetPath: m[2] || '', session }); return;
+      }
       // Artifact + assets
       if ((m = path.match(/^\/s\/([a-f0-9]{16})$/)) && method === 'GET') { res.writeHead(308, { location: `/s/${m[1]}/` }).end(); return; }
       if ((m = path.match(/^\/s\/([a-f0-9]{16})\/$/)) && method === 'GET') { await serveArtifact(req, res, m[1]); return; }
@@ -574,7 +592,8 @@ export async function startServer({ host = '127.0.0.1', port = 0, idleTimeoutMs 
         const key = m[1];
         if (method === 'GET') { sendJson(res, 200, store.getComments(key, { since: url.searchParams.get('since') || undefined })); return; }
         if (method === 'POST') {
-          const body = reviewerInput(req, await readJsonBody(req));
+          let body = reviewerInput(req, await readJsonBody(req));
+          body = await diagrams.checkFeedbackAnchor(key, body, diagramActor(req));
           const result = store.addComment(key, body);
           if (!result) { sendJson(res, 404, { error: 'session not found' }); return; }
           events.emit('feedback', key); // refresh browser panels (SSE) — always
@@ -727,7 +746,7 @@ export async function startServer({ host = '127.0.0.1', port = 0, idleTimeoutMs 
 
       res.writeHead(404, { 'content-type': 'text/plain' }).end('Not found');
     } catch (err) {
-      if (!res.headersSent) sendJson(res, err.statusCode || (err instanceof SyntaxError ? 400 : 500), { error: err.statusCode ? err.message : err instanceof SyntaxError ? 'Invalid JSON request' : 'Request failed' });
+      if (!res.headersSent) sendJson(res, err.statusCode || (err instanceof SyntaxError ? 400 : 500), { error: err.statusCode ? err.message : err instanceof SyntaxError ? 'Invalid JSON request' : 'Request failed', ...(err.statusCode ? { statusCode: err.statusCode } : {}), ...(err.current ? { current: err.current } : {}) });
       else if (!res.writableEnded) res.end();
     }
   });

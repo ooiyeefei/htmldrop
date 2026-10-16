@@ -642,10 +642,10 @@
     openPopover(pageLeft, pageTop + pageH + 12, (text) => submitAreaComment(rect, text, captured));
   }
 
-  async function submitComment(selectedText, selector, text) {
+  async function submitComment(selectedText, selector, text, diagramAnchor) {
     const name = userName || 'Anonymous';
     const body = {
-      anchor: { type: selectedText ? 'text_range' : 'page_level', selector: selector || undefined, selectedText: selectedText || undefined },
+      anchor: diagramAnchor || { type: selectedText ? 'text_range' : 'page_level', selector: selector || undefined, selectedText: selectedText || undefined },
       content: { type: 'text', text },
       author: { displayName: name },
       parentId: null,
@@ -1064,6 +1064,119 @@
     };
   }
 
+  // Native scene JSON is inert data. Match all identity fields before looking
+  // up a shape, so a missing diagram can never reattach to a different canvas.
+  function diagramTarget(anchor) {
+    if (!anchor || anchor.type !== 'diagram_shape') return null;
+    const figures = Array.from(document.querySelectorAll('figure[data-htmldrop-diagram]')).filter(f => f.getAttribute('data-htmldrop-diagram') === anchor.diagramId);
+    if (figures.length !== 1) return null;
+    const figure = figures[0];
+    const scripts = Array.from(figure.querySelectorAll('script[type="application/json"][data-htmldrop-scene]')).filter(el => el.getAttribute('data-htmldrop-scene') === anchor.diagramId);
+    if (scripts.length !== 1 || scripts[0].textContent.length > 20 * 1024 * 1024) return null;
+    try {
+      const data = JSON.parse(scripts[0].textContent);
+      if (data.version !== 1 || data.documentId !== anchor.documentId || data.diagramId !== anchor.diagramId || data.scene?.type !== 'excalidraw' || data.scene.version !== 2 || !Array.isArray(data.scene.elements) || data.scene.elements.length > 5000) return null;
+      const shapes = data.scene.elements.filter(el => el && !el.isDeleted);
+      const matching = shapes.filter(el => el.id === anchor.shapeId);
+      return { figure, data, shapes, shape: matching.length === 1 ? matching[0] : null };
+    } catch(e) { return null; }
+  }
+
+  // Published artifacts retain their inert native scene, so reviewers can
+  // choose a stable shape without loading the editing application.
+  function installDiagramCommentControls() {
+    document.querySelectorAll('figure[data-htmldrop-diagram]').forEach(figure => {
+      if (figure.querySelector('.hd-diagram-comment-controls')) return;
+      const script = figure.querySelector('script[type="application/json"][data-htmldrop-scene]');
+      if (!script || script.textContent.length > 20 * 1024 * 1024) return;
+      let data;
+      try { data = JSON.parse(script.textContent); } catch(e) { return; }
+      const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+      if (![data.documentId,data.diagramId,data.revisionId].every(id => typeof id === 'string' && uuid.test(id))) return;
+      const elements = data.scene?.elements;
+      if (!Array.isArray(elements) || !elements.length || elements.length > 5000) return;
+      const first = elements.find(el => el && !el.isDeleted && typeof el.id === 'string');
+      if (!first) return;
+      const anchorFor = shapeId => ({ type: 'diagram_shape', documentId: data.documentId, diagramId: data.diagramId, revisionId: data.revisionId, shapeId });
+      if (!diagramTarget(anchorFor(first.id))) return;
+      const controls = document.createElement('div');
+      controls.className = 'hd-diagram-comment-controls';
+      controls.style.cssText = 'display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:8px 0;font:13px system-ui,sans-serif';
+      const select = document.createElement('select');
+      select.setAttribute('aria-label', 'Diagram shape to comment on');
+      select.style.cssText = 'max-width:100%;font:inherit;padding:6px;border:1px solid #a5b4fc;border-radius:4px;background:#fff;color:#1e1b4b';
+      elements.filter(el => el && !el.isDeleted && typeof el.id === 'string' && /^[A-Za-z0-9_-]{1,128}$/.test(el.id)).forEach(shape => {
+        const option = document.createElement('option');
+        option.value = shape.id;
+        option.textContent = (typeof shape.text === 'string' && shape.text.trim() ? shape.text.trim().slice(0, 60) : String(shape.type || 'Shape')) + ' · ' + shape.id;
+        select.appendChild(option);
+      });
+      if (!select.options.length) return;
+      const comment = document.createElement('button');
+      comment.type = 'button';
+      comment.textContent = 'Comment on shape';
+      comment.style.cssText = 'font:inherit;padding:6px 10px;border:1px solid #6366f1;border-radius:4px;background:#eef2ff;color:#312e81;cursor:pointer';
+      select.addEventListener('change', () => scrollToDiagramShape({ anchor: anchorFor(select.value) }));
+      comment.addEventListener('click', () => {
+        const anchor = anchorFor(select.value);
+        const target = diagramTarget(anchor);
+        if (!target?.shape) return;
+        scrollToDiagramShape({ anchor });
+        const rect = comment.getBoundingClientRect();
+        openPopover(rect.left + window.scrollX, rect.bottom + window.scrollY + 8, text => submitComment('', '', text, anchor));
+      });
+      controls.append(select, comment);
+      figure.appendChild(controls);
+    });
+  }
+
+  function diagramBounds(shape) {
+    const x = shape.x, y = shape.y, w = shape.width, h = shape.height, angle = shape.angle || 0;
+    if (![x,y,w,h,angle].every(Number.isFinite)) return null;
+    const cx = x + w / 2, cy = y + h / 2, cos = Math.cos(angle), sin = Math.sin(angle);
+    if (Array.isArray(shape.points) && shape.points.length > 20000) return null;
+    const points = Array.isArray(shape.points) && shape.points.length ? shape.points.map(p => [x + p[0], y + p[1]]) : [[x,y],[x+w,y],[x+w,y+h],[x,y+h]];
+    if (points.some(p => !p.every(Number.isFinite))) return null;
+    const rotated = points.map(p => [cx + (p[0]-cx)*cos - (p[1]-cy)*sin, cy + (p[0]-cx)*sin + (p[1]-cy)*cos]);
+    const xs = rotated.map(p => p[0]), ys = rotated.map(p => p[1]);
+    return [Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)];
+  }
+
+  function scrollToDiagramShape(item) {
+    const target = diagramTarget(item.anchor);
+    if (!target) return;
+    target.figure.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    // Removed shapes keep their thread and scroll to the original diagram.
+    // They must never highlight a nearby or similarly named shape.
+    if (!target.shape) return;
+    const image = target.figure.querySelector('img');
+    const bounds = diagramBounds(target.shape);
+    const all = target.shapes.map(diagramBounds).filter(Boolean);
+    if (!image || !bounds || !all.length) return;
+    const supplied = target.data.scene.appState?.htmldropExportBounds;
+    const canvas = Array.isArray(supplied) && supplied.length === 4 && supplied.every(Number.isFinite) && supplied[2] > supplied[0] && supplied[3] > supplied[1] ? supplied : [Math.min(...all.map(b => b[0])) - 10, Math.min(...all.map(b => b[1])) - 10, Math.max(...all.map(b => b[2])) + 10, Math.max(...all.map(b => b[3])) + 10];
+    if (canvas[2] <= canvas[0] || canvas[3] <= canvas[1]) return;
+    const box = document.createElement('div');
+    box.className = 'hd-diagram-shape-highlight';
+    box.style.cssText = 'position:fixed;pointer-events:none;border:3px solid #6366f1;border-radius:4px;background:rgba(99,102,241,.12);z-index:999972;box-sizing:border-box';
+    const position = () => {
+      const rect = image.getBoundingClientRect();
+      // Respect object-fit contain/letterboxing using the image's actual SVG
+      // aspect ratio; native preview pixels do not depend on document size.
+      const ratio = image.naturalWidth && image.naturalHeight ? image.naturalWidth / image.naturalHeight : (canvas[2]-canvas[0])/(canvas[3]-canvas[1]);
+      const width = Math.min(rect.width, rect.height * ratio), height = width / ratio;
+      const left = rect.left + (rect.width-width)/2, top = rect.top + (rect.height-height)/2;
+      box.style.left = left + (bounds[0]-canvas[0])/(canvas[2]-canvas[0])*width + 'px';
+      box.style.top = top + (bounds[1]-canvas[1])/(canvas[3]-canvas[1])*height + 'px';
+      box.style.width = Math.max(6,(bounds[2]-bounds[0])/(canvas[2]-canvas[0])*width) + 'px';
+      box.style.height = Math.max(6,(bounds[3]-bounds[1])/(canvas[3]-canvas[1])*height) + 'px';
+    };
+    document.querySelectorAll('.hd-diagram-shape-highlight').forEach(el => el.remove());
+    document.body.appendChild(box); position();
+    window.addEventListener('scroll', position, true); window.addEventListener('resize', position);
+    setTimeout(() => { box.remove(); window.removeEventListener('scroll', position, true); window.removeEventListener('resize', position); }, 2500);
+  }
+
   // Decide, for every top-level text_range comment, whether its anchored text still
   // exists in the doc. Runs BEFORE renderPanel so the panel can render the orphan
   // badge. Orphan = selectedText not found in the body text. For orphans we also
@@ -1075,6 +1188,12 @@
     const bodyNorm = normalizeWithMap(flattenBodyText().flat).norm;
     comments.forEach(item => {
       if (item.parentId) return;
+      if (item.anchor?.type === 'diagram_shape') {
+        const target = diagramTarget(item.anchor);
+        item._diagramStatus = !target || !target.shape ? 'Removed' : target.data.revisionId !== item.anchor.revisionId ? 'Changed' : '';
+        item._orphaned = false;
+        return;
+      }
       if (!item.anchor || item.anchor.type !== 'text_range' || !item.anchor.selectedText) {
         item._orphaned = false;
         item._currentText = undefined;
@@ -1114,6 +1233,10 @@
     } catch(e) { /* Keep the last successful comments and every unsent draft. */ }
   }
   window.addEventListener('htmldrop:feedback-refresh', () => { loadComments(); });
+  window.addEventListener('htmldrop:diagram-comment', event => {
+    if (event.detail && typeof event.detail.id === 'string') rememberMine(event.detail.id);
+    loadComments();
+  });
 
   // Re-draw saved area-annotation boxes over the document (light-DOM overlay).
   function renderAreaBoxes() {
@@ -1370,7 +1493,8 @@
     // Click → scroll to the anchored text highlight, or to the area box.
     el.addEventListener('click', (e) => {
       if (e.target.tagName === 'BUTTON' || e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
-      if (item.anchor && item.anchor.type === 'element_rect') scrollToAreaBox(item);
+      if (item.anchor?.type === 'diagram_shape') scrollToDiagramShape(item);
+      else if (item.anchor && item.anchor.type === 'element_rect') scrollToAreaBox(item);
       else scrollToHighlight(item);
       panel.querySelectorAll('.hd-comment').forEach(c => c.classList.remove('active'));
       el.classList.add('active');
@@ -1395,7 +1519,12 @@
 
     el.append(header, text);
 
-    if (item.anchor?.selectedText && item._orphaned) {
+    if (item.anchor?.type === 'diagram_shape') {
+      const tag = document.createElement('span');
+      tag.className = item._diagramStatus ? 'hd-stale-badge' : 'hd-anchor';
+      tag.textContent = 'Shape ' + String(item.anchor.shapeId).slice(0, 128) + (item._diagramStatus ? ' · ' + item._diagramStatus : '');
+      el.appendChild(tag);
+    } else if (item.anchor?.selectedText && item._orphaned) {
       // Orphaned text anchor: original quote is gone. Show a muted "updated" badge
       // plus a before/after so the reviewer can see what the text became.
       const badge = document.createElement('span');
@@ -1659,6 +1788,8 @@
     if (e.source !== window || !e.data || e.data.type !== 'htmldrop:area') return;
     setAreaMode(typeof e.data.on === 'boolean' ? e.data.on : !areaMode);
   });
+
+  installDiagramCommentControls();
 
   // Initial load only — use ↻ button to refresh manually
   loadComments();

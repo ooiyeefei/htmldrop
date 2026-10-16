@@ -1,0 +1,10 @@
+Excalidraw v0.18.1 font metadata and license notices
+Source: https://raw.githubusercontent.com/excalidraw/excalidraw/v0.18.1/packages/excalidraw/fonts/Lilita/index.ts
+
+
+
+Embedded font name-table notices:
+
+Copyright (c) 2011 Juan Montoreano (juan@remolacha.biz), with Reserved Font Names "Lilita One"
+
+http://scripts.sil.org/OFL

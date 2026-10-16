@@ -1,0 +1,220 @@
+@import "@excalidraw/excalidraw/index.css";
+:root {
+  font-family: Arial, Helvetica, sans-serif;
+  color: #202124;
+  background: #f5f6f8;
+  font-size: 14px;
+}
+* {
+  box-sizing: border-box;
+}
+body {
+  margin: 0;
+}
+button,
+input,
+textarea,
+select {
+  font: inherit;
+}
+button {
+  cursor: pointer;
+  border: 1px solid #c8cbd2;
+  border-radius: 5px;
+  padding: 7px 10px;
+  background: #fff;
+  color: #25262b;
+}
+button:hover {
+  background: #eef0f5;
+}
+button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+button:focus-visible,
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible {
+  outline: 3px solid #6366f1;
+  outline-offset: 2px;
+}
+.shell {
+  height: 100vh;
+  height: 100dvh;
+  display: flex;
+  flex-direction: column;
+}
+.toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding: 10px 14px;
+  background: #fff;
+  border-bottom: 1px solid #dfe1e6;
+}
+.toolbar h1 {
+  font-size: 15px;
+  margin: 0 7px 0 0;
+}
+.toolbar input {
+  min-width: 100px;
+  flex: 1;
+  max-width: 280px;
+  border: 1px solid #c8cbd2;
+  border-radius: 4px;
+  padding: 7px;
+}
+.primary {
+  background: #5054c7;
+  color: #fff;
+  border-color: #5054c7;
+}
+.primary:hover {
+  background: #4145b2;
+}
+.workspace {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+.canvas {
+  flex: 1;
+  min-width: 0;
+  position: relative;
+}
+.review {
+  width: 310px;
+  max-width: 40vw;
+  overflow: auto;
+  border-left: 1px solid #dfe1e6;
+  padding: 14px;
+  background: #fff;
+}
+.review h2 {
+  font-size: 15px;
+  margin: 18px 0 8px;
+}
+.review h2:first-child {
+  margin-top: 0;
+}
+.review p {
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+.review textarea {
+  width: 100%;
+  min-height: 65px;
+  border: 1px solid #c8cbd2;
+  border-radius: 4px;
+  padding: 8px;
+}
+.review input {
+  width: 100%;
+  margin: 5px 0;
+  padding: 6px;
+}
+.status {
+  padding: 8px 14px;
+  background: #edf0ff;
+  color: #35377c;
+  min-height: 32px;
+}
+.status.error {
+  background: #fff0ed;
+  color: #9c311d;
+}
+.record {
+  border-top: 1px solid #e2e3e9;
+  padding: 10px 0;
+}
+.record button {
+  margin: 3px 4px 0 0;
+}
+.preview {
+  max-height: 180px;
+  width: 100%;
+  object-fit: contain;
+  background: #f8f9fc;
+}
+.muted {
+  color: #686d79;
+  font-size: 12px;
+}
+.empty {
+  display: grid;
+  place-content: center;
+  height: 100%;
+  text-align: center;
+  padding: 28px;
+}
+.empty p {
+  max-width: 460px;
+  line-height: 1.5;
+}
+.file {
+  display: none;
+}
+.changed {
+  color: #9c311d;
+  font-weight: 600;
+}
+.review label {
+  display: block;
+  font-size: 12px;
+  margin-top: 7px;
+}
+dialog {
+  border: 1px solid #c8cbd2;
+  border-radius: 8px;
+  max-width: 650px;
+  width: 90vw;
+}
+dialog textarea {
+  width: 100%;
+  height: 240px;
+}
+dialog::backdrop {
+  background: #20212466;
+}
+@media (max-width: 780px) {
+  .review {
+    width: 250px;
+    max-width: 45vw;
+    padding: 10px;
+  }
+  .toolbar {
+    gap: 5px;
+    padding: 8px;
+  }
+  .toolbar h1 {
+    display: none;
+  }
+  .toolbar button {
+    font-size: 12px;
+    padding: 6px;
+  }
+  .toolbar input {
+    max-width: 160px;
+  }
+  .workspace {
+    flex-direction: column;
+  }
+  .review {
+    width: 100%;
+    max-width: none;
+    max-height: 35vh;
+    border-left: 0;
+    border-top: 1px solid #dfe1e6;
+  }
+  .canvas {
+    min-height: 300px;
+  }
+}
+
+/* The embedded document editor has no remote library catalog. Keyboard access
+   opens the inert DefaultSidebar override rather than the upstream catalog. */
+.excalidraw .default-sidebar-trigger {
+  display: none !important;
+}

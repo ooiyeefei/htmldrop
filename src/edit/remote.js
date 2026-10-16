@@ -23,6 +23,8 @@ function reviewerRoute(path, method, key) {
   if (path === `/api/feedback/${key}`) return method === 'GET' || method === 'POST';
   const comment = path.match(new RegExp(`^/api/feedback/${key}/[0-9a-f-]{36}(/reply)?$`));
   if (comment) return comment[1] ? method === 'POST' : method === 'PATCH' || method === 'DELETE';
+  const diagram = path.match(new RegExp(`^/api/edit/${key}/diagrams(?:/[^/]+)?(?:/(proposals|comments|export))?$`));
+  if (diagram) return method === 'GET' || (method === 'POST' && ['proposals', 'comments'].includes(diagram[1]));
   const edit = path.match(new RegExp(`^/api/edit/${key}/(health|chat|question|message|answer|hold|flush|layout|layout/queue|layout/ignore)$`));
   if (!edit) return false;
   if (method === 'GET') return ['health', 'chat', 'question', 'hold', 'layout'].includes(edit[1]);
@@ -93,7 +95,7 @@ export async function startRemoteGateway({ port = 0, host = '127.0.0.1', publicO
     const outgoing = request({ hostname: backendHostname, port: backendPort, method: req.method, path: req.url, headers }, upstream => {
       outgoing.setTimeout(0); // SSE has its own server heartbeats.
       const responseHeaders = {};
-      for (const name of ['content-type', 'content-disposition', 'x-content-type-options', 'x-accel-buffering', 'location']) if (upstream.headers[name]) responseHeaders[name] = upstream.headers[name];
+      for (const name of ['content-type', 'content-disposition', 'content-security-policy', 'x-content-type-options', 'x-accel-buffering', 'location']) if (upstream.headers[name]) responseHeaders[name] = upstream.headers[name];
       // Redirects from the backend must remain on this gateway/session.
       if (responseHeaders.location && !responseHeaders.location.startsWith(`/s/${sessionKey}/`)) delete responseHeaders.location;
       res.writeHead(upstream.statusCode || 502, responseHeaders);

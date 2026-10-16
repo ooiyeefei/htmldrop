@@ -36,6 +36,7 @@ _Click the diagram for the interactive release note._
 - [Example walkthroughs](#example-walkthroughs)
 - [The agent loop](#the-agent-loop)
 - [Edit mode (local, pre-publish)](#edit-mode-local-pre-publish)
+- [Excalidraw diagrams and MCP](#excalidraw-diagrams-and-mcp)
 - [Multi-provider AI (Anthropic / OpenAI / Gemini)](#multi-provider-ai)
 - [Architecture](#architecture)
 - [Security model](#security-model)
@@ -275,8 +276,9 @@ since the password gate uses built-in WebCrypto.
 
 ## Release notes
 
-Each release ships a short, visual release note — published with htmldrop itself, so you can read it as a live page:
+Release summaries are published on [GitHub Releases](https://github.com/ooiyeefei/htmldrop/releases). The complete change history is in [CHANGELOG.md](CHANGELOG.md). Earlier visual release notes remain available below:
 
+- **v1.16.0** — automatic history and redlines on every publish, safe declared sibling assets, expiring private HTTPS review and a layout inbox. → [Release notes](https://github.com/ooiyeefei/htmldrop/releases/tag/v1.16.0)
 - **v1.10.0** — playbooks, a one-command design starter kit, smarter edit-mode guidance, and `htmldrop pull` + shared team identity (hand a doc off to a teammate, no git). → **[Read the release note](https://yooi.surge.sh/htmldrop-v1.10.0.html)**
 
 ---
@@ -531,7 +533,7 @@ Unchanged source is deduplicated. Content or protection changes create a revisio
 
 For an existing feedback link, password protection is registered before deploying its new page, including when feedback is turned off. If deployment then fails, that remote review link stays protected and its previous password capability may stop working. Retry the same push to synchronize it; the CLI reports this partial transition explicitly. It never automatically reopens private access to recover a failed deploy.
 
-For isolated profiles or test servers, set `HTMLDROP_CONFIG_DIR` to an explicit state directory; the default remains `~/.htmldrop`. Excalidraw editing, shape comments and MCP are planned together for milestone 2 and are not included in this release.
+For isolated profiles or test servers, set `HTMLDROP_CONFIG_DIR` to an explicit state directory; the default remains `~/.htmldrop`. Excalidraw editing, shape comments and local MCP are included; see [Excalidraw diagrams and MCP](#excalidraw-diagrams-and-mcp).
 
 ---
 
@@ -571,6 +573,56 @@ It’s symmetric: when your teammate publishes *their* doc, they’re the owner 
 - **User-claimed (OTP)** — a human proves identity via a one-time email/SMS code. *Passwordless login for humans;* htmldrop does **not** implement this today.
 
 **When you'd actually adopt more of auth.md:** only when you want **identity-based** access (allowlist `jane@example.com`, revoke per person, audit who opened it) *instead of* a shared password — i.e., real multi-user roles. For a trusted team sharing a link + password out-of-band, the current model is sufficient and requires no auth.md adoption. Identity-based content access also implies the server can decrypt your doc (see the Security model note) — a deliberate trade-off, not a free upgrade.
+
+---
+
+## Excalidraw diagrams and MCP
+
+Edit mode includes a locally bundled Excalidraw canvas. Open **Diagrams** to create a diagram, import native `.excalidraw` JSON, or import supported Mermaid as new editable shapes. Select a diagram, draw or move shapes, then **Save diagram**. Saves update the local HTML; they do not publish it.
+
+The HTML embeds the accepted native scene, stable document/diagram/shape identifiers and a static SVG image. A published page remains readable without React, Excalidraw or an editor service. With `--feedback`, readers can select a shape beside the preview and comment; the anchor keeps the shape ID across moves and text changes. Removed shapes retain their threads with a visible removed label. A comment records the revision it referred to.
+
+### Proposals and diagram revisions
+
+Private edit reviewers can change a canvas and **Propose changes**. The accepted page stays unchanged until the local owner accepts the proposal. Owners can accept or reject in the editor; acceptance renders a fresh preview from the proposed scene. Conflicting source or diagram changes return an explicit conflict rather than replacing someone else's work. Export a conflicting draft before reopening the latest diagram.
+
+The owner editor lists local accepted diagram revisions and can export each as native JSON or its corresponding SVG preview. Reviewers see only the current accepted revision and proposals based on the current source, so a newly shared review link cannot reveal removed content from older local drafts. This local diagram history is separate from the automatic history of published HTML versions. Current accepted scene/IDs travel with the HTML and survive `pull`; private local proposals and unpublished diagram revisions remain in the original profile. Earlier published diagram source remains available through published document history.
+
+Incoming comments refresh without discarding unsent text. Source-file reloads are deferred while the diagram editor is open; close or save the diagram before reloading the surrounding page. The canvas loads only when opened. Its editor code and fonts are packaged locally, with an editor CSP restricting network access; there is no required CDN, Excalidraw+ account or hosted collaboration service.
+
+### Connect a local MCP agent
+
+First register the HTML artifact in edit mode:
+
+```bash
+htmldrop edit start /absolute/path/report.html --no-open
+htmldrop mcp --artifact /absolute/path/report.html --role owner
+```
+
+The MCP command speaks stdio JSON-RPC and stays running for its client. Configure your client's stdio MCP server with:
+
+```json
+{
+  "mcpServers": {
+    "htmldrop": {
+      "command": "htmldrop",
+      "args": ["mcp", "--artifact", "/absolute/path/report.html", "--role", "owner"]
+    }
+  }
+}
+```
+
+Each connection binds one already-registered artifact. Tools cannot choose arbitrary files, URLs or another session. The default role is `reviewer`: read the current scene/comments, inspect current proposals, propose changes, comment on a shape and export the current revision. Explicit `--role owner` additionally exposes create, save, accept and reject. Neither role publishes the HTML or exposes edit-server controls.
+
+Read `diagram_list`, then `diagram_read` for the current IDs and source hash. Mutations require the returned `baseRevisionId` and `baseSourceHash` (creation needs only the source hash). Resources expose the bound artifact's diagram list and revisions. Native JSON export needs no browser; an accepted save requires a safe SVG preview rendered from that scene, and SVG export returns the stored preview for that exact revision. The owner acceptance UI can render a proposal that has no preview. MCP does not invent a preview or silently reuse an older one.
+
+### First-release boundaries
+
+- Publication still requires self-contained HTML; diagram images must be embedded PNG, JPEG, WebP or GIF data. Web embeds and shape links are disabled.
+- The full accepted source must stay within the existing 2 MB HTML limit; reduce embedded images or diagram size if a save is refused.
+- Mermaid import is one-way. There is no claim of arbitrary lossless canvas-to-Mermaid conversion.
+- MCP is local stdio; private browser review uses `edit share`. Public remote MCP and simultaneous multiplayer are separate work.
+- `push --password` encrypts accepted diagram source and published history under the existing password model. Local diagram revision/proposal archives use the local profile's encryption key; keep the profile private. Publishing does not upload those local archives.
 
 ---
 

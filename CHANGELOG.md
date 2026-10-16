@@ -4,6 +4,21 @@ All notable changes to this project are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/), and this project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [1.17.0] — 2026-10-16
+
+### Added
+
+- A locally bundled Excalidraw editor in edit mode, with native scene and SVG export, JSON import and one-way Mermaid import.
+- Shape-attached comment threads in the editor and on published feedback pages, retaining stable IDs and revision context when shapes move or are removed.
+- Owner-reviewed scene proposals, accepted diagram revisions, and stale-source/revision conflict detection shared by browser and agents.
+- A local stdio MCP server bound to one registered artifact, with reviewer tools and explicit owner create/save/accept/reject tools.
+- Accepted scenes and static SVG previews embedded in self-contained HTML, surviving publish/pull and automatic encrypted publication history. Private local diagram history remains outside published staging.
+
+### Changed
+
+- Diagram editor assets load on demand from the installed package; editor CSP restricts external resources and web embeds are disabled.
+- Source reload waits while the diagram editor is open, so accepted source changes do not silently navigate away from an active canvas draft.
+
 ## [1.16.0] — 2026-10-16
 
 ### Added

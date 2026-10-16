@@ -647,7 +647,10 @@ function clusterSegments(items: FeedbackStored[]): Segment[] {
   const groups: Record<string, Segment> = {};
 
   for (const item of items) {
-    const key = item.anchor?.selectedText?.slice(0, 40) || item.anchor?.selector || 'page-level';
+    const anchor = item.anchor;
+    const key = anchor?.type === 'diagram_shape'
+      ? `Shape ${anchor.documentId}/${anchor.diagramId}/${anchor.shapeId}`
+      : anchor?.selectedText?.slice(0, 40) || anchor?.selector || 'page-level';
     if (!groups[key]) {
       groups[key] = { title: key, items: [], hasDebate: false };
     }

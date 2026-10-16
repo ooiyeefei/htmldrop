@@ -32,6 +32,8 @@ jobs:
           path: |
             .scratch/m1-uat/run-*/*.png
             .scratch/m1-uat/run-*/*-failure.json
+            .scratch/m2-uat/run-*/*.png
+            .scratch/m2-uat/run-*/*-failure.json
           if-no-files-found: ignore
           retention-days: 7
       - run: npm pack --dry-run
